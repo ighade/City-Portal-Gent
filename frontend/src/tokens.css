@@ -1,0 +1,131 @@
+/* Kleur- en vormtokens — één op één overgenomen van LvCRM/frontend/src/index.css, zodat de
+   drie toepassingen (LvGenome, LvCRM, AlgemeneTaken) één huis blijven. Wijzig ze dáár. */
+:root {
+  color-scheme: light;
+
+  /* vlakken — de grijzen van LvGenome */
+  --bg: #f7f8fa;
+  --bg-tint: #f1f3f6;
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --surface-3: #f1f3f6;
+  --overlay: rgba(16, 24, 40, 0.42);
+
+  /* tekst */
+  --ink: #101828;
+  --ink-2: #475467;
+  --muted: #667085;
+
+  /* lijnen — één echte lijn, geen doorschijnend zwart */
+  --border: #e4e7ec;
+  --border-strong: #d0d5dd;
+
+  /* accent — indigo, de standaardkeuze van LvGenome */
+  --brand: #4f46e5;
+  --brand-strong: #4338ca;
+  --brand-ink: #ffffff;
+  --brand-soft: #eef2ff;
+  --brand-soft-2: #e0e7ff;
+  --ring: rgba(79, 70, 229, 0.25);
+  --aurora: linear-gradient(120deg, #4f46e5 0%, #2a78d6 55%, #1baf7a 100%);
+  --aurora-soft: linear-gradient(120deg, rgba(79, 70, 229, 0.10), rgba(42, 120, 214, 0.08));
+
+  /* status */
+  --ok: #0ca30c;
+  --ok-ink: #0a7d0a;
+  --warn: #d98a00;
+  --warn-ink: #a86a00;
+  --serious: #d5652f;
+  --serious-ink: #b04e1f;
+  --crit: #d03b3b;
+  --crit-ink: #b52d2d;
+  --info: #2a78d6;
+  --info-ink: #1c5fae;
+  --neutral-badge: #7d7d8a;
+
+  /* chart palette (dataviz validated categorical, light steps) */
+  --c1: #2a78d6;
+  --c2: #008300;
+  --c3: #e87ba4;
+  --c4: #eda100;
+  --c5: #1baf7a;
+  --c6: #eb6834;
+  --c7: #4a3aa7;
+  --c8: #e34948;
+  --grid: #e4e4ec;
+  --axis: #c9c9d2;
+
+  /* diepte — vlak, zoals hiernaast; een kaart draagt haar lijn, niet haar schaduw */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-md: 0 4px 8px -2px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.06);
+  --shadow-lg: 0 12px 16px -4px rgba(16, 24, 40, 0.10), 0 4px 6px -2px rgba(16, 24, 40, 0.05);
+
+  /* vorm — de trap van tailwind, die LvGenome gebruikt */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-full: 999px;
+
+  --sidebar-w: 252px;
+
+  /* Eén letter voor alles. LvGenome zet geen aparte letter voor titels, en een
+     tweede letter is precies wat twee toepassingen uit elkaar doet vallen. */
+  --font-display: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-reading: "Source Serif 4 Variable", "Source Serif 4", Georgia, "Times New Roman", serif;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0d1117;
+  --bg-tint: #151b23;
+  --surface: #151b23;
+  --surface-2: #1b2330;
+  --surface-3: #222c3b;
+  --overlay: rgba(2, 6, 12, 0.62);
+
+  --ink: #e6edf3;
+  --ink-2: #b3bdc9;
+  --muted: #8d96a5;
+
+  --border: #262f3d;
+  --border-strong: #35405180;
+
+  --brand: #818cf8;
+  --brand-strong: #a5b4fc;
+  --brand-ink: #0b1017;
+  --brand-soft: #272b52;
+  --brand-soft-2: #313668;
+  --ring: rgba(129, 140, 248, 0.35);
+  --aurora: linear-gradient(120deg, #818cf8 0%, #3987e5 55%, #199e70 100%);
+  --aurora-soft: linear-gradient(120deg, rgba(129, 140, 248, 0.16), rgba(57, 135, 229, 0.10));
+
+  --ok: #22c55e;
+  --ok-ink: #4ade80;
+  --warn: #fab219;
+  --warn-ink: #fac95a;
+  --serious: #ec835a;
+  --serious-ink: #f0a07f;
+  --crit: #e05a5a;
+  --crit-ink: #f07f7f;
+  --info: #3987e5;
+  --info-ink: #7db3ee;
+  --neutral-badge: #9a9aa8;
+
+  --c1: #3987e5;
+  --c2: #2ca02c;
+  --c3: #d55181;
+  --c4: #c98500;
+  --c5: #199e70;
+  --c6: #d95926;
+  --c7: #9085e9;
+  --c8: #e66767;
+  --grid: #26262f;
+  --axis: #34343f;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 10px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 14px 32px rgba(0, 0, 0, 0.55);
+}

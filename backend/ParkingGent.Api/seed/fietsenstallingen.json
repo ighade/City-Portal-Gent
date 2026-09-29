@@ -1,0 +1,78 @@
+{
+  "_lees_dit_eerst": [
+    "Stad Gent meet de bezetting van drie fietsenstallingen, maar publiceert bij géén van",
+    "de drie een coördinaat: 'geo_point_2d' is leeg in de ene dataset en ontbreekt in de",
+    "andere. Zonder dit bestand staan ze dus nergens op de kaart. Nagemeten op 29-09-2026.",
+    "",
+    "Elke coördinaat hieronder heeft een 'herkomst'. Zet er nooit een bij zonder — een",
+    "speld waarvan niemand meer weet waar hij vandaan komt, is niet te onderhouden en niet",
+    "te corrigeren. Verschijnt er ooit wél een coördinaat in de open data, dan hoort de",
+    "betrokken rij hier te verdwijnen in plaats van te blijven staan.",
+    "",
+    "Koppelen gebeurt op 'sleutel': dat is het veld 'id' van het record als het dat heeft,",
+    "anders 'id_parking'. Staat een gemeten stalling hier niet in, dan wordt ze overgeslagen",
+    "en zegt het logboek welke sleutel ontbrak."
+  ],
+
+  "stallingen": [
+    {
+      "sleutel": "48-5",
+      "dataset": "real-time-bezettingen-fietsenstallingen-gent",
+      "naam": "Fietsenparking Graslei",
+      "lat": 51.05388289309628,
+      "lon": 3.721417758534325,
+      "adres": "Pakhuisstraat, onder de Sint-Michielsbrug, 9000 Gent",
+      "openbaar": true,
+      "beheerder": "De Fietsambassade Gent",
+      "url": "https://fietsambassade.gent.be/nl/fiets-parkeren/fietsenparkings",
+      "herkomst": [
+        "Stad Gent zelf, dataset 'fietsenstallingen-gent', rij urid mob/ftsst13995.",
+        "Dat is de énige openbare rij in die dataset met bezettingsinfo=True, ze heet daar",
+        "'Korenmarkt' (Pakhuisstraat 2) en telt 215 plaatsen tegenover de 220 van de meting.",
+        "De Fietsambassade noemt dezelfde stalling 'Graslei, onder de Sint-Michielsbrug, via",
+        "de Pakhuisstraat' met 203 plaatsen. Het adrespunt van Pakhuisstraat 1 ligt 50 m van",
+        "dit punt, dus het gaat om één stalling met twee namen. Deze coördinaat komt uit het",
+        "register van de stad en niet uit een huisnummer, en is dus de beste van de drie."
+      ]
+    },
+    {
+      "sleutel": "Stadskantoor Zuid",
+      "dataset": "real-time-bezetting-fietsenstalling-stadskantoor-gent",
+      "naam": "Fietsenparking Stadskantoor",
+      "lat": 51.0473843712,
+      "lon": 3.7307702535,
+      "adres": "Woodrow Wilsonplein 1, 9000 Gent",
+      "openbaar": true,
+      "beheerder": "De Fietsambassade Gent",
+      "url": "https://fietsambassade.gent.be/nl/fiets-parkeren/fietsenparkings",
+      "herkomst": [
+        "Het adrespunt van Woodrow Wilsonplein 1 uit het Vlaamse adressenregister",
+        "(geo.api.vlaanderen.be/geolocation/v4/Location), opgevraagd op 29-09-2026.",
+        "De Fietsambassade noemt deze stalling met 486 plaatsen; de meting zegt óók 486, dus",
+        "over welke stalling het gaat bestaat geen twijfel.",
+        "LET OP: dit is het adrespunt van het gebouw, niet de ingang van de stalling. De",
+        "fietsen gaan er langs de pleinzijde in, zo'n honderd meter hiervandaan."
+      ]
+    },
+    {
+      "sleutel": "Stadskantoor Zuid privaat",
+      "dataset": "real-time-bezetting-fietsenstalling-stadskantoor-gent",
+      "naam": "Fietsenparking Stadskantoor (personeel)",
+      "lat": 51.0473843712,
+      "lon": 3.7307702535,
+      "adres": "Woodrow Wilsonplein 1, 9000 Gent",
+      "openbaar": false,
+      "beheerder": "Stad Gent",
+      "url": null,
+      "herkomst": [
+        "Zelfde gebouw, dus met opzet dezelfde coördinaat als de openbare stalling hierboven.",
+        "Er is bewust géén kunstmatige verschuiving bij gezet om de twee spelden uit elkaar te",
+        "houden: dat zou een plaats verzinnen die niet bestaat. Het scherm tekent de openbare",
+        "stalling als laatste, zodat die bovenop ligt.",
+        "Deze stalling staat niet op de publiekslijst van de Fietsambassade en is voor",
+        "personeel. Ze staat hier omdat de stad haar bezetting publiceert, maar het scherm",
+        "zegt erbij dat je er niet terechtkunt."
+      ]
+    }
+  ]
+}
