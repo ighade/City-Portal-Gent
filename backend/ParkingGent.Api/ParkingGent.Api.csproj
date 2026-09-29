@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Zonder dit leest de C#-compiler een bronbestand zonder BOM in de ANSI-codepagina van
+         het besturingssysteem. In de Linux-container is dat toevallig UTF-8 en klopt alles; op
+         Windows wordt "Stad Gent — Open Data" dan "Stad Gent â€" Open Data". Nagemeten op
+         29-09-2026. Hiermee bouwen beide hetzelfde. -->
+    <CodePage>65001</CodePage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- De coördinaten van de fietsenstallingen, die Stad Gent zelf niet publiceert. -->
+    <None Update="seed/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <!-- De standaard-veerkrachtlaag van .NET (Polly eronder): nieuwe pogingen met
+         wachttijd, een stroomonderbreker en een tijdslimiet rond elke oproep naar
+         data.stad.gent. Die dienst valt af en toe weg, en dan hoort deze API gewoon
+         de vorige stand te blijven tonen in plaats van mee te vallen. -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.*" />
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+  </ItemGroup>
+
+</Project>

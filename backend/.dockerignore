@@ -1,0 +1,6 @@
+# Wat de bouwcontext niet hoeft te zien. Zonder dit gaan de bin/ en obj/ van de
+# ontwikkelmachine mee het image in — traag, en een restore van Windows-artefacten
+# in een Linux-beeld levert rare fouten op.
+**/bin/
+**/obj/
+**/*.user
