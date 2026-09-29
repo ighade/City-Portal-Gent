@@ -93,6 +93,22 @@ export interface Meta {
   measurementCount: number
 }
 
+export interface RoutePlanRequest {
+  startLat: number
+  startLon: number
+  endLat: number
+  endLon: number
+  mode: 'car'
+}
+
+export interface RoutePlanResult {
+  mode: 'car'
+  distanceKm: number
+  durationMinutes: number
+  coordinates: number[][]
+  routeSummary: string
+}
+
 export interface SyncRun {
   startedUtc: string
   durationMs: number

@@ -5,6 +5,7 @@ import { Beheer } from './pages/Beheer'
 import { Detail } from './pages/Detail'
 import { Kaart } from './pages/Kaart'
 import { Over } from './pages/Over'
+import { RoutePlanner } from './pages/RoutePlanner'
 
 export default function App() {
   const { isAdmin, adminChecked } = useApp()
@@ -12,6 +13,7 @@ export default function App() {
     <Routes>
       <Route element={<Shell />}>
         <Route index element={<Kaart />} />
+        <Route path="route" element={<RoutePlanner />} />
         <Route path="parking/:slug" element={<Detail />} />
         <Route path="over" element={<Over />} />
         {/* Pas omleiden als vaststaat dat het antwoord "nee" is; anders kaatst een

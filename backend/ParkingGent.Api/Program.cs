@@ -17,6 +17,7 @@ builder.Host.UseSerilog((context, configuration) => configuration
 
 builder.Services.Configure<GentOptions>(builder.Configuration.GetSection(GentOptions.SectionName));
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.SectionName));
+builder.Services.Configure<RoutePlannerOptions>(builder.Configuration.GetSection(RoutePlannerOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? "Host=parkinggent-postgres;Database=parkinggent;Username=parkinggent;Password=parkinggent";
@@ -37,6 +38,16 @@ builder.Services.AddHttpClient<GentOpenData>((sp, c) =>
         c.DefaultRequestHeaders.UserAgent.ParseAdd(
             string.IsNullOrWhiteSpace(contact) ? "ParkingGent/2.0" : $"ParkingGent/2.0 (+{contact.Trim()})");
         c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    })
+    .AddStandardResilienceHandler();
+
+builder.Services.AddHttpClient<RoutePlanner>((sp, c) =>
+    {
+        var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RoutePlannerOptions>>().Value;
+        c.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+        c.Timeout = TimeSpan.FromSeconds(30);
+        c.DefaultRequestHeaders.Accept.Clear();
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/geo+json");
     })
     .AddStandardResilienceHandler();
 
