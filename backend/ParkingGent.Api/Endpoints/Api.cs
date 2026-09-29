@@ -34,6 +34,7 @@ public static class Api
         api.MapGet("/geojson", GeoJson).CacheOutput("kort");
         // De lage-emissiezone verandert hooguit eens in de zoveel jaar; die mag lang blijven staan.
         api.MapGet("/lez", LowEmissionZone).CacheOutput("lang");
+        api.MapPost("/route/plan", RoutePlan);
 
         var admin = api.MapGroup("/admin").AddEndpointFilter(async (ctx, next) =>
         {
@@ -191,6 +192,19 @@ public static class Api
 
         return Results.Json(new { type = "FeatureCollection", features },
             new JsonSerializerOptions(JsonSerializerDefaults.Web), "application/geo+json");
+    }
+
+    private static async Task<IResult> RoutePlan(RoutePlanner planner, RoutePlanRequest request, CancellationToken ct)
+    {
+        if (request.StartLat is < -90 or > 90 || request.StartLon is < -180 or > 180)
+            return Results.BadRequest(new { error = "Ongeldige startcoördinaten." });
+        if (request.EndLat is < -90 or > 90 || request.EndLon is < -180 or > 180)
+            return Results.BadRequest(new { error = "Ongeldige eindcoördinaten." });
+
+        var route = await planner.PlanAsync(request.StartLat, request.StartLon, request.EndLat, request.EndLon, request.Mode, ct);
+        return route is null
+            ? Results.BadRequest(new { error = "Routeplanning kon niet uitgevoerd worden." })
+            : Results.Ok(route);
     }
 
     // ---------- beheer, alleen vanaf het LAN ----------

@@ -102,3 +102,11 @@ public sealed class AuthOptions
             .Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(e => e.ToLowerInvariant());
 }
+
+public sealed class RoutePlannerOptions
+{
+    public const string SectionName = "RoutePlanner";
+
+    public string BaseUrl { get; set; } = "https://api.heigit.org/openrouteservice";
+    public string ApiKey { get; set; } = string.Empty;
+}

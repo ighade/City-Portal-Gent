@@ -14,6 +14,19 @@ import { api } from '../api'
 import { busyness, busynessLabel, kindLabel } from '../types'
 import type { Parking } from '../types'
 
+interface RoutePoint {
+  lat: number
+  lon: number
+  label: string
+}
+
+interface RouteOverlay {
+  start: RoutePoint
+  end: RoutePoint
+  mode: 'car'
+  points: Array<{ lat: number; lon: number }>
+}
+
 interface Props {
   parkings: Parking[]
   basemap: 'grb' | 'osm'
@@ -22,6 +35,7 @@ interface Props {
   /** Welke parking in de lijst is aangewezen; die speld springt naar voren. */
   selected?: string | null
   onSelect?: (slug: string | null) => void
+  route?: RouteOverlay | null
 }
 
 /**
@@ -32,10 +46,11 @@ interface Props {
  * groen verschillen hier ook in wat erin staat. Een parking zonder meting krijgt een open ring
  * met haar capaciteit — zichtbaar anders dan een gemeten plek.
  */
-export function ParkingMap({ parkings, basemap, showLez, selected, onSelect }: Props) {
+export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
+  const routeLayer = useRef<L.LayerGroup | null>(null)
   const base = useRef<L.TileLayer | null>(null)
   const lez = useRef<L.GeoJSON | null>(null)
   const markers = useRef<Map<string, L.Marker>>(new Map())
@@ -144,6 +159,35 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect }: P
       cancelled = true
     }
   }, [showLez])
+
+  // Route-overlay: één lijn en twee markers. Dit is voor de routepagina en hoeft de kaart van de
+  // parkinglijst niet te veranderen.
+  useEffect(() => {
+    const m = map.current
+    if (!m) return
+
+    routeLayer.current?.remove()
+    routeLayer.current = null
+    if (!route) return
+
+    const group = L.layerGroup().addTo(m)
+    const polyline = L.polyline(
+      route.points.map((p) => [p.lat, p.lon] as [number, number]),
+      { color: '#d94a4a', weight: 5, opacity: 0.9 },
+    )
+    polyline.addTo(group)
+
+    L.marker([route.start.lat, route.start.lon]).addTo(group)
+    L.marker([route.end.lat, route.end.lon]).addTo(group)
+
+    routeLayer.current = group
+    const bounds = L.latLngBounds([
+      [route.start.lat, route.start.lon],
+      [route.end.lat, route.end.lon],
+      ...route.points.map((p) => [p.lat, p.lon] as [number, number]),
+    ])
+    m.fitBounds(bounds.pad(0.18), { animate: true })
+  }, [route])
 
   // De spelden: bij elke vernieuwing opnieuw tekenen. Vijftig spelden is niets.
   useEffect(() => {

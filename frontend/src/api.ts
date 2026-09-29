@@ -1,4 +1,4 @@
-import type { GeoJsonCollection, Meta, Parking, Point, Stats, SyncRun, Trend } from './types'
+import type { GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, SyncRun, Trend } from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -43,6 +43,7 @@ export const api = {
   stats: () => call<Stats>('GET', '/api/stats'),
   /** De lage-emissiezone als GeoJSON. Verandert vrijwel nooit; één keer per bezoek volstaat. */
   lez: () => call<GeoJsonCollection>('GET', '/api/lez'),
+  routePlan: (payload: RoutePlanRequest) => call<RoutePlanResult>('POST', '/api/route/plan', payload),
   meta: () => call<Meta>('GET', '/api/meta'),
 
   /**
