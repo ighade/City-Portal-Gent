@@ -34,6 +34,10 @@ public static class Api
         api.MapGet("/geojson", GeoJson).CacheOutput("kort");
         // De lage-emissiezone verandert hooguit eens in de zoveel jaar; die mag lang blijven staan.
         api.MapGet("/lez", LowEmissionZone).CacheOutput("lang");
+        api.MapGet("/transit/stops", TransitStops).CacheOutput("lang");
+        api.MapGet("/transit/stops/{stopId}/realtime", TransitStopRealtime);
+        api.MapGet("/transit/status", TransitStatus).CacheOutput("kort");
+        api.MapPost("/transit/route", TransitRoute);
         api.MapPost("/route/plan", RoutePlan);
 
         var admin = api.MapGroup("/admin").AddEndpointFilter(async (ctx, next) =>
@@ -201,10 +205,79 @@ public static class Api
         if (request.EndLat is < -90 or > 90 || request.EndLon is < -180 or > 180)
             return Results.BadRequest(new { error = "Ongeldige eindcoördinaten." });
 
-        var route = await planner.PlanAsync(request.StartLat, request.StartLon, request.EndLat, request.EndLon, request.Mode, ct);
+        var route = await planner.PlanAsync(
+            request.StartLat,
+            request.StartLon,
+            request.EndLat,
+            request.EndLon,
+            request.Mode,
+            request.CheckLez,
+            ct);
+        if (route?.LezRestricted == true)
+            return Results.BadRequest(new { error = route.LezWarning });
+
         return route is null
             ? Results.BadRequest(new { error = "Routeplanning kon niet uitgevoerd worden." })
             : Results.Ok(route);
+    }
+
+    private static async Task<IResult> TransitStops(TransitService transit, CancellationToken ct)
+    {
+        try
+        {
+            return Results.Ok(await transit.GetStopsAsync(ct));
+        }
+        catch (TransitUnavailableException)
+        {
+            return Results.Json(new { error = "De OV-dienstregeling is tijdelijk niet beschikbaar." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
+    private static async Task<IResult> TransitStatus(TransitService transit, CancellationToken ct)
+    {
+        try
+        {
+            return Results.Ok(await transit.GetStatusAsync(ct));
+        }
+        catch (TransitUnavailableException)
+        {
+            return Results.Json(new { error = "De OV-dienstregeling is tijdelijk niet beschikbaar." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
+    private static async Task<IResult> TransitStopRealtime(TransitService transit, string stopId, CancellationToken ct)
+    {
+        try
+        {
+            var result = await transit.GetStopRealtimeAsync(stopId, ct);
+            return result is null
+                ? Results.NotFound(new { error = "Die halte kennen we niet." })
+                : Results.Ok(result);
+        }
+        catch (TransitUnavailableException)
+        {
+            return Results.Json(new { error = "De realtime OV-gegevens zijn tijdelijk niet beschikbaar." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
+    private static async Task<IResult> TransitRoute(TransitService transit, TransitRouteRequest request, CancellationToken ct)
+    {
+        if (request.StartLat is < -90 or > 90 || request.StartLon is < -180 or > 180)
+            return Results.BadRequest(new { error = "Ongeldige startcoördinaten." });
+        if (request.EndLat is < -90 or > 90 || request.EndLon is < -180 or > 180)
+            return Results.BadRequest(new { error = "Ongeldige eindcoördinaten." });
+
+        try
+        {
+            var route = await transit.PlanAsync(request.StartLat, request.StartLon, request.EndLat, request.EndLon, ct);
+            return route is null
+                ? Results.NotFound(new { error = "Geen OV-route gevonden voor deze locaties." })
+                : Results.Ok(route);
+        }
+        catch (TransitUnavailableException)
+        {
+            return Results.Json(new { error = "De OV-dienstregeling is tijdelijk niet beschikbaar." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
     }
 
     // ---------- beheer, alleen vanaf het LAN ----------

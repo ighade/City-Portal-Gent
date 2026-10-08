@@ -192,6 +192,31 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
 
 /* ---- Kaart en lijst naast elkaar ------------------------------------------ */
 .split { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+.ov-layout { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; align-items: start; }
+.ov-map-card { padding: 0; overflow: hidden; }
+.ov-panel { display: grid; gap: 16px; }
+.ov-form { display: grid; gap: 12px; }
+.ov-form label { display: grid; gap: 6px; font-size: 12.5px; color: var(--ink-2); font-weight: 600; }
+.ov-form .input { width: 100%; }
+.ov-route-meta { display: flex; gap: 16px; flex-wrap: wrap; color: var(--ink-2); font-size: 12.5px; margin-bottom: 16px; }
+.ov-legs { display: grid; gap: 0; }
+.ov-leg { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; padding: 12px 0; border-top: 1px solid var(--border); }
+.ov-mode { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; font-size: 12px; font-weight: 800; color: #fff; }
+.ov-mode-walk { background: #6b7280; }
+.ov-mode-bus { background: #0f766e; }
+.ov-mode-tram { background: #d97706; }
+.ov-empty { min-height: 150px; }
+.ov-stop-panel { max-height: 360px; overflow-y: auto; }
+.ov-departures { display: grid; gap: 0; }
+.ov-departure { display: grid; grid-template-columns: 28px 38px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 9px 0; border-top: 1px solid var(--border); }
+.ov-departure-destination { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 12.5px; }
+.ov-departure time { font-family: var(--font-display); font-weight: 700; font-size: 13px; }
+@media (max-width: 900px) {
+  .ov-layout { grid-template-columns: 1fr; }
+  .ov-map-card { order: 2; }
+  .ov-panel { order: 1; }
+  .ov-map-card .map { height: 520px; }
+}
 .map {
   height: 620px; border-radius: var(--r-lg); border: 1px solid var(--border);
   overflow: hidden; background: var(--surface-3);

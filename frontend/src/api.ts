@@ -1,4 +1,4 @@
-import type { GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, SyncRun, Trend } from './types'
+import type { GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, SyncRun, TransitRouteRequest, TransitRouteResult, TransitStatus, TransitStop, TransitStopRealtime, Trend } from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -44,6 +44,12 @@ export const api = {
   /** De lage-emissiezone als GeoJSON. Verandert vrijwel nooit; één keer per bezoek volstaat. */
   lez: () => call<GeoJsonCollection>('GET', '/api/lez'),
   routePlan: (payload: RoutePlanRequest) => call<RoutePlanResult>('POST', '/api/route/plan', payload),
+  transit: {
+    stops: () => call<TransitStop[]>('GET', '/api/transit/stops'),
+    stopRealtime: (stopId: string) => call<TransitStopRealtime>('GET', `/api/transit/stops/${encodeURIComponent(stopId)}/realtime`),
+    status: () => call<TransitStatus>('GET', '/api/transit/status'),
+    route: (payload: TransitRouteRequest) => call<TransitRouteResult>('POST', '/api/transit/route', payload),
+  },
   meta: () => call<Meta>('GET', '/api/meta'),
 
   /**

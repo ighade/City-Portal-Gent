@@ -99,6 +99,7 @@ export interface RoutePlanRequest {
   endLat: number
   endLon: number
   mode: 'car'
+  checkLez?: boolean
 }
 
 export interface RoutePlanResult {
@@ -107,6 +108,72 @@ export interface RoutePlanResult {
   durationMinutes: number
   coordinates: number[][]
   routeSummary: string
+  lezRestricted?: boolean
+  lezWarning?: string
+}
+
+export interface TransitStop {
+  id: string
+  name: string
+  lat: number
+  lon: number
+  lines: string[]
+}
+
+export interface TransitStatus {
+  staticLoaded: boolean
+  staticUpdatedAtUtc?: string
+  realtimeUpdatedAtUtc?: string
+  stopCount: number
+  connectionCount: number
+  source: string
+}
+
+export interface TransitStopRealtime {
+  stopId: string
+  stopName: string
+  updatedAt: string
+  departures: TransitDeparture[]
+}
+
+export interface TransitDeparture {
+  line: string
+  mode: 'bus' | 'tram'
+  destination: string
+  scheduledAt: string
+  expectedAt: string
+  delayMinutes: number
+}
+
+export interface TransitRouteRequest {
+  startLat: number
+  startLon: number
+  endLat: number
+  endLon: number
+}
+
+export interface TransitLeg {
+  mode: 'walk' | 'bus' | 'tram'
+  line?: string
+  from: string
+  to: string
+  fromLat: number
+  fromLon: number
+  toLat: number
+  toLon: number
+  departureAt: string
+  arrivalAt: string
+  distanceKm: number
+  delayMinutes: number
+}
+
+export interface TransitRouteResult {
+  distanceKm: number
+  durationMinutes: number
+  departureAt: string
+  arrivalAt: string
+  summary: string
+  legs: TransitLeg[]
 }
 
 export interface SyncRun {

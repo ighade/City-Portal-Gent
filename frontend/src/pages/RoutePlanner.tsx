@@ -9,6 +9,7 @@ export function RoutePlanner() {
   const [startSlug, setStartSlug] = useState('')
   const [endSlug, setEndSlug] = useState('')
   const [planning, setPlanning] = useState(false)
+  const [showLez, setShowLez] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [route, setRoute] = useState<RoutePlanResult | null>(null)
 
@@ -57,6 +58,7 @@ export function RoutePlanner() {
         endLat: endParking.lat,
         endLon: endParking.lon,
         mode: 'car',
+        checkLez: showLez,
       })
       setRoute(result)
     } catch (err) {
@@ -79,7 +81,7 @@ export function RoutePlanner() {
         <div className="row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220 }}>
             <label htmlFor="route-start">Start</label>
-            <select id="route-start" className="input" value={startSlug} onChange={(e) => setStartSlug(e.target.value)} disabled={loading || parkings.length === 0}>
+            <select id="route-start" className="input" value={startSlug} onChange={(e) => { setStartSlug(e.target.value); setError(null) }} disabled={loading || parkings.length === 0}>
               {parkings.map((parking) => (
                 <option key={parking.slug} value={parking.slug}>
                   {parking.name}
@@ -90,7 +92,7 @@ export function RoutePlanner() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220 }}>
             <label htmlFor="route-end">Eindpunt</label>
-            <select id="route-end" className="input" value={endSlug} onChange={(e) => setEndSlug(e.target.value)} disabled={loading || parkings.length === 0}>
+            <select id="route-end" className="input" value={endSlug} onChange={(e) => { setEndSlug(e.target.value); setError(null) }} disabled={loading || parkings.length === 0}>
               {parkings.map((parking) => (
                 <option key={parking.slug} value={parking.slug}>
                   {parking.name}
@@ -98,6 +100,12 @@ export function RoutePlanner() {
               ))}
             </select>
           </div>
+
+          <label className="switch" title="Controleert in de backend of de route de LEZ raakt">
+            <input type="checkbox" checked={showLez} onChange={(e) => { setShowLez(e.target.checked); setError(null) }} />
+            <span className="lez-swatch" aria-hidden="true" />
+            Lage-emissiezone
+          </label>
 
           <button className="btn btn-primary" onClick={handlePlan} disabled={planning || !startParking || !endParking || loading}>
             {planning ? 'Route berekenen…' : 'Route berekenen'}
@@ -112,7 +120,7 @@ export function RoutePlanner() {
           <ParkingMap
             parkings={parkings}
             basemap="grb"
-            showLez={false}
+            showLez={showLez}
             selected={null}
             route={routeOverlay}
           />
@@ -143,6 +151,7 @@ export function RoutePlanner() {
             <p className="note">Kies start en eindpunt en druk op “Route berekenen”.</p>
           )}
           {route && <p className="note">{route.routeSummary}</p>}
+          {route?.lezWarning && <p className="note">{route.lezWarning}</p>}
         </div>
       </div>
     </>

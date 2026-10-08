@@ -220,6 +220,118 @@ namespace ParkingGent.Api.Data.Migrations
                     b.ToTable("Runs");
                 });
 
+            modelBuilder.Entity("ParkingGent.Api.Domain.TransitConnectionEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ArrivalSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DepartureSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FromStopId")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("RouteId")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("ServiceId")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("ToStopId")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("TripId")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+                    b.HasIndex("FromStopId", "DepartureSeconds");
+                    b.HasIndex("RouteId", "TripId");
+                    b.ToTable("TransitConnections");
+                });
+
+            modelBuilder.Entity("ParkingGent.Api.Domain.TransitRouteEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+                    b.HasIndex("Name");
+                    b.ToTable("TransitRoutes");
+                });
+
+            modelBuilder.Entity("ParkingGent.Api.Domain.TransitStopEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<double>("Latitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("Longitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+                    b.HasIndex("Name");
+                    b.ToTable("TransitStops");
+                });
+
+            modelBuilder.Entity("ParkingGent.Api.Domain.TransitStopRouteEntity", b =>
+                {
+                    b.Property<string>("StopId")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("RouteId")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.HasKey("StopId", "RouteId");
+                    b.HasIndex("RouteId");
+                    b.ToTable("TransitStopRoutes");
+                });
+
             modelBuilder.Entity("ParkingGent.Api.Domain.Measurement", b =>
                 {
                     b.HasOne("ParkingGent.Api.Domain.Parking", "Parking")
@@ -247,6 +359,34 @@ namespace ParkingGent.Api.Data.Migrations
                     b.Navigation("Measurements");
 
                     b.Navigation("Status");
+                });
+
+            modelBuilder.Entity("ParkingGent.Api.Domain.TransitStopRouteEntity", b =>
+                {
+                    b.HasOne("ParkingGent.Api.Domain.TransitRouteEntity", "Route")
+                        .WithMany("Stops")
+                        .HasForeignKey("RouteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ParkingGent.Api.Domain.TransitStopEntity", "Stop")
+                        .WithMany("Routes")
+                        .HasForeignKey("StopId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Route");
+                    b.Navigation("Stop");
+                });
+
+            modelBuilder.Entity("ParkingGent.Api.Domain.TransitRouteEntity", b =>
+                {
+                    b.Navigation("Stops");
+                });
+
+            modelBuilder.Entity("ParkingGent.Api.Domain.TransitStopEntity", b =>
+                {
+                    b.Navigation("Routes");
                 });
 #pragma warning restore 612, 618
         }

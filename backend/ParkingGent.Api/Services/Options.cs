@@ -110,3 +110,18 @@ public sealed class RoutePlannerOptions
     public string BaseUrl { get; set; } = "https://api.heigit.org/openrouteservice";
     public string ApiKey { get; set; } = string.Empty;
 }
+
+public sealed class TransitOptions
+{
+    public const string SectionName = "Transit";
+
+    public string StaticFilePath { get; set; } = "seed/delijn-gtfs";
+    public string TripUpdatesUrl { get; set; } = "https://gtfs.flatturtle.cloud/delijn/_realtime/trip-update";
+    public string AlertsUrl { get; set; } = "https://gtfs.flatturtle.cloud/delijn/_realtime/alert";
+    public int StaticRefreshHours { get; set; } = 12;
+    public int RealtimeRefreshSeconds { get; set; } = 30;
+    public double GentMinLatitude { get; set; } = 50.97;
+    public double GentMaxLatitude { get; set; } = 51.14;
+    public double GentMinLongitude { get; set; } = 3.55;
+    public double GentMaxLongitude { get; set; } = 3.90;
+}

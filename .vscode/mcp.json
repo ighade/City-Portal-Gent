@@ -1,0 +1,33 @@
+{
+  "servers": {
+    "parkinggent-postgres": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://${input:parkinggent_db_user}:${input:parkinggent_db_password}@localhost:5434/${input:parkinggent_db_name}"
+      ]
+    }
+  },
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "parkinggent_db_user",
+      "description": "ParkingGent PostgreSQL user",
+      "default": "parkinggent"
+    },
+    {
+      "type": "promptString",
+      "id": "parkinggent_db_password",
+      "description": "ParkingGent PostgreSQL password",
+      "password": true
+    },
+    {
+      "type": "promptString",
+      "id": "parkinggent_db_name",
+      "description": "ParkingGent PostgreSQL database",
+      "default": "parkinggent"
+    }
+  ]
+}

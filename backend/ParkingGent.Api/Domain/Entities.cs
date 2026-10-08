@@ -160,3 +160,43 @@ public class SyncRun
     public int MeasurementsPruned { get; set; }
     public string? Message { get; set; }
 }
+
+public class TransitStopEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
+    public List<TransitStopRouteEntity> Routes { get; set; } = new();
+}
+
+public class TransitRouteEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Mode { get; set; } = "bus";
+    public DateTime UpdatedAtUtc { get; set; }
+    public List<TransitStopRouteEntity> Stops { get; set; } = new();
+}
+
+public class TransitStopRouteEntity
+{
+    public string StopId { get; set; } = string.Empty;
+    public TransitStopEntity Stop { get; set; } = null!;
+    public string RouteId { get; set; } = string.Empty;
+    public TransitRouteEntity Route { get; set; } = null!;
+}
+
+public class TransitConnectionEntity
+{
+    public long Id { get; set; }
+    public string TripId { get; set; } = string.Empty;
+    public string RouteId { get; set; } = string.Empty;
+    public string FromStopId { get; set; } = string.Empty;
+    public string ToStopId { get; set; } = string.Empty;
+    public int DepartureSeconds { get; set; }
+    public int ArrivalSeconds { get; set; }
+    public string ServiceId { get; set; } = string.Empty;
+    public DateTime UpdatedAtUtc { get; set; }
+}

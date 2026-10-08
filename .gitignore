@@ -1,3 +1,4 @@
 .env
 .env.*
 !.env.example
+backend/ParkingGent.Api/seed/delijn-gtfs.zip

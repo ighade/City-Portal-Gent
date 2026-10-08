@@ -22,6 +22,7 @@ export function Shell() {
               Kaart
             </NavLink>
             <NavLink to="/route">Route</NavLink>
+            <NavLink to="/ov">OV</NavLink>
             <NavLink to="/over">Over</NavLink>
             {isAdmin && <NavLink to="/beheer">Beheer</NavLink>}
           </nav>

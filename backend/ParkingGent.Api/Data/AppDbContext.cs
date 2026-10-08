@@ -9,6 +9,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<ParkingStatus> Statuses => Set<ParkingStatus>();
     public DbSet<Measurement> Measurements => Set<Measurement>();
     public DbSet<SyncRun> Runs => Set<SyncRun>();
+    public DbSet<TransitStopEntity> TransitStops => Set<TransitStopEntity>();
+    public DbSet<TransitRouteEntity> TransitRoutes => Set<TransitRouteEntity>();
+    public DbSet<TransitStopRouteEntity> TransitStopRoutes => Set<TransitStopRouteEntity>();
+    public DbSet<TransitConnectionEntity> TransitConnections => Set<TransitConnectionEntity>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -52,6 +56,41 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasIndex(r => r.StartedUtc);
             e.Property(r => r.Trigger).HasMaxLength(20);
             e.Property(r => r.Message).HasMaxLength(1000);
+        });
+
+        b.Entity<TransitStopEntity>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasMaxLength(120);
+            e.Property(s => s.Name).HasMaxLength(250);
+            e.HasIndex(s => s.Name);
+        });
+
+        b.Entity<TransitRouteEntity>(e =>
+        {
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasMaxLength(120);
+            e.Property(r => r.Name).HasMaxLength(250);
+            e.Property(r => r.Mode).HasMaxLength(20);
+        });
+
+        b.Entity<TransitStopRouteEntity>(e =>
+        {
+            e.HasKey(x => new { x.StopId, x.RouteId });
+            e.HasOne(x => x.Stop).WithMany(x => x.Routes).HasForeignKey(x => x.StopId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Route).WithMany(x => x.Stops).HasForeignKey(x => x.RouteId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<TransitConnectionEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TripId).HasMaxLength(160);
+            e.Property(x => x.RouteId).HasMaxLength(120);
+            e.Property(x => x.FromStopId).HasMaxLength(120);
+            e.Property(x => x.ToStopId).HasMaxLength(120);
+            e.Property(x => x.ServiceId).HasMaxLength(120);
+            e.HasIndex(x => new { x.FromStopId, x.DepartureSeconds });
+            e.HasIndex(x => new { x.RouteId, x.TripId });
         });
     }
 }
