@@ -13,6 +13,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<TransitRouteEntity> TransitRoutes => Set<TransitRouteEntity>();
     public DbSet<TransitStopRouteEntity> TransitStopRoutes => Set<TransitStopRouteEntity>();
     public DbSet<TransitConnectionEntity> TransitConnections => Set<TransitConnectionEntity>();
+    public DbSet<TransitShapePointEntity> TransitShapePoints => Set<TransitShapePointEntity>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -89,8 +90,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.FromStopId).HasMaxLength(120);
             e.Property(x => x.ToStopId).HasMaxLength(120);
             e.Property(x => x.ServiceId).HasMaxLength(120);
+            e.Property(x => x.ShapeId).HasMaxLength(160);
             e.HasIndex(x => new { x.FromStopId, x.DepartureSeconds });
             e.HasIndex(x => new { x.RouteId, x.TripId });
+        });
+
+        b.Entity<TransitShapePointEntity>(e =>
+        {
+            e.HasKey(x => new { x.ShapeId, x.Sequence });
+            e.Property(x => x.ShapeId).HasMaxLength(160);
+            e.HasIndex(x => x.ShapeId);
         });
     }
 }

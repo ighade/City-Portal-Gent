@@ -34,7 +34,8 @@ public sealed class RoutePlanner(
         double endLon,
         string mode,
         bool checkLez,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyList<(double Lat, double Lon)>? via = null)
     {
         if (string.IsNullOrWhiteSpace(options.Value.ApiKey))
         {
@@ -42,7 +43,8 @@ public sealed class RoutePlanner(
             return null;
         }
 
-        var normalizedMode = string.Equals(mode, "car", StringComparison.OrdinalIgnoreCase) ? "car" : "car";
+        var walking = string.Equals(mode, "foot-walking", StringComparison.OrdinalIgnoreCase);
+        var normalizedMode = walking ? "foot-walking" : "car";
         var lezRestricted = false;
         var lezWarning = (string?)null;
 
@@ -71,7 +73,14 @@ public sealed class RoutePlanner(
         var start = Uri.EscapeDataString($"{startLon.ToString(CultureInfo.InvariantCulture)},{startLat.ToString(CultureInfo.InvariantCulture)}");
         var end = Uri.EscapeDataString($"{endLon.ToString(CultureInfo.InvariantCulture)},{endLat.ToString(CultureInfo.InvariantCulture)}");
         var baseUrl = options.Value.BaseUrl.TrimEnd('/');
-        var requestUrl = $"{baseUrl}/v2/directions/driving-car?api_key={Uri.EscapeDataString(options.Value.ApiKey)}&start={start}&end={end}";
+        var profile = walking ? "foot-walking" : "driving-car";
+        var requestUrl = $"{baseUrl}/v2/directions/{profile}?api_key={Uri.EscapeDataString(options.Value.ApiKey)}&start={start}&end={end}";
+        if (via is { Count: > 0 })
+        {
+            var waypoints = string.Join('|', via.Select(point =>
+                $"{point.Lon.ToString(CultureInfo.InvariantCulture)},{point.Lat.ToString(CultureInfo.InvariantCulture)}"));
+            requestUrl += $"&via={Uri.EscapeDataString(waypoints)}";
+        }
 
         try
         {

@@ -198,5 +198,14 @@ public class TransitConnectionEntity
     public int DepartureSeconds { get; set; }
     public int ArrivalSeconds { get; set; }
     public string ServiceId { get; set; } = string.Empty;
+    public string ShapeId { get; set; } = string.Empty;
     public DateTime UpdatedAtUtc { get; set; }
+}
+
+public class TransitShapePointEntity
+{
+    public string ShapeId { get; set; } = string.Empty;
+    public int Sequence { get; set; }
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
 }

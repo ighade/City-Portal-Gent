@@ -61,18 +61,21 @@ public sealed record TransitLegDto(
     DateTime DepartureAt,
     DateTime ArrivalAt,
     double DistanceKm,
-    int DelayMinutes);
+    int DelayMinutes,
+    double[][] Coordinates);
 
 public sealed class TransitService(
     HttpClient http,
     AppDbContext db,
     IOptions<TransitOptions> options,
-    ILogger<TransitService> log)
+    ILogger<TransitService> log,
+    RoutePlanner routePlanner)
 {
     private readonly SemaphoreSlim loadGate = new(1, 1);
     private readonly SemaphoreSlim realtimeGate = new(1, 1);
     private readonly Dictionary<string, TransitStop> stops = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<TransitConnection>> connections = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, double[][]> shapes = new(StringComparer.Ordinal);
     private readonly Dictionary<(string TripId, string StopId), int> realtimeDelays = new();
     private DateTime staticUpdatedAtUtc;
     private DateTime realtimeUpdatedAtUtc;
@@ -214,7 +217,7 @@ public sealed class TransitService(
         var legs = new List<TransitLegDto>();
         if (originInfo.DistanceKm > 0.02)
         {
-            legs.Add(WalkLeg("Start", startLat, startLon, originStop.Name, originStop.Lat, originStop.Lon, now, originInfo.At, originInfo.DistanceKm));
+            legs.Add(await WalkLegAsync("Start", startLat, startLon, originStop.Name, originStop.Lat, originStop.Lon, now, originInfo.At, originInfo.DistanceKm, ct));
         }
 
         foreach (var group in path.GroupByConsecutive(e => e.TripId))
@@ -223,7 +226,30 @@ public sealed class TransitService(
             var last = group[^1];
             var from = stops[first.FromId];
             var to = stops[last.ToId];
-            var distance = DistanceKm(from.Lat, from.Lon, to.Lat, to.Lon);
+            var stopCoordinates = group
+                .Select(connection => stops[connection.FromId])
+                .Append(to)
+                .Select(stop => new[] { stop.Lat, stop.Lon })
+                .ToArray();
+            var viaStops = group
+                .Take(group.Count - 1)
+                .Select(connection => stops[connection.ToId])
+                .Select(stop => (stop.Lat, stop.Lon))
+                .ToArray();
+            var shapeCoordinates = shapes.TryGetValue(first.ShapeId, out var shape)
+                ? ShapeBetweenStops(shape, from, to)
+                : null;
+            var roadRoute = shapeCoordinates is null
+                ? await routePlanner.PlanAsync(from.Lat, from.Lon, to.Lat, to.Lon, "car", false, ct, viaStops)
+                : null;
+            var coordinates = shapeCoordinates ?? roadRoute?.Coordinates
+                .Where(point => point.Length >= 2)
+                .Select(point => new[] { point[1], point[0] })
+                .ToArray()
+                ?? stopCoordinates;
+            var distance = roadRoute?.DistanceKm ?? coordinates
+                .Zip(coordinates.Skip(1), (a, b) => DistanceKm(a[0], a[1], b[0], b[1]))
+                .Sum();
             legs.Add(new TransitLegDto(
                 Mode: first.Mode,
                 Line: first.Line,
@@ -236,7 +262,8 @@ public sealed class TransitService(
                 DepartureAt: first.EffectiveDeparture,
                 ArrivalAt: last.EffectiveArrival,
                 DistanceKm: distance,
-                DelayMinutes: group.Max(e => e.DelayMinutes)));
+                DelayMinutes: group.Max(e => e.DelayMinutes),
+                Coordinates: coordinates));
         }
 
         var lastTransitAt = path[^1].EffectiveArrival;
@@ -244,7 +271,7 @@ public sealed class TransitService(
         var finalArrival = destinationLabel.Arrival.AddSeconds(destinationCandidate.DistanceMeters / 1.35);
         if (finalDistanceKm > 0.02)
         {
-            legs.Add(WalkLeg(finalStop.Name, finalStop.Lat, finalStop.Lon, "Eindpunt", endLat, endLon, lastTransitAt, finalArrival, finalDistanceKm));
+            legs.Add(await WalkLegAsync(finalStop.Name, finalStop.Lat, finalStop.Lon, "Eindpunt", endLat, endLon, lastTransitAt, finalArrival, finalDistanceKm, ct));
         }
 
         var departure = legs.Count == 0 ? now : legs[0].DepartureAt;
@@ -308,13 +335,16 @@ public sealed class TransitService(
                 ModeForRouteType(row.GetValueOrDefault("route_type")));
         }
 
-        var trips = new Dictionary<string, (string RouteId, string ServiceId)>(StringComparer.Ordinal);
+        var trips = new Dictionary<string, (string RouteId, string ServiceId, string ShapeId)>(StringComparer.Ordinal);
         await foreach (var row in readRows("trips.txt", ct))
         {
             var id = row.GetValueOrDefault("trip_id");
             var routeId = row.GetValueOrDefault("route_id");
             if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(routeId))
-                trips[id] = (routeId, row.GetValueOrDefault("service_id") ?? string.Empty);
+                trips[id] = (
+                    routeId,
+                    row.GetValueOrDefault("service_id") ?? string.Empty,
+                    row.GetValueOrDefault("shape_id") ?? string.Empty);
         }
 
         var activeServices = await ActiveServicesAsync(readRows, ct);
@@ -329,8 +359,26 @@ public sealed class TransitService(
                 || !TryTime(row.GetValueOrDefault("arrival_time"), out var arrival)) continue;
             var sequence = int.TryParse(row.GetValueOrDefault("stop_sequence"), out var parsedSequence) ? parsedSequence : 0;
             if (!grouped.TryGetValue(tripId, out var times)) grouped[tripId] = times = new List<StopTime>();
-            times.Add(new StopTime(stopId, sequence, departure, arrival, trip.RouteId, trip.ServiceId));
+            times.Add(new StopTime(stopId, sequence, departure, arrival, trip.RouteId, trip.ServiceId, trip.ShapeId));
         }
+
+        var shapeIds = grouped.Values.SelectMany(x => x).Select(x => x.ShapeId)
+            .Where(x => !string.IsNullOrWhiteSpace(x)).ToHashSet(StringComparer.Ordinal);
+        var importedShapes = new Dictionary<string, List<double[]>>(StringComparer.Ordinal);
+        await foreach (var row in readRows("shapes.txt", ct))
+        {
+            var shapeId = row.GetValueOrDefault("shape_id");
+            if (string.IsNullOrWhiteSpace(shapeId) || !shapeIds.Contains(shapeId)
+                || !double.TryParse(row.GetValueOrDefault("shape_pt_lat"), CultureInfo.InvariantCulture, out var lat)
+                || !double.TryParse(row.GetValueOrDefault("shape_pt_lon"), CultureInfo.InvariantCulture, out var lon)
+                || !int.TryParse(row.GetValueOrDefault("shape_pt_sequence"), out var sequence)) continue;
+            if (!importedShapes.TryGetValue(shapeId, out var points)) importedShapes[shapeId] = points = new List<double[]>();
+            points.Add(new[] { lat, lon, (double)sequence });
+        }
+        var importedShapeArrays = importedShapes.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.OrderBy(point => point[2]).Select(point => new[] { point[0], point[1] }).ToArray(),
+            StringComparer.Ordinal);
 
         var newConnections = new Dictionary<string, List<TransitConnection>>(StringComparer.Ordinal);
         foreach (var (tripId, times) in grouped)
@@ -350,6 +398,7 @@ public sealed class TransitService(
                     ToId: to.StopId,
                     Line: routeInfo.Name,
                     Mode: routeInfo.Mode,
+                    ShapeId: from.ShapeId,
                     Departure: from.Departure,
                     Arrival: to.Arrival,
                     EffectiveDeparture: default,
@@ -378,11 +427,13 @@ public sealed class TransitService(
         }
 
         connections.Clear();
+        shapes.Clear();
+        foreach (var (shapeId, points) in importedShapeArrays) shapes[shapeId] = points;
         foreach (var (id, outgoing) in newConnections) connections[id] = outgoing;
         connectionCount = newConnections.Values.Sum(x => x.Count);
         staticUpdatedAtUtc = DateTime.UtcNow;
         staticLoaded = true;
-        await PersistStaticAsync(newStops, routes, newConnections, ct);
+        await PersistStaticAsync(newStops, routes, newConnections, importedShapeArrays, ct);
         log.LogInformation("GTFS geladen: {Stops} Gentse haltes en {Connections} verbindingen.", stops.Count, connectionCount);
     }
 
@@ -394,6 +445,7 @@ public sealed class TransitService(
         var storedRoutes = await db.TransitRoutes.AsNoTracking().ToDictionaryAsync(x => x.Id, ct);
         var storedStopRoutes = await db.TransitStopRoutes.AsNoTracking().ToListAsync(ct);
         var storedConnections = await db.TransitConnections.AsNoTracking().ToListAsync(ct);
+        var storedShapes = await db.TransitShapePoints.AsNoTracking().ToListAsync(ct);
         var routeIdsByStop = storedStopRoutes
             .GroupBy(link => link.StopId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Select(link => link.RouteId).ToArray(), StringComparer.Ordinal);
@@ -410,6 +462,10 @@ public sealed class TransitService(
             stops[stop.Id] = new TransitStop(stop.Id, stop.Name, stop.Latitude, stop.Longitude, lines);
         }
 
+        shapes.Clear();
+        foreach (var shape in storedShapes.GroupBy(x => x.ShapeId, StringComparer.Ordinal))
+            shapes[shape.Key] = shape.OrderBy(x => x.Sequence).Select(x => new[] { x.Latitude, x.Longitude }).ToArray();
+
         connections.Clear();
         foreach (var connection in storedConnections)
         {
@@ -424,6 +480,7 @@ public sealed class TransitService(
                 connection.ToStopId,
                 route.Name,
                 route.Mode,
+                connection.ShapeId,
                 TimeSpan.FromSeconds(connection.DepartureSeconds),
                 TimeSpan.FromSeconds(connection.ArrivalSeconds),
                 default,
@@ -442,11 +499,13 @@ public sealed class TransitService(
         Dictionary<string, TransitStop> newStops,
         Dictionary<string, (string Name, string Mode)> routes,
         Dictionary<string, List<TransitConnection>> newConnections,
+        Dictionary<string, double[][]> importedShapes,
         CancellationToken ct)
     {
         var updatedAtUtc = DateTime.UtcNow;
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.TransitConnections.ExecuteDeleteAsync(ct);
+        await db.TransitShapePoints.ExecuteDeleteAsync(ct);
         await db.TransitStopRoutes.ExecuteDeleteAsync(ct);
         await db.TransitRoutes.ExecuteDeleteAsync(ct);
         await db.TransitStops.ExecuteDeleteAsync(ct);
@@ -482,9 +541,17 @@ public sealed class TransitService(
                 DepartureSeconds = (int)connection.Departure.TotalSeconds,
                 ArrivalSeconds = (int)connection.Arrival.TotalSeconds,
                 ServiceId = connection.ServiceId,
+                ShapeId = connection.ShapeId,
                 UpdatedAtUtc = updatedAtUtc,
             });
         }
+        db.TransitShapePoints.AddRange(importedShapes.SelectMany(shape => shape.Value.Select((point, index) => new TransitShapePointEntity
+        {
+            ShapeId = shape.Key,
+            Sequence = index,
+            Latitude = point[0],
+            Longitude = point[1],
+        })));
         db.TransitStopRoutes.AddRange(links.Select(link => new TransitStopRouteEntity { StopId = link.StopId, RouteId = link.RouteId }));
         db.TransitConnections.AddRange(storedConnections);
         await db.SaveChangesAsync(ct);
@@ -621,7 +688,7 @@ public sealed class TransitService(
             .Take(take)
             .ToList();
 
-    private static TransitLegDto WalkLeg(
+    private async Task<TransitLegDto> WalkLegAsync(
         string from,
         double fromLat,
         double fromLon,
@@ -630,8 +697,19 @@ public sealed class TransitService(
         double toLon,
         DateTime departure,
         DateTime arrival,
-        double distanceKm)
-        => new("walk", null, from, to, fromLat, fromLon, toLat, toLon, departure, arrival, distanceKm, 0);
+        double distanceKm,
+        CancellationToken ct)
+    {
+        var route = await routePlanner.PlanAsync(fromLat, fromLon, toLat, toLon, "foot-walking", false, ct);
+        var coordinates = route?.Coordinates
+            .Where(point => point.Length >= 2)
+            .Select(point => new[] { point[1], point[0] })
+            .ToArray()
+            ?? [new[] { fromLat, fromLon }, new[] { toLat, toLon }];
+        return new TransitLegDto(
+            "walk", null, from, to, fromLat, fromLon, toLat, toLon, departure, arrival,
+            route?.DistanceKm ?? distanceKm, 0, coordinates);
+    }
 
     private static TransitStopDto ToDto(TransitStop stop) => new(stop.Id, stop.Name, stop.Lat, stop.Lon, stop.Lines);
     private bool InsideGent(double lat, double lon) => lat >= options.Value.GentMinLatitude && lat <= options.Value.GentMaxLatitude && lon >= options.Value.GentMinLongitude && lon <= options.Value.GentMaxLongitude;
@@ -645,6 +723,19 @@ public sealed class TransitService(
     private static bool TryTime(string? text, out TimeSpan value) => TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out value);
     private static DateTime AtDate(TimeSpan value) => DateTime.Today.Add(value);
     private static double DistanceKm(double lat1, double lon1, double lat2, double lon2) => DistanceMeters(lat1, lon1, lat2, lon2) / 1000d;
+    private static double[][]? ShapeBetweenStops(double[][] shape, TransitStop from, TransitStop to)
+    {
+        if (shape.Length < 2) return null;
+        var fromIndex = NearestShapePoint(shape, from.Lat, from.Lon);
+        var toIndex = NearestShapePoint(shape, to.Lat, to.Lon);
+        if (fromIndex == toIndex) return null;
+        if (fromIndex > toIndex) (fromIndex, toIndex) = (toIndex, fromIndex);
+        return shape[fromIndex..(toIndex + 1)];
+    }
+
+    private static int NearestShapePoint(double[][] shape, double lat, double lon)
+        => Enumerable.Range(0, shape.Length)
+            .MinBy(index => DistanceMeters(lat, lon, shape[index][0], shape[index][1]));
     private static double DistanceMeters(double lat1, double lon1, double lat2, double lon2)
     {
         const double earth = 6_371_000;
@@ -658,9 +749,9 @@ public sealed class TransitService(
 
     private sealed record TransitStop(string Id, string Name, double Lat, double Lon, string[] Lines = null!);
     private sealed record TransitSearchState(string StopId, string? Line);
-    private sealed record StopTime(string StopId, int Sequence, TimeSpan Departure, TimeSpan Arrival, string RouteId, string ServiceId);
+    private sealed record StopTime(string StopId, int Sequence, TimeSpan Departure, TimeSpan Arrival, string RouteId, string ServiceId, string ShapeId);
     private sealed record TransitConnection(
-        string TripId, string RouteId, string ServiceId, string FromId, string ToId, string Line, string Mode,
+        string TripId, string RouteId, string ServiceId, string FromId, string ToId, string Line, string Mode, string ShapeId,
         TimeSpan Departure, TimeSpan Arrival, DateTime EffectiveDeparture, DateTime EffectiveArrival, int DelayMinutes);
 }
 

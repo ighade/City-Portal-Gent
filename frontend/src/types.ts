@@ -165,6 +165,7 @@ export interface TransitLeg {
   arrivalAt: string
   distanceKm: number
   delayMinutes: number
+  coordinates: number[][]
 }
 
 export interface TransitRouteResult {

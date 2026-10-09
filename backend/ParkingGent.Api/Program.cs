@@ -164,8 +164,18 @@ using (var scope = app.Services.CreateScope())
             "DepartureSeconds" integer NOT NULL,
             "ArrivalSeconds" integer NOT NULL,
             "ServiceId" character varying(120) NOT NULL,
+            "ShapeId" character varying(160) NOT NULL DEFAULT '',
             "UpdatedAtUtc" timestamp with time zone NOT NULL
         );
+        ALTER TABLE "TransitConnections" ADD COLUMN IF NOT EXISTS "ShapeId" character varying(160) NOT NULL DEFAULT '';
+        CREATE TABLE IF NOT EXISTS "TransitShapePoints" (
+            "ShapeId" character varying(160) NOT NULL,
+            "Sequence" integer NOT NULL,
+            "Latitude" double precision NOT NULL,
+            "Longitude" double precision NOT NULL,
+            PRIMARY KEY ("ShapeId", "Sequence")
+        );
+        CREATE INDEX IF NOT EXISTS "IX_TransitShapePoints_ShapeId" ON "TransitShapePoints" ("ShapeId");
         CREATE TABLE IF NOT EXISTS "TransitStopRoutes" (
             "StopId" character varying(120) NOT NULL,
             "RouteId" character varying(120) NOT NULL,

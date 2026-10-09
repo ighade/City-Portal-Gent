@@ -76,10 +76,9 @@ export function TransitMap({ stops, route, selectedStopId, onStopClick }: Props)
     const group = L.layerGroup().addTo(instance)
     const bounds: Array<[number, number]> = []
     for (const leg of route.legs) {
-      const points: Array<[number, number]> = [
-        [leg.fromLat, leg.fromLon],
-        [leg.toLat, leg.toLon],
-      ]
+      const points: Array<[number, number]> = leg.coordinates?.length
+        ? leg.coordinates.map(([lat, lon]) => [lat, lon] as [number, number])
+        : [[leg.fromLat, leg.fromLon], [leg.toLat, leg.toLon]]
       bounds.push(...points)
       L.polyline(points, {
         color: leg.mode === 'walk' ? '#6b7280' : leg.mode === 'tram' ? '#d97706' : '#0f766e',
