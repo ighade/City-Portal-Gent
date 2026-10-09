@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 
@@ -27,6 +28,11 @@ public sealed class RoutePlanner(
     LowEmissionZone lez,
     ILogger<RoutePlanner> log)
 {
+    // ORS limits requests per minute; a burst from EZ Park would otherwise trip the circuit breaker.
+    private static readonly SemaphoreSlim OrsGate = new(2);
+    private static readonly ConcurrentDictionary<string, (DateTime At, RoutePlanResult Result)> Cache = new();
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(30);
+
     public async Task<RoutePlanResult?> PlanAsync(
         double startLat,
         double startLon,
@@ -74,6 +80,14 @@ public sealed class RoutePlanner(
         var end = Uri.EscapeDataString($"{endLon.ToString(CultureInfo.InvariantCulture)},{endLat.ToString(CultureInfo.InvariantCulture)}");
         var baseUrl = options.Value.BaseUrl.TrimEnd('/');
         var profile = walking ? "foot-walking" : "driving-car";
+        var cacheKey = via is { Count: > 0 }
+            ? null
+            : string.Create(CultureInfo.InvariantCulture, $"{profile}:{startLat:0.0000},{startLon:0.0000}:{endLat:0.0000},{endLon:0.0000}");
+        if (cacheKey is not null && Cache.TryGetValue(cacheKey, out var cached) && DateTime.UtcNow - cached.At < CacheTtl)
+        {
+            return cached.Result;
+        }
+
         var requestUrl = $"{baseUrl}/v2/directions/{profile}?api_key={Uri.EscapeDataString(options.Value.ApiKey)}&start={start}&end={end}";
         if (via is { Count: > 0 })
         {
@@ -87,7 +101,7 @@ public sealed class RoutePlanner(
             using var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
             request.Headers.Accept.Clear();
             request.Headers.Accept.ParseAdd("application/geo+json");
-            using var response = await http.SendAsync(request, ct);
+            using var response = await SendThrottledAsync(request, ct);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -119,7 +133,7 @@ public sealed class RoutePlanner(
             var distanceMeters = summary.GetProperty("distance").GetDouble();
             var durationSeconds = summary.GetProperty("duration").GetDouble();
 
-            return new RoutePlanResult(
+            var planned = new RoutePlanResult(
                 Mode: normalizedMode,
                 DistanceKm: distanceMeters / 1000d,
                 DurationMinutes: durationSeconds / 60d,
@@ -127,6 +141,8 @@ public sealed class RoutePlanner(
                 RouteSummary: $"{distanceMeters / 1000d:0.1} km · {(durationSeconds / 60d):0} min",
                 LezRestricted: lezRestricted,
                 LezWarning: lezWarning);
+            if (cacheKey is not null) Cache[cacheKey] = (DateTime.UtcNow, planned);
+            return planned;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -135,9 +151,22 @@ public sealed class RoutePlanner(
         }
     }
 
+    private async Task<HttpResponseMessage> SendThrottledAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        await OrsGate.WaitAsync(ct);
+        try
+        {
+            return await http.SendAsync(request, ct);
+        }
+        finally
+        {
+            OrsGate.Release();
+        }
+    }
+
     private const double LezBorderToleranceMeters = 1d;
 
-    private static bool IsInsideLez(double latitude, double longitude, IReadOnlyList<JsonElement> shapes)
+    internal static bool IsInsideLez(double latitude, double longitude, IReadOnlyList<JsonElement> shapes)
     {
         foreach (var shape in shapes)
         {

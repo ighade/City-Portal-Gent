@@ -32,8 +32,8 @@
      Achtergrond, geen gegeven: een streeplijn en een zweem vulling. De spelden
      moeten er bovenop leesbaar blijven, dus geen verzadigd vlak — en geen kleur
      uit het grafiekpalet, want dit is geen reeks maar een grens. */
-  --lez-line: #7c6ac4;
-  --lez-fill: rgba(124, 106, 196, 0.26);
+  --lez-line: #e8590c;
+  --lez-fill: rgba(255, 140, 0, 0.30);
 }
 
 :root[data-theme='dark'] {
@@ -48,8 +48,8 @@
   --heat-5: #6172d8;
   --heat-6: #94a3fb;
 
-  --lez-line: #9c8ce0;
-  --lez-fill: rgba(156, 140, 224, 0.26);
+  --lez-line: #ff922b;
+  --lez-fill: rgba(255, 146, 43, 0.30);
 }
 
 * { box-sizing: border-box; }
@@ -156,6 +156,19 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
 }
 .input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--ring); }
 .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; }
+.toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.toggle-track {
+  position: relative; width: 36px; height: 20px; border-radius: 999px; flex: none;
+  background: var(--border-strong); transition: background .15s;
+}
+.toggle-track::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s;
+}
+.toggle input:checked + .toggle-track { background: #3b82f6; }
+.toggle input:checked + .toggle-track::after { transform: translateX(16px); }
+.toggle input:focus-visible + .toggle-track { box-shadow: 0 0 0 3px var(--ring); }
 .field-inline { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
 
 .pill {
@@ -283,7 +296,7 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
    gewoon de speld eronder bereikt. */
 .lez-shape {
   stroke: var(--lez-line);
-  stroke-width: 2.5;
+  stroke-width: 3;
   stroke-dasharray: 7 4;
   fill: var(--lez-fill);
   /* Leaflet zet zelf fill-opacity="0.2" als attribuut. Dat vermenigvuldigt met de alpha

@@ -112,6 +112,54 @@ export interface RoutePlanResult {
   lezWarning?: string
 }
 
+export interface EzParkRequest {
+  startLat: number
+  startLon: number
+  endLat: number
+  endLon: number
+  departInMinutes: number
+  avoidLez: boolean
+}
+
+export interface EzParkLeg {
+  mode: 'drive' | 'park' | 'walk' | 'bus' | 'tram'
+  line?: string
+  from: string
+  to: string
+  departureAt: string
+  arrivalAt: string
+  distanceKm: number
+  /** [lat, lon] */
+  coordinates: number[][]
+}
+
+export interface EzParkVariant {
+  type: 'walk' | 'transit'
+  arrivalAt: string
+  totalMinutes: number
+  legs: EzParkLeg[]
+}
+
+export interface EzParkOption {
+  slug: string
+  name: string
+  address?: string
+  lat: number
+  lon: number
+  available: number
+  capacity: number
+  driveMinutes: number
+  driveKm: number
+  parkMinutes: number
+  variants: EzParkVariant[]
+}
+
+export interface EzParkResult {
+  departureAt: string
+  options: EzParkOption[]
+  warning?: string
+}
+
 export interface TransitStop {
   id: string
   name: string

@@ -39,6 +39,7 @@ public static class Api
         api.MapGet("/transit/status", TransitStatus).CacheOutput("kort");
         api.MapPost("/transit/route", TransitRoute);
         api.MapPost("/route/plan", RoutePlan);
+        api.MapPost("/route/ezpark", EzPark);
 
         var admin = api.MapGroup("/admin").AddEndpointFilter(async (ctx, next) =>
         {
@@ -214,11 +215,31 @@ public static class Api
             request.CheckLez,
             ct);
         if (route?.LezRestricted == true)
-            return Results.BadRequest(new { error = route.LezWarning });
+            return Results.BadRequest(new { error = route.LezWarning, code = "lez" });
 
         return route is null
             ? Results.BadRequest(new { error = "Routeplanning kon niet uitgevoerd worden." })
             : Results.Ok(route);
+    }
+
+    private static async Task<IResult> EzPark(EzParkPlanner planner, EzParkRequest request, CancellationToken ct)
+    {
+        if (request.StartLat is < -90 or > 90 || request.StartLon is < -180 or > 180)
+            return Results.BadRequest(new { error = "Ongeldige startcoördinaten." });
+        if (request.EndLat is < -90 or > 90 || request.EndLon is < -180 or > 180)
+            return Results.BadRequest(new { error = "Ongeldige eindcoördinaten." });
+
+        try
+        {
+            var result = await planner.PlanAsync(request, ct);
+            return result is null
+                ? Results.BadRequest(new { error = "EZ Park kon niet berekend worden." })
+                : Results.Ok(result);
+        }
+        catch (TransitUnavailableException)
+        {
+            return Results.Json(new { error = "De OV-dienstregeling is tijdelijk niet beschikbaar." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
     }
 
     private static async Task<IResult> TransitStops(TransitService transit, CancellationToken ct)

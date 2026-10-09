@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import L, { BASEMAP_ATTRIBUTION, BASEMAP_LAYER, BASEMAP_WMS, GENT_BOUNDS, GENT_CENTER } from '../leaflet'
+import L, { addThemedBasemap, GENT_BOUNDS, GENT_CENTER } from '../leaflet'
 import type { TransitRouteResult, TransitStop } from '../types'
 
 interface Props {
@@ -26,15 +26,7 @@ export function TransitMap({ stops, route, selectedStopId, onStopClick }: Props)
       maxBoundsViscosity: 0.7,
       zoomControl: true,
     })
-    L.tileLayer.wms(BASEMAP_WMS, {
-      layers: BASEMAP_LAYER,
-      format: 'image/png',
-      version: '1.3.0',
-      maxZoom: 21,
-      tileSize: 512,
-      updateWhenIdle: true,
-      attribution: BASEMAP_ATTRIBUTION,
-    }).addTo(instance)
+    addThemedBasemap(instance)
     stopLayer.current = L.layerGroup().addTo(instance)
     map.current = instance
 

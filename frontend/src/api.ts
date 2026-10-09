@@ -1,7 +1,7 @@
-import type { GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, SyncRun, TransitRouteRequest, TransitRouteResult, TransitStatus, TransitStop, TransitStopRealtime, Trend } from './types'
+import type { EzParkRequest, EzParkResult, GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, SyncRun, TransitRouteRequest, TransitRouteResult, TransitStatus, TransitStop, TransitStopRealtime, Trend } from './types'
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public code?: string) {
     super(message)
   }
 }
@@ -27,10 +27,10 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
   }
 
   if (!res.ok) {
-    const d = data as { detail?: string; title?: string; error?: string } | string | null
+    const d = data as { detail?: string; title?: string; error?: string; code?: string } | string | null
     const msg =
       typeof d === 'string' ? d : d?.detail || d?.error || d?.title || `${res.status} ${res.statusText}`
-    throw new ApiError(res.status, msg)
+    throw new ApiError(res.status, msg, typeof d === 'object' ? d?.code : undefined)
   }
   return data as T
 }
@@ -44,6 +44,7 @@ export const api = {
   /** De lage-emissiezone als GeoJSON. Verandert vrijwel nooit; één keer per bezoek volstaat. */
   lez: () => call<GeoJsonCollection>('GET', '/api/lez'),
   routePlan: (payload: RoutePlanRequest) => call<RoutePlanResult>('POST', '/api/route/plan', payload),
+  ezPark: (payload: EzParkRequest) => call<EzParkResult>('POST', '/api/route/ezpark', payload),
   transit: {
     stops: () => call<TransitStop[]>('GET', '/api/transit/stops'),
     stopRealtime: (stopId: string) => call<TransitStopRealtime>('GET', `/api/transit/stops/${encodeURIComponent(stopId)}/realtime`),

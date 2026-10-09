@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
+    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
     "leaflet": "^1.9.4",
+    "maplibre-gl": "^6.13.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.9.4"

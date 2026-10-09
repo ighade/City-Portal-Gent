@@ -139,7 +139,8 @@ public sealed class TransitService(
         double startLon,
         double endLat,
         double endLon,
-        CancellationToken ct)
+        CancellationToken ct,
+        DateTime? departAt = null)
     {
         await EnsureStaticAsync(ct);
         await RefreshRealtimeAsync(ct);
@@ -148,7 +149,7 @@ public sealed class TransitService(
         var destinationCandidates = Nearest(endLat, endLon, 50, 1_000);
         if (originCandidates.Count == 0 || destinationCandidates.Count == 0) return null;
 
-        var now = DateTime.Now;
+        var now = departAt ?? DateTime.Now;
         var best = new Dictionary<TransitSearchState, (int Transfers, DateTime Arrival)>();
         var previous = new Dictionary<TransitSearchState, (TransitSearchState State, TransitConnection Connection)>();
         var origins = new Dictionary<TransitSearchState, (double DistanceKm, DateTime At)>();

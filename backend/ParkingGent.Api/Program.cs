@@ -70,6 +70,7 @@ builder.Services.AddScoped<CallerResolver>();
 builder.Services.AddScoped<ParkingSync>();
 builder.Services.AddScoped<Backfill>();
 builder.Services.AddScoped<Trends>();
+builder.Services.AddScoped<EzParkPlanner>();
 builder.Services.AddHostedService<ParkingSyncService>();
 
 builder.Services.ConfigureHttpJsonOptions(o =>

@@ -1,9 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import L, {
-  BASEMAP_ATTRIBUTION,
-  BASEMAP_LAYER,
-  BASEMAP_WMS,
+  addThemedBasemap,
   GENT_BOUNDS,
   GENT_CENTER,
   OSM_ATTRIBUTION,
@@ -12,7 +10,7 @@ import L, {
 } from '../leaflet'
 import { api } from '../api'
 import { busyness, busynessLabel, kindLabel } from '../types'
-import type { Parking } from '../types'
+import type { EzParkLeg, Parking } from '../types'
 
 interface RoutePoint {
   lat: number
@@ -36,6 +34,19 @@ interface Props {
   selected?: string | null
   onSelect?: (slug: string | null) => void
   route?: RouteOverlay | null
+  /** Alle spelden in één blauw, zonder drukte-kleur (routepagina). */
+  bluePins?: boolean
+  /** Klik op een leeg stuk kaart; voor het kiezen van start of bestemming. */
+  onMapClick?: (lat: number, lon: number) => void
+  /** EZ Park: start, bestemming en de benen van de gekozen route. */
+  ezpark?: EzParkOverlay | null
+}
+
+interface EzParkOverlay {
+  start?: { lat: number; lon: number } | null
+  end?: { lat: number; lon: number } | null
+  legs: EzParkLeg[]
+  parks?: Array<{ lat: number; lon: number; name: string }>
 }
 
 /**
@@ -46,12 +57,15 @@ interface Props {
  * groen verschillen hier ook in wat erin staat. Een parking zonder meting krijgt een open ring
  * met haar capaciteit — zichtbaar anders dan een gemeten plek.
  */
-export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route }: Props) {
+export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
   const routeLayer = useRef<L.LayerGroup | null>(null)
-  const base = useRef<L.TileLayer | null>(null)
+  const ezLayer = useRef<L.LayerGroup | null>(null)
+  const clickHandler = useRef(onMapClick)
+  clickHandler.current = onMapClick
+  const base = useRef<{ remove(): void; bringToBack(): void } | null>(null)
   const lez = useRef<L.GeoJSON | null>(null)
   const markers = useRef<Map<string, L.Marker>>(new Map())
   const navigate = useNavigate()
@@ -72,6 +86,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
     })
     layer.current = L.layerGroup().addTo(m)
     map.current = m
+    m.on('click', (e: L.LeafletMouseEvent) => clickHandler.current?.(e.latlng.lat, e.latlng.lng))
 
     return () => {
       m.remove()
@@ -97,24 +112,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
             // naamloze tegelverzoeken. Dit attribuut geldt alleen voor deze plaatjes.
             referrerPolicy: OSM_REFERRER_POLICY,
           }).addTo(m)
-        : L.tileLayer
-            .wms(BASEMAP_WMS, {
-              layers: BASEMAP_LAYER,
-              format: 'image/png',
-              version: '1.3.0',
-              maxZoom: 21,
-              attribution: BASEMAP_ATTRIBUTION,
-              // De GRB-dienst tekent elke tegel ter plekke: gemeten op 29-09-2026 duurt een
-              // tegel van 256 px ongeveer één seconde en een van 512 px er tweeënhalf — maar die
-              // laatste dekt vier keer zo veel. Een kaartbeeld van deze grootte kost zo vijf
-              // oproepen in plaats van twintig, en dat scheelt de helft van de wachttijd.
-              tileSize: 512,
-              // Niet ophalen tijdens het slepen, alleen als de kaart stilvalt. Bij een trage
-              // tegeldienst is halverwege een sleepbeweging bestellen alleen maar verspilling.
-              updateWhenIdle: true,
-              keepBuffer: 1,
-            })
-            .addTo(m)
+        : addThemedBasemap(m)
     base.current.bringToBack()
   }, [basemap])
 
@@ -177,8 +175,6 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
     )
     polyline.addTo(group)
 
-    L.marker([route.start.lat, route.start.lon]).addTo(group)
-    L.marker([route.end.lat, route.end.lon]).addTo(group)
 
     routeLayer.current = group
     const bounds = L.latLngBounds([
@@ -188,6 +184,55 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
     ])
     m.fitBounds(bounds.pad(0.18), { animate: true })
   }, [route])
+
+  // EZ Park: gekozen start/bestemming plus de benen van de geselecteerde optie.
+  useEffect(() => {
+    const m = map.current
+    if (!m) return
+
+    ezLayer.current?.remove()
+    ezLayer.current = null
+    if (!ezpark) return
+
+    const group = L.layerGroup().addTo(m)
+    const bounds: Array<[number, number]> = []
+    const dot = (p: { lat: number; lon: number }, color: string, label: string) => {
+      L.circleMarker([p.lat, p.lon], { radius: 9, color: '#fff', weight: 3, fillColor: color, fillOpacity: 1 })
+        .bindTooltip(label, { permanent: true, direction: 'top', offset: [0, -8] })
+        .addTo(group)
+      bounds.push([p.lat, p.lon])
+    }
+    if (ezpark.start) dot(ezpark.start, '#2563eb', 'Start')
+    if (ezpark.end) dot(ezpark.end, '#c2410c', 'Bestemming')
+
+    for (const park of ezpark.parks ?? []) {
+      L.marker([park.lat, park.lon], {
+        title: park.name,
+        zIndexOffset: 1000,
+        icon: L.divIcon({
+          className: '',
+          html: '<span style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:#3b82f6;color:#fff;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);font:700 18px/1 sans-serif">P</span>',
+          iconSize: [34, 34],
+          iconAnchor: [17, 17],
+        }),
+      }).bindTooltip(park.name, { direction: 'top', offset: [0, -16] }).addTo(group)
+      bounds.push([park.lat, park.lon])
+    }
+
+    for (const leg of ezpark.legs) {
+      if (leg.coordinates.length < 2) continue
+      const points = leg.coordinates.map(([lat, lon]) => [lat, lon] as [number, number])
+      const style =
+        leg.mode === 'drive' ? { color: '#d94a4a', weight: 5 }
+        : leg.mode === 'walk' ? { color: '#475569', weight: 4, dashArray: '2 8' }
+        : { color: '#0f766e', weight: 5 }
+      L.polyline(points, { ...style, opacity: 0.9 }).addTo(group)
+      bounds.push(...points)
+    }
+
+    ezLayer.current = group
+    if (ezpark.legs.length > 0 && bounds.length > 0) m.fitBounds(L.latLngBounds(bounds).pad(0.15), { animate: true })
+  }, [ezpark])
 
   // De spelden: bij elke vernieuwing opnieuw tekenen. Vijftig spelden is niets.
   useEffect(() => {
@@ -203,7 +248,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
     // eerst wat niet openbaar is, zodat de speld waar je wél terechtkunt bovenop ligt.
     for (const p of [...parkings].sort((a, b) => Number(a.isPublic) - Number(b.isPublic))) {
       const marker = L.marker([p.lat, p.lon], {
-        icon: icon(p),
+        icon: icon(p, bluePins),
         title: p.name,
         riseOnHover: true,
         keyboard: true,
@@ -221,7 +266,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
       marker.addTo(group)
       markers.current.set(p.slug, marker)
     }
-  }, [parkings, navigate, onSelect])
+  }, [parkings, navigate, onSelect, bluePins])
 
   // Wat in de lijst aangewezen wordt, opent op de kaart.
   useEffect(() => {
@@ -235,9 +280,10 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
   return <div ref={host} className="map" role="application" aria-label="Kaart van de parkings in Gent" />
 }
 
-function icon(p: Parking): L.DivIcon {
+function icon(p: Parking, blue = false): L.DivIcon {
   const level = busyness(p.status)
   const open = p.status?.isOpen !== false
+  const blueStyle = blue ? ' style="background:#3b82f6;border-color:#3b82f6;color:#fff"' : ''
 
   // Een fietsenstalling krijgt een vierkante speld in plaats van een ronde. Zo is de soort af te
   // lezen zonder op de kleur te steunen — die draagt hier al de drukte.
@@ -256,7 +302,7 @@ function icon(p: Parking): L.DivIcon {
     // Geen meting: een open ring met de capaciteit. Onmiskenbaar iets anders dan een gemeten plek.
     return L.divIcon({
       className: '',
-      html: `<span class="pin pin-unknown" title="${escape(p.name)}">${compact(p.capacity)}</span>`,
+      html: `<span class="pin pin-unknown"${blueStyle} title="${escape(p.name)}">${compact(p.capacity)}</span>`,
       iconSize: [34, 34],
       iconAnchor: [17, 17],
       popupAnchor: [0, -16],
@@ -266,14 +312,13 @@ function icon(p: Parking): L.DivIcon {
   const text = open ? compact(p.status.available) : '—'
   return L.divIcon({
     className: '',
-    html: `<span class="pin level-${level}" title="${escape(p.name)}">${text}</span>`,
+    html: `<span class="pin level-${level}"${blueStyle} title="${escape(p.name)}">${text}</span>`,
     iconSize: [38, 38],
     iconAnchor: [19, 19],
     popupAnchor: [0, -18],
   })
 }
 
-/** 2372 wordt "2,4k": vier tekens passen op een speld, zes niet. */
 function compact(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1).replace('.', ',')}k`
   return String(n)

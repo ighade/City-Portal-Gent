@@ -95,7 +95,7 @@ export function Kaart() {
 
         <div className="segmented grow-end" role="group" aria-label="Achtergrondkaart">
           <button className={basemap === 'grb' ? 'on' : ''} onClick={() => setBasemap('grb')}>
-            GRB
+            Standaard
           </button>
           <button className={basemap === 'osm' ? 'on' : ''} onClick={() => setBasemap('osm')}>
             OpenStreetMap

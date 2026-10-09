@@ -1,157 +1,197 @@
-import { useEffect, useMemo, useState } from 'react'
-import { api } from '../api'
+import { useMemo, useState } from 'react'
+import { api, ApiError } from '../api'
+import { EzParkPanel } from '../components/EzParkPanel'
+import type { EzOverlay } from '../components/EzParkPanel'
 import { ParkingMap } from '../components/ParkingMap'
+import { useRouteInputs } from '../components/RouteInputs'
 import { useApp } from '../context/AppContext'
 import type { RoutePlanResult } from '../types'
 
 export function RoutePlanner() {
-  const { parkings, loading } = useApp()
-  const [startSlug, setStartSlug] = useState('')
-  const [endSlug, setEndSlug] = useState('')
+  const { parkings } = useApp()
   const [planning, setPlanning] = useState(false)
   const [showLez, setShowLez] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [route, setRoute] = useState<RoutePlanResult | null>(null)
+  const [ezOn, setEzOn] = useState(false)
+  const [lezBlocked, setLezBlocked] = useState(false)
+  const [ezOverlay, setEzOverlay] = useState<EzOverlay | null>(null)
+  const [overviewEl, setOverviewEl] = useState<HTMLElement | null>(null)
+  const [mapClick, setMapClick] = useState<{ lat: number; lon: number; n: number } | null>(null)
 
-  const startParking = useMemo(() => parkings.find((p) => p.slug === startSlug) ?? null, [parkings, startSlug])
-  const endParking = useMemo(() => parkings.find((p) => p.slug === endSlug) ?? null, [parkings, endSlug])
-
-  useEffect(() => {
-    if (parkings.length === 0) return
-    if (!startSlug) {
-      const fallback = parkings.find((p) => /sint-pieters|dok/i.test(p.name)) ?? parkings[0]
-      setStartSlug(fallback.slug)
-    }
-    if (!endSlug) {
-      const fallback = parkings.find((p) => /gravensteen|korenmarkt|brug|mergel/i.test(p.name)) ?? parkings[parkings.length - 1]
-      setEndSlug(fallback.slug)
-    }
-  }, [parkings, startSlug, endSlug])
+  const carParkings = useMemo(() => parkings.filter((p) => p.kind !== 'bicycle'), [parkings])
+  const inputs = useRouteInputs(carParkings, mapClick)
+  const { start, end } = inputs
 
   const routeOverlay = useMemo(() => {
-    if (!route || !startParking || !endParking) return null
+    if (!route || !start || !end) return null
     return {
-      start: { lat: startParking.lat, lon: startParking.lon, label: startParking.name },
-      end: { lat: endParking.lat, lon: endParking.lon, label: endParking.name },
+      start: { lat: start.lat, lon: start.lon, label: start.label },
+      end: { lat: end.lat, lon: end.lon, label: end.label },
       mode: 'car' as const,
       points: route.coordinates.map(([lon, lat]) => ({ lat, lon })),
     }
-  }, [route, startParking, endParking])
+  }, [route, start, end])
+
+  const markerOverlay = useMemo<EzOverlay>(
+    () => ({ start, end, legs: [], variant: null, parkingName: null, parks: [] }),
+    [start, end],
+  )
+
+  const departAt = useMemo(
+    () => new Date(Date.now() + inputs.departInMinutes() * 60000),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [route, inputs.departTime],
+  )
+  const arriveAt = route ? new Date(departAt.getTime() + route.durationMinutes * 60000) : null
 
   async function handlePlan() {
-    if (!startParking || !endParking) {
+    if (!start || !end) {
       setError('Kies eerst een start- en eindpunt.')
-      return
-    }
-    if (startParking.slug === endParking.slug) {
-      setError('Kies twee verschillende locaties.')
       return
     }
 
     setPlanning(true)
     setError(null)
+    setLezBlocked(false)
 
     try {
       const result = await api.routePlan({
-        startLat: startParking.lat,
-        startLon: startParking.lon,
-        endLat: endParking.lat,
-        endLon: endParking.lon,
+        startLat: start.lat,
+        startLon: start.lon,
+        endLat: end.lat,
+        endLon: end.lon,
         mode: 'car',
         checkLez: showLez,
       })
       setRoute(result)
     } catch (err) {
+      setLezBlocked(err instanceof ApiError && err.code === 'lez')
       setError(err instanceof Error ? err.message : 'De route kon niet worden berekend.')
     } finally {
       setPlanning(false)
     }
   }
 
+  function startEzPark() {
+    setError(null)
+    setLezBlocked(false)
+    setEzOn(true)
+  }
+
+  const toggles = (<>
+    <label className="toggle" title="Controleert in de backend of de route de LEZ raakt">
+      <input type="checkbox" role="switch" checked={showLez} onChange={(e) => { setShowLez(e.target.checked); setError(null) }} />
+      <span className="toggle-track" aria-hidden="true" />
+      Lage-emissiezone
+    </label>
+
+    <label className="toggle" title="Rij naar een open parking en ga te voet of met het OV verder">
+      <input type="checkbox" role="switch" checked={ezOn} onChange={(e) => (e.target.checked ? startEzPark() : setEzOn(false))} />
+      <span className="toggle-track" aria-hidden="true" />
+      EZ Park
+    </label>
+  </>)
+
+  const time = (d: Date) => d.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })
+
   return (
     <>
       <div className="page-head">
         <div>
           <h1>Routeplanner</h1>
-          <p>Route tussen parkeerlocaties uit de database van deze app. Eén route per keer, berekend met OpenRouteService.</p>
+          <p>Plan een route met de auto, of parkeer buiten de zone met EZ Park. Berekend met OpenRouteService.</p>
         </div>
       </div>
 
       <div className="card">
-        <div className="row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220 }}>
-            <label htmlFor="route-start">Start</label>
-            <select id="route-start" className="input" value={startSlug} onChange={(e) => { setStartSlug(e.target.value); setError(null) }} disabled={loading || parkings.length === 0}>
-              {parkings.map((parking) => (
-                <option key={parking.slug} value={parking.slug}>
-                  {parking.name}
-                </option>
-              ))}
-            </select>
+        {ezOn ? (
+          <EzParkPanel
+            avoidLez={showLez}
+            start={start}
+            end={end}
+            departInMinutes={inputs.departInMinutes}
+            fields={inputs.fields}
+            toggles={toggles}
+            overviewEl={overviewEl}
+            hint={inputs.hint}
+            onOverlay={setEzOverlay}
+          />
+        ) : (<>
+          <div className="row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            {inputs.fields}
+
+            {toggles}
+
+            <button className="btn btn-primary" style={{ minWidth: 150, whiteSpace: 'nowrap' }} onClick={handlePlan} disabled={planning || !start || !end}>
+              {planning ? 'Route berekenen…' : 'Route berekenen'}
+            </button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220 }}>
-            <label htmlFor="route-end">Eindpunt</label>
-            <select id="route-end" className="input" value={endSlug} onChange={(e) => { setEndSlug(e.target.value); setError(null) }} disabled={loading || parkings.length === 0}>
-              {parkings.map((parking) => (
-                <option key={parking.slug} value={parking.slug}>
-                  {parking.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <label className="switch" title="Controleert in de backend of de route de LEZ raakt">
-            <input type="checkbox" checked={showLez} onChange={(e) => { setShowLez(e.target.checked); setError(null) }} />
-            <span className="lez-swatch" aria-hidden="true" />
-            Lage-emissiezone
-          </label>
-
-          <button className="btn btn-primary" onClick={handlePlan} disabled={planning || !startParking || !endParking || loading}>
-            {planning ? 'Route berekenen…' : 'Route berekenen'}
-          </button>
-        </div>
-
-        {error && <div className="banner" style={{ marginTop: 16 }}>{error}</div>}
+          {inputs.hint && <p className="note">{inputs.hint}</p>}
+          {error && <div className="banner" style={{ marginTop: 16 }}>{error}</div>}
+          {lezBlocked && (
+            <div className="banner" style={{ marginTop: 16 }}>
+              Deze route komt in de LEZ. Wil je EZ Park gebruiken: parkeer buiten de zone en ga verder te voet of met het OV?
+              <button className="btn btn-primary" style={{ marginLeft: 12 }} onClick={startEzPark}>Gebruik EZ Park</button>
+            </div>
+          )}
+        </>)}
+        {inputs.locateError && !start && <div className="banner" style={{ marginTop: 16 }}>{inputs.locateError}</div>}
       </div>
 
       <div className="split" style={{ marginTop: 16 }}>
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <ParkingMap
-            parkings={parkings}
+            parkings={ezOn ? [] : carParkings}
+            bluePins
             basemap="grb"
             showLez={showLez}
             selected={null}
-            route={routeOverlay}
+            route={ezOn ? null : routeOverlay}
+            onMapClick={(lat, lon) => setMapClick({ lat, lon, n: Date.now() })}
+            ezpark={ezOn ? ezOverlay : markerOverlay}
           />
         </div>
 
         <div className="card">
           <h2>Routeoverzicht</h2>
-          <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <span className="muted">Start</span>
-              <strong>{startParking?.name ?? '—'}</strong>
+          {ezOn ? (
+            <div ref={setOverviewEl} />
+          ) : (<>
+            <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span className="muted">Start</span>
+                <strong>{start?.label ?? '—'}</strong>
+              </div>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span className="muted">Eind</span>
+                <strong>{end?.label ?? '—'}</strong>
+              </div>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span className="muted">Vertrek</span>
+                <strong>{route ? time(departAt) : '—'}</strong>
+              </div>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span className="muted">Aankomst</span>
+                <strong>{arriveAt ? time(arriveAt) : '—'}</strong>
+              </div>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span className="muted">Afstand</span>
+                <strong>{route ? `${route.distanceKm.toFixed(1)} km` : '—'}</strong>
+              </div>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span className="muted">Geschatte tijd</span>
+                <strong>{route ? `${Math.round(route.durationMinutes)} min` : '—'}</strong>
+              </div>
             </div>
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <span className="muted">Eind</span>
-              <strong>{endParking?.name ?? '—'}</strong>
-            </div>
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <span className="muted">Afstand</span>
-              <strong>{route ? `${route.distanceKm.toFixed(1)} km` : '—'}</strong>
-            </div>
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <span className="muted">Geschatte tijd</span>
-              <strong>{route ? `${Math.round(route.durationMinutes)} min` : '—'}</strong>
-            </div>
-          </div>
 
-          {!route && !planning && (
-            <p className="note">Kies start en eindpunt en druk op “Route berekenen”.</p>
-          )}
-          {route && <p className="note">{route.routeSummary}</p>}
-          {route?.lezWarning && <p className="note">{route.lezWarning}</p>}
+            {!route && !planning && (
+              <p className="note">Kies start en bestemming en druk op “Route berekenen”.</p>
+            )}
+            {route && <p className="note">{route.routeSummary}</p>}
+            {route?.lezWarning && <p className="note">{route.lezWarning}</p>}
+          </>)}
         </div>
       </div>
     </>
