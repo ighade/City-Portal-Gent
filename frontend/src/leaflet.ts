@@ -49,9 +49,16 @@ export const MAP_COLORS = {
 
 const PARK_ID = /park|grass|wood|forest|cemetery|garden|pitch|playground|recreation|sport|golf|farm|scrub|wetland|meadow|orchard|vineyard/i
 
+// Geen icoontjes voor haltes, tankstations en winkels: de app tekent haar eigen haltes.
+const HIDDEN_SOURCE_LAYERS = new Set(['poi', 'housenumber', 'aerodrome_label'])
+
 /** Kleurt de OpenFreeMap-stijl "bright" om naar het eigen palet; de lagen en hun volgorde blijven. */
 function themeStyle(style: StyleSpecification): StyleSpecification {
   const c = MAP_COLORS
+  style.layers = style.layers.filter((layer) => {
+    const src = 'source-layer' in layer ? (layer['source-layer'] as string | undefined) : undefined
+    return !(src && HIDDEN_SOURCE_LAYERS.has(src))
+  })
   for (const layer of style.layers) {
     const id = layer.id
     const src = 'source-layer' in layer ? (layer['source-layer'] as string | undefined) : undefined

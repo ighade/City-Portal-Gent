@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { api, ApiError } from '../api'
 import { EzParkPanel } from '../components/EzParkPanel'
+import { GarageRate, StreetRate } from '../components/RateInfo'
 import type { EzOverlay } from '../components/EzParkPanel'
 import { ParkingMap } from '../components/ParkingMap'
 import { useRouteInputs } from '../components/RouteInputs'
@@ -191,6 +192,13 @@ export function RoutePlanner() {
             )}
             {route && <p className="note">{route.routeSummary}</p>}
             {route?.lezWarning && <p className="note">{route.lezWarning}</p>}
+            {route?.destinationGarage && (
+              <div style={{ marginTop: 16 }}>
+                <h3>Tarief {route.destinationGarage.name}</h3>
+                <GarageRate rate={route.destinationGarage.rate} />
+              </div>
+            )}
+            {route?.destinationParking && <StreetRate info={route.destinationParking} arrival={arriveAt} />}
           </>)}
         </div>
       </div>

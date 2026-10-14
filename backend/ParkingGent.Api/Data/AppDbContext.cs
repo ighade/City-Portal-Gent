@@ -14,6 +14,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<TransitStopRouteEntity> TransitStopRoutes => Set<TransitStopRouteEntity>();
     public DbSet<TransitConnectionEntity> TransitConnections => Set<TransitConnectionEntity>();
     public DbSet<TransitShapePointEntity> TransitShapePoints => Set<TransitShapePointEntity>();
+    public DbSet<StreetParkingTariff> StreetParkingTariffs => Set<StreetParkingTariff>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -93,6 +94,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.ShapeId).HasMaxLength(160);
             e.HasIndex(x => new { x.FromStopId, x.DepartureSeconds });
             e.HasIndex(x => new { x.RouteId, x.TripId });
+        });
+
+        b.Entity<StreetParkingTariff>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Zone).HasMaxLength(20);
+            e.Property(x => x.Period).HasMaxLength(10);
+            e.Property(x => x.AmountEur).HasPrecision(8, 2);
+            e.HasIndex(x => new { x.Zone, x.Period, x.Hours }).IsUnique();
         });
 
         b.Entity<TransitShapePointEntity>(e =>

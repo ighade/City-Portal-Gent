@@ -20,7 +20,11 @@ public sealed record RoutePlanResult(
     double[][] Coordinates,
     string RouteSummary,
     bool LezRestricted,
-    string? LezWarning);
+    string? LezWarning,
+    StreetParkingDto? DestinationParking = null,
+    DestinationGarage? DestinationGarage = null);
+
+public sealed record DestinationGarage(string Name, ParkingRate Rate);
 
 public sealed class RoutePlanner(
     HttpClient http,

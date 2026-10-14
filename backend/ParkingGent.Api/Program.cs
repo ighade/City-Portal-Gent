@@ -65,6 +65,7 @@ builder.Services.AddHttpClient<TransitService>(c =>
 
 builder.Services.AddSingleton<BicycleLocations>();
 builder.Services.AddSingleton<LowEmissionZone>();
+builder.Services.AddSingleton<StreetParkingZones>();
 builder.Services.AddHostedService<TransitWarmupService>();
 builder.Services.AddScoped<CallerResolver>();
 builder.Services.AddScoped<ParkingSync>();

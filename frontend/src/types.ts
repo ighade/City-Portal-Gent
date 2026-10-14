@@ -102,6 +102,40 @@ export interface RoutePlanRequest {
   checkLez?: boolean
 }
 
+export interface StreetTariff {
+  period: 'dag' | 'avond'
+  /** 0 = dagtarief (24 u) */
+  hours: number
+  amountEur: number
+}
+
+export interface StreetParking {
+  zone: 'rood' | 'oranje' | 'geel' | 'groen' | 'blauw'
+  name: string
+  subzone?: string
+  paidNow: boolean
+  rules: string
+  notes: string[]
+  tariffs: StreetTariff[]
+  sourceUrl: string
+}
+
+export interface RatePeriod {
+  key: 'weekday' | 'saturday' | 'sunday' | 'night'
+  label: string
+  hourlyEur: number
+  isMaximum: boolean
+  dayMaxEur?: number
+  extra?: string
+}
+
+export interface ParkingRate {
+  activeKey: RatePeriod['key']
+  periods: RatePeriod[]
+  notes: string[]
+  sourceUrl: string
+}
+
 export interface RoutePlanResult {
   mode: 'car'
   distanceKm: number
@@ -110,6 +144,8 @@ export interface RoutePlanResult {
   routeSummary: string
   lezRestricted?: boolean
   lezWarning?: string
+  destinationParking?: StreetParking
+  destinationGarage?: { name: string; rate: ParkingRate }
 }
 
 export interface EzParkRequest {
@@ -152,6 +188,7 @@ export interface EzParkOption {
   driveKm: number
   parkMinutes: number
   variants: EzParkVariant[]
+  rate?: ParkingRate
 }
 
 export interface EzParkResult {

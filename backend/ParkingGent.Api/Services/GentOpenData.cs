@@ -250,6 +250,23 @@ public sealed class GentOpenData(HttpClient http, IOptions<GentOptions> options,
         return shapes;
     }
 
+    /// <summary>De tariefzones voor straatparkeren, met hun vlak als GeoJSON-geometrie.</summary>
+    public async Task<List<TariffZoneShape>> GetParkingTariffZonesAsync(CancellationToken ct)
+    {
+        var rows = await FetchAllAsync<TariffZoneRecord>(options.Value.ParkingTariffZoneDataset, orderBy: null, max: 300, ct);
+        var zones = new List<TariffZoneShape>();
+
+        foreach (var r in rows)
+        {
+            if (string.IsNullOrWhiteSpace(r.Id)) continue;
+            if (r.Geometry.ValueKind != JsonValueKind.Object) continue;
+            if (!r.Geometry.TryGetProperty("geometry", out var inner) || inner.ValueKind != JsonValueKind.Object) continue;
+            zones.Add(new TariffZoneShape(r.Id!, r.Zone, r.Subzone, inner.Clone()));
+        }
+
+        return zones;
+    }
+
     /// <summary>
     /// Kan de bron bereikt worden? Alleen de kop van de realtime-dataset, met een korte limiet —
     /// dit hangt aan <c>/api/health</c> en mag een statuscontrole niet laten wachten.
@@ -451,6 +468,14 @@ public sealed class GentOpenData(HttpClient http, IOptions<GentOptions> options,
     /// </summary>
     private sealed class ZoneRecord
     {
+        public JsonElement Geometry { get; set; }
+    }
+
+    private sealed class TariffZoneRecord
+    {
+        public string? Id { get; set; }
+        public string? Zone { get; set; }
+        public string? Subzone { get; set; }
         public JsonElement Geometry { get; set; }
     }
 

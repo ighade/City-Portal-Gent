@@ -41,7 +41,8 @@ public sealed record EzParkOption(
     double DriveMinutes,
     double DriveKm,
     int ParkMinutes,
-    EzParkVariant[] Variants);
+    EzParkVariant[] Variants,
+    ParkingRate? Rate);
 
 public sealed record EzParkResult(
     DateTime DepartureAt,
@@ -165,7 +166,8 @@ public sealed class EzParkPlanner(
             p.Slug, p.Name, p.Address, p.Latitude, p.Longitude,
             p.Status!.AvailableSpaces, p.Status.TotalCapacity,
             drive.DurationMinutes, drive.DistanceKm, ParkMinutes,
-            variants.ToArray());
+            variants.ToArray(),
+            ParkingRates.For(p.Slug, parked));
     }
 
     private static double[][] Flip(double[][] lonLat) =>

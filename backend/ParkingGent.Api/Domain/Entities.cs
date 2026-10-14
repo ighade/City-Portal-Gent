@@ -209,3 +209,21 @@ public class TransitShapePointEntity
     public double Latitude { get; set; }
     public double Longitude { get; set; }
 }
+
+/// <summary>Straatparkeertarief van Stad Gent: wat <see cref="Hours"/> uur parkeren kost in een zone.</summary>
+public class StreetParkingTariff
+{
+    public long Id { get; set; }
+
+    /// <summary>"rood", "oranje", "geel" of "groen".</summary>
+    public string Zone { get; set; } = string.Empty;
+
+    /// <summary>"dag" (9–19 u) of "avond" (19–23 u).</summary>
+    public string Period { get; set; } = string.Empty;
+
+    /// <summary>1 tot 5 uur; 0 is het dagtarief (24 u).</summary>
+    public int Hours { get; set; }
+
+    /// <summary>Totaalbedrag voor die duur; 0 is gratis. Een duur die niet kan, heeft geen rij.</summary>
+    public decimal AmountEur { get; set; }
+}

@@ -199,7 +199,7 @@ public static class Api
             new JsonSerializerOptions(JsonSerializerDefaults.Web), "application/geo+json");
     }
 
-    private static async Task<IResult> RoutePlan(RoutePlanner planner, RoutePlanRequest request, CancellationToken ct)
+    private static async Task<IResult> RoutePlan(RoutePlanner planner, StreetParkingZones streetZones, AppDbContext db, RoutePlanRequest request, CancellationToken ct)
     {
         if (request.StartLat is < -90 or > 90 || request.StartLon is < -180 or > 180)
             return Results.BadRequest(new { error = "Ongeldige startcoördinaten." });
@@ -219,7 +219,32 @@ public static class Api
 
         return route is null
             ? Results.BadRequest(new { error = "Routeplanning kon niet uitgevoerd worden." })
-            : Results.Ok(route);
+            : Results.Ok(await WithDestinationParking(route, streetZones, db, request, ct));
+    }
+
+    private static async Task<RoutePlanResult> WithDestinationParking(
+        RoutePlanResult route, StreetParkingZones streetZones, AppDbContext db, RoutePlanRequest request, CancellationToken ct)
+    {
+        if (!string.Equals(route.Mode, "car", StringComparison.OrdinalIgnoreCase)) return route;
+
+        var arrival = StreetParkingZones.LocalTime(DateTime.UtcNow.AddMinutes(route.DurationMinutes));
+        var parking = await streetZones.FindAsync(request.EndLat, request.EndLon, arrival, ct);
+
+        // Een eindpunt dat een parking is (binnen ~100 m): toon haar garagetarief.
+        const double box = 0.001;
+        var garage = (await db.Parkings.AsNoTracking()
+                .Where(p => p.Kind != ParkingKind.Bicycle
+                    && Math.Abs(p.Latitude - request.EndLat) < box && Math.Abs(p.Longitude - request.EndLon) < box)
+                .ToListAsync(ct))
+            .OrderBy(p => Math.Abs(p.Latitude - request.EndLat) + Math.Abs(p.Longitude - request.EndLon))
+            .Select(p => (p.Name, Rate: ParkingRates.For(p.Slug, arrival)))
+            .FirstOrDefault(x => x.Rate is not null);
+
+        return route with
+        {
+            DestinationParking = parking,
+            DestinationGarage = garage.Rate is null ? null : new DestinationGarage(garage.Name, garage.Rate),
+        };
     }
 
     private static async Task<IResult> EzPark(EzParkPlanner planner, EzParkRequest request, CancellationToken ct)

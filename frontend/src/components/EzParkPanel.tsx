@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
+import { GarageRate, EndTimeSelect, endOptions, estimateCost } from './RateInfo'
 import type { RoutePoint } from './RouteInputs'
-import type { EzParkLeg, EzParkOption, EzParkResult, EzParkVariant } from '../types'
+import type { EzParkLeg, EzParkOption, EzParkResult, EzParkVariant, ParkingRate } from '../types'
 
 export type EzPoint = RoutePoint
 
@@ -103,7 +104,7 @@ export function EzParkPanel({ avoidLez, start, end, departInMinutes, fields, tog
                 <span>Gekozen: <strong>{option.name}</strong> · {variant.type === 'walk' ? 'te voet' : 'OV'}</span>
                 <button className="btn" onClick={() => setSelected(null)}>Andere optie kiezen</button>
               </div>
-              <Legs variant={variant} />
+              <Legs variant={variant} rate={option.rate} />
             </>
           )}
 
@@ -146,11 +147,14 @@ function OptionCard({ option, selected, onSelect }: {
           )
         })}
       </div>
+      <GarageRate rate={option.rate} />
     </div>
   )
 }
 
-export function Legs({ variant }: { variant: EzParkVariant }) {
+export function Legs({ variant, rate }: { variant: EzParkVariant; rate?: ParkingRate }) {
+  const [idx, setIdx] = useState(0)
+
   return (
     <div style={{ marginTop: 16 }}>
       <h3>Jouw traject · {Math.round(variant.totalMinutes)} min</h3>
@@ -165,9 +169,33 @@ export function Legs({ variant }: { variant: EzParkVariant }) {
                 {formatTime(leg.departureAt)}–{formatTime(leg.arrivalAt)}
                 {leg.distanceKm > 0 ? ` · ${leg.distanceKm.toFixed(1)} km` : ''}
               </div>
+              {leg.mode === 'park' && <ParkCost leg={leg} rate={rate} index={idx} onIndex={setIdx} />}
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function ParkCost({ leg, rate, index, onIndex }: {
+  leg: EzParkLeg
+  rate?: ParkingRate
+  index: number
+  onIndex: (i: number) => void
+}) {
+  const start = new Date(leg.departureAt)
+  const chosen = endOptions(start)[index]
+  const cost = rate ? estimateCost(rate, start, chosen.hours) : null
+
+  return (
+    <div className="small" style={{ marginTop: 6, display: 'grid', gap: 4 }}>
+      <EndTimeSelect start={start} index={index} onIndex={onIndex} />
+      <div>
+        {formatTime(start.toISOString())}–{formatTime(chosen.end.toISOString())}
+        {cost === null
+          ? ' · tarief onbekend (zie website uitbater)'
+          : <> · <strong>≈ € {cost.toLocaleString('nl-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></>}
       </div>
     </div>
   )

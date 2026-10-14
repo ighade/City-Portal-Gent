@@ -220,6 +220,39 @@ namespace ParkingGent.Api.Data.Migrations
                     b.ToTable("Runs");
                 });
 
+            modelBuilder.Entity("ParkingGent.Api.Domain.StreetParkingTariff", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("AmountEur")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.Property<int>("Hours")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("Zone")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Zone", "Period", "Hours")
+                        .IsUnique();
+
+                    b.ToTable("StreetParkingTariffs");
+                });
+
             modelBuilder.Entity("ParkingGent.Api.Domain.TransitConnectionEntity", b =>
                 {
                     b.Property<long>("Id")

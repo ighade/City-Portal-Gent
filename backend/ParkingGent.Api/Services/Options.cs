@@ -35,6 +35,9 @@ public sealed class GentOptions
     /// </summary>
     public string LowEmissionZoneDataset { get; set; } = "lage-emissie-zone-gent";
 
+    /// <summary>De tariefzones voor parkeren op straat (rood, oranje, geel, groen, blauw).</summary>
+    public string ParkingTariffZoneDataset { get; set; } = "parkeertariefzones-gent";
+
     /// <summary>Hoe vaak we opnieuw ophalen, in minuten. De stad vernieuwt zelf om de vijf minuten.</summary>
     public int RefreshMinutes { get; set; } = 5;
 
