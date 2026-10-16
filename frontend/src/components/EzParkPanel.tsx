@@ -14,13 +14,16 @@ export interface EzOverlay {
   legs: EzParkLeg[]
   variant: EzParkVariant | null
   parkingName: string | null
-  parks: Array<{ lat: number; lon: number; name: string; slug: string; details: string[] }>
+  parks: Array<{ lat: number; lon: number; name: string; slug: string; details: string[]; available: number | null; capacity: number }>
 }
 
 interface Props {
   avoidLez: boolean
   start: EzPoint | null
   end: EzPoint | null
+  canPlan: boolean
+  resolveStart: () => Promise<EzPoint>
+  resolveEnd: () => Promise<EzPoint>
   departInMinutes: () => number
   /** De gedeelde invoervelden van de routeplanner. */
   fields: ReactNode
@@ -34,7 +37,7 @@ interface Props {
   pick: { slug: string; n: number } | null
 }
 
-export function EzParkPanel({ avoidLez, start, end, departInMinutes, fields, toggles, overviewEl, hint, onOverlay, pick }: Props) {
+export function EzParkPanel({ avoidLez, start, end, canPlan, resolveStart, resolveEnd, departInMinutes, fields, toggles, overviewEl, hint, onOverlay, pick }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<EzParkResult | null>(null)
@@ -50,9 +53,10 @@ export function EzParkPanel({ avoidLez, start, end, departInMinutes, fields, tog
       name: o.name,
       slug: o.slug,
       details: [
-        o.available === null ? 'Beschikbaarheid onbekend' : `${o.available} vrij van ${o.capacity}`,
         `rijden ${Math.round(o.driveMinutes)} min (${o.driveKm.toFixed(1)} km) · parkeren ${o.parkMinutes} min`,
       ],
+      available: o.available,
+      capacity: o.capacity,
     }))
     onOverlay({ start, end, legs: variant?.legs ?? [], variant, parkingName: option?.name ?? null, parks })
   }, [start, end, variant, option, result, onOverlay])
@@ -64,7 +68,7 @@ export function EzParkPanel({ avoidLez, start, end, departInMinutes, fields, tog
   }, [pick])
 
   async function plan() {
-    if (!start || !end) {
+    if (!canPlan) {
       setError('Kies een start en een bestemming.')
       return
     }
@@ -73,11 +77,12 @@ export function EzParkPanel({ avoidLez, start, end, departInMinutes, fields, tog
     setResult(null)
     setSelected(null)
     try {
+      const [from, to] = await Promise.all([resolveStart(), resolveEnd()])
       const res = await api.ezPark({
-        startLat: start.lat,
-        startLon: start.lon,
-        endLat: end.lat,
-        endLon: end.lon,
+        startLat: from.lat,
+        startLon: from.lon,
+        endLat: to.lat,
+        endLon: to.lon,
         departInMinutes: departInMinutes(),
         avoidLez,
       })
@@ -96,7 +101,7 @@ export function EzParkPanel({ avoidLez, start, end, departInMinutes, fields, tog
 
         {toggles}
 
-        <button className="btn btn-primary" style={{ minWidth: 150, whiteSpace: 'nowrap' }} onClick={plan} disabled={loading || !start || !end}>
+        <button className="btn btn-primary" style={{ minWidth: 150, whiteSpace: 'nowrap' }} onClick={plan} disabled={loading || !canPlan}>
           {loading ? 'Zoeken…' : 'Zoek parkings'}
         </button>
       </div>

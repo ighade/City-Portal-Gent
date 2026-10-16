@@ -6,6 +6,38 @@ export class ApiError extends Error {
   }
 }
 
+const GEO = 'https://geo.api.vlaanderen.be/geolocation/v4'
+
+interface Place { lat: number; lon: number; label: string }
+
+const inGent = (label: string) => /\bgent\b/i.test(label)
+
+async function flemishGeocode(q: string): Promise<Place> {
+  const res = await fetch(`${GEO}/Location?c=5&q=${encodeURIComponent(q)}`)
+  const body = res.ok
+    ? await res.json() as { LocationResult?: Array<{ FormattedAddress?: string; Municipality?: string; Location: { Lat_WGS84: number; Lon_WGS84: number } }> }
+    : {}
+  const hits = body.LocationResult ?? []
+  const hit = hits.find((h) => h.Municipality?.toLowerCase() === 'gent') ?? hits[0]
+  if (!hit) throw new Error('Dit adres werd niet gevonden.')
+  return { lat: hit.Location.Lat_WGS84, lon: hit.Location.Lon_WGS84, label: hit.FormattedAddress ?? q }
+}
+
+// Eén oproep per voorstel-ronde; de coördinaten komen pas bij het berekenen, via flemishGeocode.
+const suggestCache = new Map<string, string[]>()
+
+async function flemishSuggest(q: string): Promise<string[]> {
+  const cached = suggestCache.get(q)
+  if (cached) return cached
+  const res = await fetch(`${GEO}/Suggestion?c=10&q=${encodeURIComponent(q)}`)
+  if (!res.ok) return []
+  const body = await res.json() as { SuggestionResult?: string[] }
+  const all = body.SuggestionResult ?? []
+  const sorted = [...all.filter(inGent), ...all.filter((l) => !inGent(l))].slice(0, 5)
+  suggestCache.set(q, sorted)
+  return sorted
+}
+
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
@@ -44,6 +76,8 @@ export const api = {
   /** De lage-emissiezone als GeoJSON. Verandert vrijwel nooit; één keer per bezoek volstaat. */
   lez: () => call<GeoJsonCollection>('GET', '/api/lez'),
   routePlan: (payload: RoutePlanRequest) => call<RoutePlanResult>('POST', '/api/route/plan', payload),
+  suggest: flemishSuggest,
+  geocode: flemishGeocode,
   ezPark: (payload: EzParkRequest) => call<EzParkResult>('POST', '/api/route/ezpark', payload),
   transit: {
     stops: () => call<TransitStop[]>('GET', '/api/transit/stops'),

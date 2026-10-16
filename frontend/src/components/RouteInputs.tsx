@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api'
 import type { Parking, TransitStop } from '../types'
@@ -11,9 +11,39 @@ export interface RoutePoint {
 
 type Pick = 'start' | 'end' | null
 
+/** Adresvoorstellen, alleen opgehaald door een toetsaanslag en niet door een programmatische wijziging. */
+function useSuggestions() {
+  const [items, setItems] = useState<string[]>([])
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const latest = useRef(0)
+
+  function request(text: string) {
+    clearTimeout(timer.current)
+    const q = text.trim()
+    const id = ++latest.current
+    if (q.length < 3) {
+      setItems([])
+      return
+    }
+    timer.current = setTimeout(() => {
+      api.suggest(q).then((r) => id === latest.current && setItems(r)).catch(() => id === latest.current && setItems([]))
+    }, 350)
+  }
+
+  useEffect(() => () => clearTimeout(timer.current), [])
+  return [items, request] as const
+}
+
+/** Een toets of wissen, geen keuze uit de lijst en geen programmatische wijziging. */
+const isTyped = (e: { nativeEvent: Event }) => {
+  const type = (e.nativeEvent as InputEvent).inputType
+  return type !== undefined && type !== 'insertReplacementText'
+}
+
 /** Gedeelde invoer voor de gewone route en EZ Park: start, bestemming en vertrektijd. */
 export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon: number; n: number } | null) {
   const [start, setStart] = useState<RoutePoint | null>(null)
+  const [startText, setStartText] = useState('')
   const [end, setEnd] = useState<RoutePoint | null>(null)
   const [endText, setEndText] = useState('')
   const [stops, setStops] = useState<TransitStop[]>([])
@@ -36,6 +66,7 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setStart({ lat: pos.coords.latitude, lon: pos.coords.longitude, label: 'Mijn locatie' })
+        setStartText('Mijn locatie')
         setLocating(false)
       },
       () => {
@@ -53,8 +84,10 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
   useEffect(() => {
     if (!mapClick || !pick) return
     const point = { lat: mapClick.lat, lon: mapClick.lon, label: 'Gekozen op kaart' }
-    if (pick === 'start') setStart(point)
-    else {
+    if (pick === 'start') {
+      setStart(point)
+      setStartText(point.label)
+    } else {
       setEnd(point)
       setEndText(point.label)
     }
@@ -70,11 +103,39 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
     [parkings, stops],
   )
 
+  const [startSuggestions, suggestStart] = useSuggestions()
+  const [endSuggestions, suggestEnd] = useSuggestions()
+
+  const sameLabel = (a: string, b: string) => a.trim().toLocaleLowerCase('nl-BE') === b.trim().toLocaleLowerCase('nl-BE')
+
+  function onStartText(value: string) {
+    setStartText(value)
+    setStart(null)
+  }
+
   function onEndText(value: string) {
     setEndText(value)
-    const key = value.trim().toLocaleLowerCase('nl-BE')
-    const place = places.find((p) => p.name.toLocaleLowerCase('nl-BE') === key)
-    if (place) setEnd({ lat: place.lat, lon: place.lon, label: place.name })
+    const place = places.find((p) => sameLabel(p.name, value))
+    setEnd(place ? { lat: place.lat, lon: place.lon, label: place.name } : null)
+  }
+
+  async function resolveStart(): Promise<RoutePoint> {
+    if (start) return start
+    const text = startText.trim()
+    if (!text) throw new Error('Kies eerst een startpunt.')
+    const hit = await api.geocode(text)
+    setStart(hit)
+    return hit
+  }
+
+  /** De gekozen bestemming, of een getypt adres dat eerst opgezocht wordt. */
+  async function resolveEnd(): Promise<RoutePoint> {
+    if (end) return end
+    const text = endText.trim()
+    if (!text) throw new Error('Kies eerst een bestemming.')
+    const hit = await api.geocode(text)
+    setEnd(hit)
+    return hit
   }
 
   function chooseEnd(point: RoutePoint) {
@@ -96,7 +157,10 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 260px', minWidth: 0 }}>
         <label>Start</label>
         <div className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
-          <input className="input" style={{ flex: 1 }} readOnly value={start ? start.label : ''} title={start ? `${start.lat.toFixed(4)}, ${start.lon.toFixed(4)}` : undefined} placeholder="Geen startpunt" />
+          <input className="input" style={{ flex: 1 }} list="route-start-suggestions" value={startText} onChange={(e) => { onStartText(e.target.value); if (isTyped(e)) suggestStart(e.target.value) }} title={start ? `${start.lat.toFixed(4)}, ${start.lon.toFixed(4)}` : undefined} placeholder="Adres of mijn locatie" />
+          <datalist id="route-start-suggestions">
+            {startSuggestions.map((label) => <option key={label} value={label} />)}
+          </datalist>
           <button className="btn" style={{ whiteSpace: 'nowrap' }} onClick={locate} disabled={locating}>{locating ? '…' : 'Mijn locatie'}</button>
           <button className={`btn${pick === 'start' ? ' btn-primary' : ''}`} style={{ whiteSpace: 'nowrap' }} onClick={() => setPick(pick === 'start' ? null : 'start')}>Op kaart</button>
         </div>
@@ -105,9 +169,9 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 260px', minWidth: 0 }}>
         <label htmlFor="route-end">Bestemming</label>
         <div className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
-          <input id="route-end" className="input" style={{ flex: 1 }} list="route-places" value={endText} onChange={(e) => onEndText(e.target.value)} placeholder="Zoek een parking of halte" />
+          <input id="route-end" className="input" style={{ flex: 1 }} list="route-places" value={endText} onChange={(e) => { onEndText(e.target.value); if (isTyped(e)) suggestEnd(e.target.value) }} placeholder="Adres, parking of halte" />
           <datalist id="route-places">
-            {places.map((p, i) => <option key={`${p.name}-${i}`} value={p.name} />)}
+            {endSuggestions.map((label) => <option key={label} value={label} />)}
           </datalist>
           <button className={`btn${pick === 'end' ? ' btn-primary' : ''}`} style={{ whiteSpace: 'nowrap' }} onClick={() => setPick(pick === 'end' ? null : 'end')}>Op kaart</button>
         </div>
@@ -124,5 +188,5 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
     ? `Klik op de kaart om je ${pick === 'start' ? 'startpunt' : 'bestemming'} te kiezen.`
     : null
 
-  return { start, end, departTime, departInMinutes, fields, hint, locateError, chooseEnd }
+  return { start, end, hasStart: start !== null || startText.trim() !== '', hasEnd: end !== null || endText.trim() !== '', resolveStart, resolveEnd, departTime, departInMinutes, fields, hint, locateError, chooseEnd }
 }

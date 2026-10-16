@@ -50,7 +50,7 @@ interface EzParkOverlay {
   start?: { lat: number; lon: number } | null
   end?: { lat: number; lon: number } | null
   legs: EzParkLeg[]
-  parks?: Array<{ lat: number; lon: number; name: string; slug: string; details: string[] }>
+  parks?: Array<{ lat: number; lon: number; name: string; slug: string; details: string[]; available: number | null; capacity: number }>
 }
 
 /**
@@ -223,7 +223,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
         }),
       })
         .bindPopup(
-          `<div class="pin-popup"><strong>${escape(park.name)}</strong>${park.details.map((d) => `<p>${escape(d)}</p>`).join('')}</div>`,
+          `<div class="pin-popup"><strong>${escape(park.name)}</strong>${park.available !== null && park.capacity > 0 ? occupancyBar(park.available, park.capacity) : '<p>Beschikbaarheid onbekend</p>'}${park.details.map((d) => `<p>${escape(d)}</p>`).join('')}</div>`,
           { closeButton: false, maxWidth: 260, autoPan: false, offset: [0, -8] },
         )
         .on('mouseover', (e) => e.target.openPopup())

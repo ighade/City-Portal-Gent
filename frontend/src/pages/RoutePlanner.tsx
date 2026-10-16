@@ -49,22 +49,18 @@ export function RoutePlanner() {
   )
   const arriveAt = route ? new Date(departAt.getTime() + route.durationMinutes * 60000) : null
 
-  async function handlePlan(target: RoutePoint | null = end) {
-    if (!start || !target) {
-      setError('Kies eerst een start- en eindpunt.')
-      return
-    }
-
+  async function handlePlan(target?: RoutePoint) {
     setPlanning(true)
     setError(null)
     setLezBlocked(false)
 
     try {
+      const [from, dest] = await Promise.all([inputs.resolveStart(), target ?? inputs.resolveEnd()])
       const result = await api.routePlan({
-        startLat: start.lat,
-        startLon: start.lon,
-        endLat: target.lat,
-        endLon: target.lon,
+        startLat: from.lat,
+        startLon: from.lon,
+        endLat: dest.lat,
+        endLon: dest.lon,
         mode: 'car',
         checkLez: showLez,
       })
@@ -82,7 +78,7 @@ export function RoutePlanner() {
     if (!p) return
     const point = { lat: p.lat, lon: p.lon, label: p.name }
     inputs.chooseEnd(point)
-    if (start) void handlePlan(point)
+    if (inputs.hasStart) void handlePlan(point)
   }
 
   function startEzPark() {
@@ -132,7 +128,9 @@ export function RoutePlanner() {
             avoidLez={showLez}
             start={start}
             end={end}
-            departInMinutes={inputs.departInMinutes}
+            canPlan={inputs.hasStart && inputs.hasEnd}
+            resolveStart={inputs.resolveStart}
+            resolveEnd={inputs.resolveEnd}            departInMinutes={inputs.departInMinutes}
             fields={inputs.fields}
             toggles={toggles}
             overviewEl={overviewEl}
@@ -146,7 +144,7 @@ export function RoutePlanner() {
 
             {toggles}
 
-            <button className="btn btn-primary" style={{ minWidth: 150, whiteSpace: 'nowrap' }} onClick={() => handlePlan()} disabled={planning || !start || !end}>
+            <button className="btn btn-primary" style={{ minWidth: 150, whiteSpace: 'nowrap' }} onClick={() => handlePlan()} disabled={planning || !inputs.hasStart || !inputs.hasEnd}>
               {planning ? 'Route berekenen…' : 'Route berekenen'}
             </button>
           </div>
