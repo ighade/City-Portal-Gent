@@ -36,7 +36,7 @@ public sealed record EzParkOption(
     string? Address,
     double Lat,
     double Lon,
-    int Available,
+    int? Available,
     int Capacity,
     double DriveMinutes,
     double DriveKm,
@@ -72,12 +72,13 @@ public sealed class EzParkPlanner(
             .Where(p => p.Kind != ParkingKind.Bicycle && p.IsPublic && p.Status != null)
             .ToListAsync(ct);
 
-        var open = rows.Where(p =>
-            p.Status!.IsOpen
-            && !p.Status.TemporarilyClosed
-            && p.Status.IsPlausible
-            && p.Status.AvailableSpaces > 0
-            && utcNow - p.Status.MeasuredAtUtc <= Mapping.StaleAfter);
+                var open = rows.Where(p => p.Status is null
+                        ? !p.HasLiveData
+                        : p.Status.IsOpen
+                            && !p.Status.TemporarilyClosed
+                            && p.Status.IsPlausible
+                            && p.Status.AvailableSpaces > 0
+                            && utcNow - p.Status.MeasuredAtUtc <= Mapping.StaleAfter);
 
         if (request.AvoidLez)
         {
@@ -164,7 +165,7 @@ public sealed class EzParkPlanner(
 
         return new EzParkOption(
             p.Slug, p.Name, p.Address, p.Latitude, p.Longitude,
-            p.Status!.AvailableSpaces, p.Status.TotalCapacity,
+            p.Status?.AvailableSpaces, p.Status?.TotalCapacity ?? p.Capacity,
             drive.DurationMinutes, drive.DistanceKm, ParkMinutes,
             variants.ToArray(),
             ParkingRates.For(p.Slug, parked));

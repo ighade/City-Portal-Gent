@@ -147,8 +147,8 @@ function Row({ parking, active, onHover }: { parking: Parking; active: boolean; 
       <span className="row-num">
         {status && status.isOpen ? (
           <>
-            <b>{status.available.toLocaleString('nl-BE')}</b>
-            <small className="muted">vrij</small>
+            <b>{status.available?.toLocaleString('nl-BE') ?? '—'}</b>
+            <small className="muted">{status.available === null ? 'onbekend' : 'vrij'}</small>
           </>
         ) : status && !status.isOpen ? (
           <small className="muted">gesloten</small>
@@ -194,7 +194,7 @@ function comparer(sort: Sort): (a: Parking, b: Parking) => number {
 }
 
 function free(p: Parking): number {
-  return p.status?.isOpen ? p.status.available : -1
+  return p.status?.isOpen ? p.status.available ?? -1 : -1
 }
 
 function rank(p: Parking): number {

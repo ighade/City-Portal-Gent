@@ -1,7 +1,7 @@
 export type ParkingKind = 'garage' | 'park-and-ride' | 'bicycle'
 
 export interface Status {
-  available: number
+  available: number | null
   capacity: number
   /** Leeg als de meting zichzelf tegensprak — dan is er wel een aantal vrije plaatsen, maar geen percentage. */
   occupancy?: number

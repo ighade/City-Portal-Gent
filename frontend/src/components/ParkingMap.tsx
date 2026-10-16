@@ -319,24 +319,33 @@ function icon(p: Parking, blue = false): L.DivIcon {
   })
 }
 
-function compact(n: number): string {
+function compact(n: number | null): string {
+  if (n === null) return '—'
   if (n >= 1000) return `${(n / 1000).toFixed(1).replace('.', ',')}k`
   return String(n)
 }
 
 function describe(p: Parking): string {
   if (!p.status) return `geen meting, ${p.capacity} plaatsen`
-  if (!p.isPublic) return `privaat, ${p.status.available} vrij van ${p.status.capacity}`
+  const available = p.status.available === null
+    ? `vrije plaatsen onbekend van ${p.status.capacity}`
+    : `${p.status.available} vrij van ${p.status.capacity}`
+  if (!p.isPublic) return `privaat, ${available}`
   if (!p.status.isOpen) return 'gesloten'
-  return `${busynessLabel[busyness(p.status)]}, ${p.status.available} vrij van ${p.status.capacity}`
+  return `${busynessLabel[busyness(p.status)]}, ${available}`
 }
 
 function popup(p: Parking): string {
   const kind = kindLabel[p.kind] + (p.isPublic ? '' : ' · privaat, voor personeel')
+  const available = p.status?.available === null
+    ? `<b>Onbekend</b> vrij van ${p.status.capacity.toLocaleString('nl-BE')}`
+    : p.status
+      ? `<b>${p.status.available.toLocaleString('nl-BE')}</b> vrij van ${p.status.capacity.toLocaleString('nl-BE')}`
+      : ''
+  const occupancy = p.status?.occupancy == null ? '' : ` · ${p.status.occupancy} % bezet`
   const status = p.status
     ? p.status.isOpen
-      ? `<b>${p.status.available.toLocaleString('nl-BE')}</b> vrij van ${p.status.capacity.toLocaleString('nl-BE')}` +
-        (p.status.occupancy === undefined || p.status.occupancy === null ? '' : ` · ${p.status.occupancy} % bezet`)
+      ? available + occupancy
       : '<b>Gesloten</b>'
     : `${p.capacity.toLocaleString('nl-BE')} plaatsen · de stad meet hier niet`
   return `

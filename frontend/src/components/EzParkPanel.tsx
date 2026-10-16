@@ -132,7 +132,9 @@ function OptionCard({ option, selected, onSelect }: {
         <div>
           <strong>{option.name}</strong>
           <div className="small muted">
-            {option.available} vrij van {option.capacity} · rijden {Math.round(option.driveMinutes)} min ({option.driveKm.toFixed(1)} km) · parkeren {option.parkMinutes} min
+            {option.available === null
+              ? 'Beschikbaarheid onbekend'
+              : `${option.available} vrij van ${option.capacity}`} · rijden {Math.round(option.driveMinutes)} min ({option.driveKm.toFixed(1)} km) · parkeren {option.parkMinutes} min
           </div>
         </div>
       </div>

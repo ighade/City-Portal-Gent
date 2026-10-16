@@ -23,6 +23,7 @@ export function OccupancyMeter({ status, size = 'normal' }: { status?: Status; s
   }
 
   const pct = status.occupancy
+  const available = status.available?.toLocaleString('nl-BE') ?? 'onbekend'
   return (
     <div className={`meter meter-${size}`}>
       <div className="meter-bar" role="img" aria-label={meterLabel(status)}>
@@ -35,10 +36,12 @@ export function OccupancyMeter({ status, size = 'normal' }: { status?: Status; s
         <b>{busynessLabel[level]}</b>
         {pct !== undefined && pct !== null && <span className="muted">{pct} % bezet</span>}
         <span className="meter-free">
-          <b>{status.available.toLocaleString('nl-BE')}</b> vrij van {status.capacity.toLocaleString('nl-BE')}
+          <b>{available}</b> vrij van {status.capacity.toLocaleString('nl-BE')}
         </span>
       </div>
-      {pct === undefined || pct === null ? (
+      {status.available === null ? (
+        <p className="small muted meter-note">Het aantal vrije plaatsen is onbekend.</p>
+      ) : pct === undefined || pct === null ? (
         <p className="small muted meter-note">
           De stad meldt meer vrije plaatsen dan er plaatsen zijn; daarom staat er geen percentage.
         </p>
@@ -54,7 +57,8 @@ export function OccupancyMeter({ status, size = 'normal' }: { status?: Status; s
 
 function meterLabel(status: Status): string {
   const level = busynessLabel[busyness(status)]
+  const available = status.available?.toLocaleString('nl-BE') ?? 'onbekend'
   return status.occupancy === undefined || status.occupancy === null
-    ? `${level}, ${status.available} vrije plaatsen`
-    : `${level}, ${status.occupancy} procent bezet, ${status.available} vrije plaatsen`
+    ? `${level}, ${available} vrije plaatsen`
+    : `${level}, ${status.occupancy} procent bezet, ${available} vrije plaatsen`
 }
