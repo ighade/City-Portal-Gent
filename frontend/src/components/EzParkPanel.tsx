@@ -14,7 +14,7 @@ export interface EzOverlay {
   legs: EzParkLeg[]
   variant: EzParkVariant | null
   parkingName: string | null
-  parks: Array<{ lat: number; lon: number; name: string }>
+  parks: Array<{ lat: number; lon: number; name: string; slug: string; details: string[] }>
 }
 
 interface Props {
@@ -30,9 +30,11 @@ interface Props {
   overviewEl: HTMLElement | null
   hint: string | null
   onOverlay: (overlay: EzOverlay) => void
+  /** Een P-speld op de kaart is aangeklikt; kiest de snelste variant van die parking. */
+  pick: { slug: string; n: number } | null
 }
 
-export function EzParkPanel({ avoidLez, start, end, departInMinutes, fields, toggles, overviewEl, hint, onOverlay }: Props) {
+export function EzParkPanel({ avoidLez, start, end, departInMinutes, fields, toggles, overviewEl, hint, onOverlay, pick }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<EzParkResult | null>(null)
@@ -42,9 +44,24 @@ export function EzParkPanel({ avoidLez, start, end, departInMinutes, fields, tog
   const variant = useMemo(() => option?.variants.find((v) => v.type === selected?.type) ?? null, [option, selected])
 
   useEffect(() => {
-    const parks = (option ? [option] : result?.options ?? []).map((o) => ({ lat: o.lat, lon: o.lon, name: o.name }))
+    const parks = (option ? [option] : result?.options ?? []).map((o) => ({
+      lat: o.lat,
+      lon: o.lon,
+      name: o.name,
+      slug: o.slug,
+      details: [
+        o.available === null ? 'Beschikbaarheid onbekend' : `${o.available} vrij van ${o.capacity}`,
+        `rijden ${Math.round(o.driveMinutes)} min (${o.driveKm.toFixed(1)} km) · parkeren ${o.parkMinutes} min`,
+      ],
+    }))
     onOverlay({ start, end, legs: variant?.legs ?? [], variant, parkingName: option?.name ?? null, parks })
   }, [start, end, variant, option, result, onOverlay])
+
+  useEffect(() => {
+    const picked = pick && result?.options.find((o) => o.slug === pick.slug)
+    if (picked) setSelected({ slug: picked.slug, type: bestVariant(picked).type })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pick])
 
   async function plan() {
     if (!start || !end) {
@@ -116,6 +133,21 @@ export function EzParkPanel({ avoidLez, start, end, departInMinutes, fields, tog
   )
 }
 
+function OccupancyBar({ available, capacity }: { available: number | null; capacity: number }) {
+  if (available === null || capacity <= 0) return <div className="small muted">Beschikbaarheid onbekend</div>
+  const pct = Math.min(100, Math.max(0, Math.round(((capacity - available) / capacity) * 100)))
+  const color = pct < 50 ? '#16a34a' : pct < 80 ? '#f59e0b' : '#dc2626'
+  return (
+    <div className="row" style={{ marginTop: 6, gap: 10, flexWrap: 'nowrap', alignItems: 'center' }}>
+      <div role="img" aria-label={`${pct} % bezet`} title={`${pct} % bezet`}
+        style={{ width: 200, maxWidth: '100%', height: 8, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }}>
+        <div style={{ width: `${Math.max(2, pct)}%`, height: '100%', background: color }} />
+      </div>
+      <span className="small muted" style={{ whiteSpace: 'nowrap' }}>{available} vrij van {capacity}</span>
+    </div>
+  )
+}
+
 function bestVariant(o: EzParkOption): EzParkVariant {
   return o.variants.reduce((a, b) => (b.totalMinutes < a.totalMinutes ? b : a))
 }
@@ -131,11 +163,7 @@ function OptionCard({ option, selected, onSelect }: {
       <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div>
           <strong>{option.name}</strong>
-          <div className="small muted">
-            {option.available === null
-              ? 'Beschikbaarheid onbekend'
-              : `${option.available} vrij van ${option.capacity}`} · rijden {Math.round(option.driveMinutes)} min ({option.driveKm.toFixed(1)} km) · parkeren {option.parkMinutes} min
-          </div>
+          <OccupancyBar available={option.available} capacity={option.capacity} />
         </div>
       </div>
       <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: 'wrap' }}>

@@ -77,6 +77,12 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
     if (place) setEnd({ lat: place.lat, lon: place.lon, label: place.name })
   }
 
+  function chooseEnd(point: RoutePoint) {
+    setEnd(point)
+    setEndText(point.label)
+    setPick(null)
+  }
+
   function departInMinutes(): number {
     if (!departTime) return 0
     const [h, m] = departTime.split(':').map(Number)
@@ -118,5 +124,5 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
     ? `Klik op de kaart om je ${pick === 'start' ? 'startpunt' : 'bestemming'} te kiezen.`
     : null
 
-  return { start, end, departTime, departInMinutes, fields, hint, locateError }
+  return { start, end, departTime, departInMinutes, fields, hint, locateError, chooseEnd }
 }

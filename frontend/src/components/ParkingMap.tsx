@@ -40,13 +40,17 @@ interface Props {
   onMapClick?: (lat: number, lon: number) => void
   /** EZ Park: start, bestemming en de benen van de gekozen route. */
   ezpark?: EzParkOverlay | null
+  /** Info bij hoveren in plaats van een popup bij klikken; klikken meldt alleen de selectie. */
+  hoverInfo?: boolean
+  /** Klik op een EZ Park-speld. */
+  onEzParkPick?: (slug: string) => void
 }
 
 interface EzParkOverlay {
   start?: { lat: number; lon: number } | null
   end?: { lat: number; lon: number } | null
   legs: EzParkLeg[]
-  parks?: Array<{ lat: number; lon: number; name: string }>
+  parks?: Array<{ lat: number; lon: number; name: string; slug: string; details: string[] }>
 }
 
 /**
@@ -57,7 +61,7 @@ interface EzParkOverlay {
  * groen verschillen hier ook in wat erin staat. Een parking zonder meting krijgt een open ring
  * met haar capaciteit — zichtbaar anders dan een gemeten plek.
  */
-export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins }: Props) {
+export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
@@ -65,6 +69,8 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
   const ezLayer = useRef<L.LayerGroup | null>(null)
   const clickHandler = useRef(onMapClick)
   clickHandler.current = onMapClick
+  const ezPick = useRef(onEzParkPick)
+  ezPick.current = onEzParkPick
   const base = useRef<{ remove(): void; bringToBack(): void } | null>(null)
   const lez = useRef<L.GeoJSON | null>(null)
   const markers = useRef<Map<string, L.Marker>>(new Map())
@@ -215,7 +221,18 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
           iconSize: [34, 34],
           iconAnchor: [17, 17],
         }),
-      }).bindTooltip(park.name, { direction: 'top', offset: [0, -16] }).addTo(group)
+      })
+        .bindPopup(
+          `<div class="pin-popup"><strong>${escape(park.name)}</strong>${park.details.map((d) => `<p>${escape(d)}</p>`).join('')}</div>`,
+          { closeButton: false, maxWidth: 260, autoPan: false, offset: [0, -8] },
+        )
+        .on('mouseover', (e) => e.target.openPopup())
+        .on('mouseout', (e) => e.target.closePopup())
+        .on('click', (e) => {
+          L.DomEvent.stopPropagation(e)
+          ezPick.current?.(park.slug)
+        })
+        .addTo(group)
       bounds.push([park.lat, park.lon])
     }
 
@@ -254,8 +271,17 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
         keyboard: true,
         alt: `${p.name}, ${describe(p)}`,
       })
-      marker.bindPopup(popup(p), { closeButton: true, maxWidth: 260 })
-      marker.on('click', () => onSelect?.(p.slug))
+      if (hoverInfo) {
+        marker.bindPopup(popup(p, false), { closeButton: false, maxWidth: 260, autoPan: false })
+        marker.on('mouseover', () => marker.openPopup())
+        marker.on('mouseout', () => marker.closePopup())
+      } else {
+        marker.bindPopup(popup(p), { closeButton: true, maxWidth: 260 })
+      }
+      marker.on('click', (e) => {
+        if (hoverInfo) L.DomEvent.stopPropagation(e)
+        onSelect?.(p.slug)
+      })
       marker.on('popupopen', () => {
         const link = document.getElementById(`popup-link-${p.slug}`)
         link?.addEventListener('click', (e) => {
@@ -266,11 +292,11 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
       marker.addTo(group)
       markers.current.set(p.slug, marker)
     }
-  }, [parkings, navigate, onSelect, bluePins])
+  }, [parkings, navigate, onSelect, bluePins, hoverInfo])
 
   // Wat in de lijst aangewezen wordt, opent op de kaart.
   useEffect(() => {
-    if (!selected) return
+    if (!selected || hoverInfo) return
     const marker = markers.current.get(selected)
     if (!marker || !map.current) return
     map.current.panTo(marker.getLatLng(), { animate: true })
@@ -335,7 +361,7 @@ function describe(p: Parking): string {
   return `${busynessLabel[busyness(p.status)]}, ${available}`
 }
 
-function popup(p: Parking): string {
+function popup(p: Parking, withLink = true): string {
   const kind = kindLabel[p.kind] + (p.isPublic ? '' : ' · privaat, voor personeel')
   const available = p.status?.available === null
     ? `<b>Onbekend</b> vrij van ${p.status.capacity.toLocaleString('nl-BE')}`
@@ -348,13 +374,27 @@ function popup(p: Parking): string {
       ? available + occupancy
       : '<b>Gesloten</b>'
     : `${p.capacity.toLocaleString('nl-BE')} plaatsen · de stad meet hier niet`
+  const bar = !withLink && p.status?.isOpen && p.status.available !== null && p.status.capacity > 0
+    ? occupancyBar(p.status.available, p.status.capacity)
+    : ''
   return `
     <div class="pin-popup">
       <strong>${escape(p.name)}</strong>
       <small>${kind}${p.address ? ` · ${escape(p.address)}` : ''}</small>
-      <p>${status}</p>
-      <a id="popup-link-${escape(p.slug)}" href="/parking/${escape(p.slug)}">Verloop en drukte →</a>
+      ${bar || `<p>${status}</p>`}
+      ${withLink ? `<a id="popup-link-${escape(p.slug)}" href="/parking/${escape(p.slug)}">Verloop en drukte →</a>` : ''}
     </div>`
+}
+
+function occupancyBar(available: number, capacity: number): string {
+  const pct = Math.min(100, Math.max(0, Math.round(((capacity - available) / capacity) * 100)))
+  const color = pct < 50 ? '#16a34a' : pct < 80 ? '#f59e0b' : '#dc2626'
+  return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+    <div title="${pct} % bezet" style="width:120px;height:8px;border-radius:999px;background:#e5e7eb;overflow:hidden">
+      <div style="width:${Math.max(2, pct)}%;height:100%;background:${color}"></div>
+    </div>
+    <span style="white-space:nowrap">${available.toLocaleString('nl-BE')} vrij van ${capacity.toLocaleString('nl-BE')}</span>
+  </div>`
 }
 
 function escape(s: string): string {

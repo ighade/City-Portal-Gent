@@ -57,8 +57,8 @@ public sealed class EzParkPlanner(
     ILogger<EzParkPlanner> log)
 {
     public const int ParkMinutes = 5;
-    private const int Shortlist = 4;
-    private const int Suggestions = 3;
+    private const int Shortlist = 7;
+    private const int Suggestions = 4;
     private const double WalkMetersPerSecond = 1.35;
 
     public async Task<EzParkResult?> PlanAsync(EzParkRequest request, CancellationToken ct)

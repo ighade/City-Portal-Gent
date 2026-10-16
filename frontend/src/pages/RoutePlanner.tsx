@@ -4,7 +4,9 @@ import { EzParkPanel } from '../components/EzParkPanel'
 import { GarageRate, StreetRate } from '../components/RateInfo'
 import type { EzOverlay } from '../components/EzParkPanel'
 import { ParkingMap } from '../components/ParkingMap'
+import { Fact } from '../components/ParkingInfo'
 import { useRouteInputs } from '../components/RouteInputs'
+import type { RoutePoint } from '../components/RouteInputs'
 import { useApp } from '../context/AppContext'
 import type { RoutePlanResult } from '../types'
 
@@ -19,6 +21,7 @@ export function RoutePlanner() {
   const [ezOverlay, setEzOverlay] = useState<EzOverlay | null>(null)
   const [overviewEl, setOverviewEl] = useState<HTMLElement | null>(null)
   const [mapClick, setMapClick] = useState<{ lat: number; lon: number; n: number } | null>(null)
+  const [ezPick, setEzPick] = useState<{ slug: string; n: number } | null>(null)
 
   const carParkings = useMemo(() => parkings.filter((p) => p.kind !== 'bicycle'), [parkings])
   const inputs = useRouteInputs(carParkings, mapClick)
@@ -46,8 +49,8 @@ export function RoutePlanner() {
   )
   const arriveAt = route ? new Date(departAt.getTime() + route.durationMinutes * 60000) : null
 
-  async function handlePlan() {
-    if (!start || !end) {
+  async function handlePlan(target: RoutePoint | null = end) {
+    if (!start || !target) {
       setError('Kies eerst een start- en eindpunt.')
       return
     }
@@ -60,8 +63,8 @@ export function RoutePlanner() {
       const result = await api.routePlan({
         startLat: start.lat,
         startLon: start.lon,
-        endLat: end.lat,
-        endLon: end.lon,
+        endLat: target.lat,
+        endLon: target.lon,
         mode: 'car',
         checkLez: showLez,
       })
@@ -72,6 +75,14 @@ export function RoutePlanner() {
     } finally {
       setPlanning(false)
     }
+  }
+
+  function pickParking(slug: string | null) {
+    const p = carParkings.find((c) => c.slug === slug)
+    if (!p) return
+    const point = { lat: p.lat, lon: p.lon, label: p.name }
+    inputs.chooseEnd(point)
+    if (start) void handlePlan(point)
   }
 
   function startEzPark() {
@@ -97,15 +108,25 @@ export function RoutePlanner() {
   const time = (d: Date) => d.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <>
-      <div className="page-head">
-        <div>
-          <h1>Routeplanner</h1>
-          <p>Plan een route met de auto, of parkeer buiten de zone met EZ Park. Berekend met OpenRouteService.</p>
-        </div>
+    <div className="route-stage">
+      <div className="route-map">
+          <ParkingMap
+            parkings={ezOn ? [] : carParkings}
+            bluePins
+            basemap="grb"
+            showLez={showLez}
+            selected={null}
+            onSelect={pickParking}
+            hoverInfo
+            onEzParkPick={(slug) => setEzPick({ slug, n: Date.now() })}
+            route={ezOn ? null : routeOverlay}
+            onMapClick={(lat, lon) => setMapClick({ lat, lon, n: Date.now() })}
+            ezpark={ezOn ? ezOverlay : markerOverlay}
+          />
       </div>
 
-      <div className="card">
+      <div className="card route-form">
+        <h1 className="route-title">Routeplanner</h1>
         {ezOn ? (
           <EzParkPanel
             avoidLez={showLez}
@@ -117,6 +138,7 @@ export function RoutePlanner() {
             overviewEl={overviewEl}
             hint={inputs.hint}
             onOverlay={setEzOverlay}
+            pick={ezPick}
           />
         ) : (<>
           <div className="row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -124,7 +146,7 @@ export function RoutePlanner() {
 
             {toggles}
 
-            <button className="btn btn-primary" style={{ minWidth: 150, whiteSpace: 'nowrap' }} onClick={handlePlan} disabled={planning || !start || !end}>
+            <button className="btn btn-primary" style={{ minWidth: 150, whiteSpace: 'nowrap' }} onClick={() => handlePlan()} disabled={planning || !start || !end}>
               {planning ? 'Route berekenen…' : 'Route berekenen'}
             </button>
           </div>
@@ -141,50 +163,18 @@ export function RoutePlanner() {
         {inputs.locateError && !start && <div className="banner" style={{ marginTop: 16 }}>{inputs.locateError}</div>}
       </div>
 
-      <div className="split" style={{ marginTop: 16 }}>
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <ParkingMap
-            parkings={ezOn ? [] : carParkings}
-            bluePins
-            basemap="grb"
-            showLez={showLez}
-            selected={null}
-            route={ezOn ? null : routeOverlay}
-            onMapClick={(lat, lon) => setMapClick({ lat, lon, n: Date.now() })}
-            ezpark={ezOn ? ezOverlay : markerOverlay}
-          />
-        </div>
-
-        <div className="card">
+      <div className="card route-overview">
           <h2>Routeoverzicht</h2>
           {ezOn ? (
             <div ref={setOverviewEl} />
           ) : (<>
             <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <span className="muted">Start</span>
-                <strong>{start?.label ?? '—'}</strong>
-              </div>
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <span className="muted">Eind</span>
-                <strong>{end?.label ?? '—'}</strong>
-              </div>
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <span className="muted">Vertrek</span>
-                <strong>{route ? time(departAt) : '—'}</strong>
-              </div>
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <span className="muted">Aankomst</span>
-                <strong>{arriveAt ? time(arriveAt) : '—'}</strong>
-              </div>
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <span className="muted">Afstand</span>
-                <strong>{route ? `${route.distanceKm.toFixed(1)} km` : '—'}</strong>
-              </div>
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <span className="muted">Geschatte tijd</span>
-                <strong>{route ? `${Math.round(route.durationMinutes)} min` : '—'}</strong>
-              </div>
+              <Fact label="Start">{start?.label ?? '—'}</Fact>
+              <Fact label="Eind">{end?.label ?? '—'}</Fact>
+              <Fact label="Vertrek">{route ? time(departAt) : '—'}</Fact>
+              <Fact label="Aankomst">{arriveAt ? time(arriveAt) : '—'}</Fact>
+              <Fact label="Afstand">{route ? `${route.distanceKm.toFixed(1)} km` : '—'}</Fact>
+              <Fact label="Geschatte tijd">{route ? `${Math.round(route.durationMinutes)} min` : '—'}</Fact>
             </div>
 
             {!route && !planning && (
@@ -200,8 +190,7 @@ export function RoutePlanner() {
             )}
             {route?.destinationParking && <StreetRate info={route.destinationParking} arrival={arriveAt} />}
           </>)}
-        </div>
       </div>
-    </>
+    </div>
   )
 }
