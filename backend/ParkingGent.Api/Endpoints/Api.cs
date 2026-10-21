@@ -35,6 +35,8 @@ public static class Api
         // De lage-emissiezone verandert hooguit eens in de zoveel jaar; die mag lang blijven staan.
         api.MapGet("/lez", LowEmissionZone).CacheOutput("lang");
         api.MapGet("/events", Events).CacheOutput("lang");
+        // Zonder uitvoercache: de eerste aanvraag haalt de beschrijving op (1 credit) en bewaart ze.
+        api.MapGet("/events/{id}", EventDetail);
         api.MapGet("/transit/stops", TransitStops).CacheOutput("lang");
         api.MapGet("/transit/stops/{stopId}/realtime", TransitStopRealtime);
         api.MapGet("/transit/status", TransitStatus).CacheOutput("kort");
@@ -290,6 +292,30 @@ public static class Api
                 e.Kind, e.SocialSummary, e.InterestedCount, e.GoingCount, e.WentCount, e.TicketPriceLabel))
             .ToListAsync(ct);
         return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> EventDetail(string id, AppDbContext db, EventDescriptions descriptions, CancellationToken ct)
+    {
+        var e = await db.Events.Include(x => x.Place).FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (e is null) return Results.NotFound();
+
+        if (e.DescriptionFetchedAtUtc is null)
+        {
+            var text = await descriptions.FetchAsync(e.Id, ct);
+            // Mislukt de oproep, dan blijft het veld leeg en proberen we het bij een volgend bezoek opnieuw.
+            if (text is not null)
+            {
+                e.Description = text.Length == 0 ? null : text;
+                e.DescriptionFetchedAtUtc = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+        }
+
+        var dto = new EventDto(
+            e.Id, e.Url, e.Name, e.CoverImageUrl, e.CoverAccessibilityCaption, e.IsOnline, e.IsPast,
+            e.IsHappeningNow, e.StartsAtUtc, e.DayTimeLabel, e.Place?.Name,
+            e.Kind, e.SocialSummary, e.InterestedCount, e.GoingCount, e.WentCount, e.TicketPriceLabel);
+        return Results.Ok(new EventDetailDto(dto, e.Description));
     }
 
     private static async Task<IResult> TransitStatus(TransitService transit, CancellationToken ct)

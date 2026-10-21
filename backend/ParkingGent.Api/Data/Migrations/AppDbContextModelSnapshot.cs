@@ -243,6 +243,12 @@ namespace ParkingGent.Api.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DescriptionFetchedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int?>("GoingCount")
                         .HasColumnType("integer");
 

@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import { EzParkPanel } from '../components/EzParkPanel'
 import { GarageRate, StreetRate } from '../components/RateInfo'
 import type { EzOverlay } from '../components/EzParkPanel'
 import { ParkingMap, textOn } from '../components/ParkingMap'
 import { transitFareLabel } from '../fare'
-import { GENT_BOUNDS } from '../leaflet'
+import { locatePlace } from '../eventGeo'
 import type { MapEvent } from '../components/ParkingMap'
 import { Fact } from '../components/ParkingInfo'
 import { useRouteInputs } from '../components/RouteInputs'
@@ -66,6 +67,19 @@ export function RoutePlanner() {
   const weekEvents = useWeekEvents()
   const inputs = useRouteInputs(carParkings, mapClick)
   const { start, end } = inputs
+
+  // Komt de bezoeker van een evenement, dan staat de bestemming al ingevuld.
+  const incoming = (useLocation().state as { destination?: { place: string; name: string } } | null)?.destination
+  const chooseEnd = useRef(inputs.chooseEnd)
+  chooseEnd.current = inputs.chooseEnd
+  useEffect(() => {
+    if (!incoming) return
+    let cancelled = false
+    void locatePlace(incoming.place).then((at) => {
+      if (at && !cancelled) chooseEnd.current({ lat: at.lat, lon: at.lon, label: incoming.name })
+    })
+    return () => { cancelled = true }
+  }, [incoming?.place, incoming?.name])
 
   const routeOverlay = useMemo(() => {
     if (!route || !start || !end) return null
@@ -282,38 +296,6 @@ export function RoutePlanner() {
   )
 }
 
-const GEO_CACHE = 'parkinggent.eventGeo.v3'
-
-function readGeoCache(): Record<string, { lat: number; lon: number } | null> {
-  try {
-    return JSON.parse(localStorage.getItem(GEO_CACHE) ?? '{}')
-  } catch {
-    return {}
-  }
-}
-
-// Het adres staat achteraan de plaatsnaam ("De Vooruit, Sint-Pietersnieuwstraat 23, Ghent"); probeer
-// eerst alles, daarna vanaf het eerste deel met een huisnummer.
-function addressCandidates(place: string): string[] {
-  const parts = place.split(',').map((p) => p.trim()).filter(Boolean)
-  const firstWithNumber = parts.findIndex((p) => /\d/.test(p))
-  const candidates = [place]
-  if (firstWithNumber > 0) candidates.push(parts.slice(firstWithNumber).join(', '))
-  return candidates
-}
-
-// Een loutere naam staat zelden zo in OpenStreetMap: probeer ook zonder "in Gent" en zonder
-// soortwoord ("Club Wintercircus" → "Wintercircus").
-function nameCandidates(place: string): string[] {
-  const first = place.split(',')[0].trim()
-  const base = first.replace(/\s+(in\s+)?(gent|ghent)$/i, '')
-  const bare = base.replace(/^(club|feestzaal|muziekcentrum|kunstencentrum)\s+/i, '')
-  return [...new Set([first, base, bare])].filter(Boolean)
-}
-
-const inGentArea = (hit: { lat: number; lon: number }) =>
-  hit.lat >= GENT_BOUNDS[0][0] && hit.lat <= GENT_BOUNDS[1][0] && hit.lon >= GENT_BOUNDS[0][1] && hit.lon <= GENT_BOUNDS[1][1]
-
 /** Evenementen van de komende 7 dagen, met coördinaat uit de Vlaamse geolocatie (onthouden in localStorage). */
 function useWeekEvents(): MapEvent[] {
   const [items, setItems] = useState<MapEvent[]>([])
@@ -336,43 +318,14 @@ function useWeekEvents(): MapEvent[] {
         return t >= now - 3 * 3600 * 1000 && t <= weekAhead
       })
 
-      const cache = readGeoCache()
       const found: MapEvent[] = []
-      const failedPlaces = new Set<string>()
       for (const e of thisWeek) {
-        const key = e.place!
-        if (!cache[key] && !failedPlaces.has(key)) {
-          for (const q of /\d/.test(key) ? addressCandidates(key) : []) {
-            try {
-              const hit = await api.geocode(q)
-              if (!inGentArea(hit)) continue
-              cache[key] = { lat: hit.lat, lon: hit.lon }
-              break
-            } catch {
-              // volgende kandidaat
-            }
-          }
-          if (!cache[key]) {
-            // Alleen een naam, of een adres dat niet gevonden werd: zoek de plaats zelf.
-            for (const q of nameCandidates(key)) {
-              try {
-                const hit = await api.placeByName(q)
-                if (!inGentArea(hit)) continue
-                cache[key] = { lat: hit.lat, lon: hit.lon }
-                break
-              } catch {
-                // volgende kandidaat
-              }
-              await new Promise((r) => setTimeout(r, 1100))
-            }
-          }
-          if (!cache[key]) failedPlaces.add(key)
-          localStorage.setItem(GEO_CACHE, JSON.stringify(cache))
-        }
-        const at = cache[key]
-        if (at) found.push({ event: e, lat: at.lat, lon: at.lon })
+        const at = await locatePlace(e.place!)
         if (cancelled) return
-        setItems([...found])
+        if (at) {
+          found.push({ event: e, lat: at.lat, lon: at.lon })
+          setItems([...found])
+        }
       }
     })()
     return () => { cancelled = true }

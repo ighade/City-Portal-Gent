@@ -20,6 +20,7 @@ builder.Services.Configure<GentOptions>(builder.Configuration.GetSection(GentOpt
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.SectionName));
 builder.Services.Configure<RoutePlannerOptions>(builder.Configuration.GetSection(RoutePlannerOptions.SectionName));
 builder.Services.Configure<TransitOptions>(builder.Configuration.GetSection(TransitOptions.SectionName));
+builder.Services.Configure<SocialfetchOptions>(builder.Configuration.GetSection(SocialfetchOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? "Host=parkinggent-postgres;Database=parkinggent;Username=parkinggent;Password=parkinggent";
@@ -62,6 +63,8 @@ builder.Services.AddHttpClient<TransitService>(c =>
     c.Timeout = TimeSpan.FromSeconds(45);
     c.DefaultRequestHeaders.UserAgent.ParseAdd("ParkingGent/2.0 (+https://parking.gent)");
 });
+
+builder.Services.AddHttpClient<EventDescriptions>(c => c.Timeout = TimeSpan.FromSeconds(20));
 
 builder.Services.AddSingleton<BicycleLocations>();
 builder.Services.AddSingleton<LowEmissionZone>();

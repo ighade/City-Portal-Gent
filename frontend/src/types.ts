@@ -318,3 +318,8 @@ export interface GentEvent {
   wentCount?: number | null
   ticketPriceLabel?: string | null
 }
+
+export interface GentEventDetail {
+  event: GentEvent
+  description?: string | null
+}

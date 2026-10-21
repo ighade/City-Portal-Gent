@@ -260,5 +260,8 @@ public class EventEntity
     public int? GoingCount { get; set; }
     public int? WentCount { get; set; }
     public string? TicketPriceLabel { get; set; }
+    /// <summary>Beschrijving van het evenement; wordt bij het eerste bezoek van de detailpagina opgehaald en bewaard.</summary>
+    public string? Description { get; set; }
+    public DateTime? DescriptionFetchedAtUtc { get; set; }
     public DateTime ImportedAtUtc { get; set; }
 }

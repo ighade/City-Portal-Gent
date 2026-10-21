@@ -486,6 +486,16 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
 .event-foot { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; color: var(--muted); }
 .event-price { background: var(--brand-soft); color: var(--brand-strong); padding: 1px 8px; border-radius: 999px; font-weight: 600; }
 
+/* ---- Evenementdetail ---- */
+.event-detail { padding: 0; overflow: hidden; max-width: 860px; margin-top: 12px; }
+.event-detail-cover { width: 100%; max-height: 360px; object-fit: cover; display: block; }
+.event-detail-body { padding: 20px 24px 24px; display: grid; gap: 12px; }
+.event-detail-meta { display: grid; gap: 4px; }
+.event-live-inline { justify-self: start; background: var(--crit); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+.event-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.event-actions .btn small { opacity: .8; font-weight: 400; }
+.event-description { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; color: var(--ink-2); }
+
 /* ---- Evenementen op de routekaart ---- */
 .event-pin { position: relative; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; background: var(--brand); color: #fff; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
 .event-pin-count { position: absolute; top: -9px; right: -9px; min-width: 17px; height: 17px; padding: 0 3px; display: grid; place-items: center; border: 1px solid #fff; border-radius: 999px; background: var(--crit); color: #fff; font-size: 10px; font-weight: 700; line-height: 1; }

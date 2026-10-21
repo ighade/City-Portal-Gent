@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api'
 import type { GentEvent } from '../types'
 
@@ -14,7 +15,7 @@ function EventCard({ event }: { event: GentEvent }) {
   const showImage = event.coverImageUrl && !imageFailed
 
   return (
-    <a className="card event-card" href={event.url} target="_blank" rel="noreferrer">
+    <Link className="card event-card" to={`/events/${encodeURIComponent(event.id)}`}>
       <div className="event-cover">
         {showImage ? (
           <img src={event.coverImageUrl!} alt={event.coverCaption ?? event.name} loading="lazy" referrerPolicy="no-referrer" onError={() => setImageFailed(true)} />
@@ -39,7 +40,7 @@ function EventCard({ event }: { event: GentEvent }) {
           {event.isOnline && <span className="event-price">Online</span>}
         </div>
       </div>
-    </a>
+    </Link>
   )
 }
 

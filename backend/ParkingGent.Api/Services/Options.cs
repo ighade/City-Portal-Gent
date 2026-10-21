@@ -1,5 +1,14 @@
 namespace ParkingGent.Api.Services;
 
+/// <summary>Social Fetch, waar de beschrijving van een evenement vandaan komt. Zonder sleutel blijft die leeg.</summary>
+public sealed class SocialfetchOptions
+{
+    public const string SectionName = "Socialfetch";
+
+    public string BaseUrl { get; set; } = "https://api.socialfetch.dev";
+    public string? ApiKey { get; set; }
+}
+
 /// <summary>Waar de open data van Stad Gent staat, en hoe vaak we kijken.</summary>
 public sealed class GentOptions
 {
