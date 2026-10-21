@@ -487,15 +487,27 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
 .event-price { background: var(--brand-soft); color: var(--brand-strong); padding: 1px 8px; border-radius: 999px; font-weight: 600; }
 
 /* ---- Evenementen op de routekaart ---- */
-.event-pin { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; background: var(--brand); color: #fff; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+.event-pin { position: relative; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; background: var(--brand); color: #fff; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+.event-pin-count { position: absolute; top: -9px; right: -9px; min-width: 17px; height: 17px; padding: 0 3px; display: grid; place-items: center; border: 1px solid #fff; border-radius: 999px; background: var(--crit); color: #fff; font-size: 10px; font-weight: 700; line-height: 1; }
 .event-popup .leaflet-popup-content-wrapper { padding: 0; overflow: hidden; border-radius: var(--r-md, 12px); }
-.event-popup .leaflet-popup-content { margin: 0; width: 260px !important; }
+.event-popup .leaflet-popup-content { margin: 0; width: auto !important; max-width: 82vw; }
 .event-popup .event-card { box-shadow: none; border: 0; border-radius: 0; }
 .event-popup .event-card:hover { transform: none; }
+.event-popup > .leaflet-popup-content-wrapper > .leaflet-popup-content > .event-card { width: 260px; }
+.event-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; width: min(720px, 82vw); }
+.event-group .event-card { min-width: 0; }
+/* Compacte kaarten in een groep, zodat meerdere rijen in de popup passen; de rest scrolt. */
+.event-group .event-cover { aspect-ratio: 21 / 9; }
+.event-group .event-body { padding: 10px 12px 12px; }
+.event-group .event-hint { display: none; }
+.event-popup-group .leaflet-popup-content { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .event-hint { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
 .event-popup-below .leaflet-popup-tip-container { display: none; }
 /* De kaart mag de muis niet opvangen (anders sluit hij onder de cursor en flikkert hij) en moet meteen staan. */
 .event-popup, .event-popup * { pointer-events: none !important; }
+.event-popup-group, .event-popup-group * { pointer-events: auto !important; }
+.event-popup-group .event-card { cursor: pointer; }
+.event-popup-group .event-card:hover { background: var(--surface-2); }
 .leaflet-fade-anim .event-popup, .event-popup { transition: none !important; animation: none !important; opacity: 1 !important; }
 
 /* ---- Vervoermiddel (radio, als segmenten) ---- */

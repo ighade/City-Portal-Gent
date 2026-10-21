@@ -23,6 +23,41 @@ async function flemishGeocode(q: string): Promise<Place> {
   return { lat: hit.Location.Lat_WGS84, lon: hit.Location.Lon_WGS84, label: hit.FormattedAddress ?? q }
 }
 
+// Plaatsen zonder adres ("Kuipke", "Bijloke") kent de Vlaamse geolocatie niet; OpenStreetMap wel,
+// beperkt tot de omgeving van Gent.
+async function placeByName(name: string): Promise<Place> {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&bounded=1&viewbox=3.55,51.15,3.9,50.96&q=${encodeURIComponent(name)}`,
+    { headers: { Accept: 'application/json' } },
+  )
+  const hits = res.ok ? await res.json() as Array<{ lat: string; lon: string; display_name: string }> : []
+  if (hits[0]) return { lat: Number(hits[0].lat), lon: Number(hits[0].lon), label: hits[0].display_name }
+  return photonByName(name)
+}
+
+const squash = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+// Laatste redmiddel: Photon kent ook zaken die onder een samengeschreven naam of zonder soortwoord
+// in OpenStreetMap staan ("deVierdeZaal, Driebeekstraat 4"). Alleen treffers waarvan de naam
+// echt op de gezochte lijkt tellen; anders krijg je een straat of een stad met dezelfde klank.
+async function photonByName(name: string): Promise<Place> {
+  const res = await fetch(
+    `https://photon.komoot.io/api/?limit=5&lat=51.05&lon=3.72&bbox=3.55,50.96,3.9,51.15&q=${encodeURIComponent(name)}`,
+  )
+  const body = res.ok
+    ? await res.json() as { features?: Array<{ geometry: { coordinates: [number, number] }; properties: { name?: string; street?: string; housenumber?: string; city?: string } }> }
+    : {}
+  const want = squash(name.replace(/\s+(in\s+)?(gent|ghent)$/i, ''))
+  const hit = (body.features ?? []).find((f) => {
+    const got = squash(f.properties.name ?? '')
+    return got.length >= 5 && want.length >= 5 && (got.includes(want) || want.includes(got))
+  })
+  if (!hit) throw new Error('Deze plaats werd niet gevonden.')
+  const p = hit.properties
+  const [lon, lat] = hit.geometry.coordinates
+  return { lat, lon, label: [p.name, [p.street, p.housenumber].filter(Boolean).join(' '), p.city].filter(Boolean).join(', ') }
+}
+
 // Eén oproep per voorstel-ronde; de coördinaten komen pas bij het berekenen, via flemishGeocode.
 const suggestCache = new Map<string, string[]>()
 
@@ -78,6 +113,7 @@ export const api = {
   routePlan: (payload: RoutePlanRequest) => call<RoutePlanResult>('POST', '/api/route/plan', payload),
   suggest: flemishSuggest,
   geocode: flemishGeocode,
+  placeByName,
   ezPark: (payload: EzParkRequest) => call<EzParkResult>('POST', '/api/route/ezpark', payload),
   transit: {
     stops: () => call<TransitStop[]>('GET', '/api/transit/stops'),

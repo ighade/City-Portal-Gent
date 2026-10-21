@@ -290,49 +290,102 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
   useEffect(() => {
     const m = map.current
     if (!m) return
-    eventLayer.current?.remove()
-    eventLayer.current = null
     if (!events || events.length === 0) return
 
+    const draw = () => {
+    eventLayer.current?.remove()
     const group = L.layerGroup().addTo(m)
+
+    // Spelden die op het scherm dichter dan EVENT_CLUSTER_PX bij elkaar liggen worden één speld;
+    // bij inzoomen vallen ze vanzelf uit elkaar.
+    const clusters: Array<{ items: MapEvent[]; x: number; y: number }> = []
     for (const item of events) {
-      L.marker([item.lat, item.lon], {
-        title: item.event.name,
+      const pt = m.project([item.lat, item.lon])
+      const near = clusters.find((c) => Math.hypot(c.x - pt.x, c.y - pt.y) < EVENT_CLUSTER_PX)
+      if (near) near.items.push(item)
+      else clusters.push({ items: [item], x: pt.x, y: pt.y })
+    }
+
+    for (const { items } of clusters) {
+      const first = items[0]
+      const lat = items.reduce((sum, i) => sum + i.lat, 0) / items.length
+      const lon = items.reduce((sum, i) => sum + i.lon, 0) / items.length
+      const grouped = items.length > 1
+      let closeTimer: number | undefined
+      L.marker([lat, lon], {
+        title: items.length > 1 ? `${items.length} evenementen` : first.event.name,
         zIndexOffset: 500,
         icon: L.divIcon({
           className: '',
-          html: `<span class="event-pin" title="${escape(item.event.name)}">${calendarSvg}</span>`,
+          html: `<span class="event-pin" title="${escape(first.event.name)}">${calendarSvg}${items.length > 1 ? `<span class="event-pin-count">${items.length}</span>` : ''}</span>`,
           iconSize: [30, 30],
           iconAnchor: [15, 15],
           popupAnchor: [0, -14],
         }),
       })
-        .bindPopup(eventCardHtml(item.event), { closeButton: false, maxWidth: 280, minWidth: 260, autoPan: false, className: 'event-popup' })
+        .bindPopup(eventGroupHtml(items), {
+          closeButton: false,
+          maxWidth: 800,
+          minWidth: 260,
+          autoPan: false,
+          className: grouped ? 'event-popup event-popup-group' : 'event-popup',
+        })
         .on('mouseover', (e) => {
           const marker = e.target as L.Marker
           const popup = marker.getPopup()
           if (!popup) return
+          window.clearTimeout(closeTimer)
           popup.options.offset = L.point(0, 0)
-          marker.openPopup()
-          // Staat de speld te hoog voor de kaart, dan gaat de kaart onder de speld open.
-          const height = popup.getElement()?.offsetHeight ?? 0
+          // De kaart past in de ruimte boven of onder de speld, de grootste van de twee; wat niet past scrolt.
           const y = m.latLngToContainerPoint(marker.getLatLng()).y
-          const below = y - 34 - height < 8
+          const roomAbove = y - 34 - 8
+          const roomBelow = m.getSize().y - y - 56 - 8
+          popup.options.maxHeight = Math.max(160, Math.max(roomAbove, roomBelow))
+          marker.openPopup()
+          const height = popup.getElement()?.offsetHeight ?? 0
+          const below = height > roomAbove && roomBelow > roomAbove
           popup.getElement()?.classList.toggle('event-popup-below', below)
           if (below) {
             // Kaart helemaal onder de speld: boven de wrapper zit 20 px marge, de speld is 30 px hoog.
             popup.options.offset = L.point(0, height + 56)
             popup.update()
           }
+          const el = popup.getElement()
+          if (grouped && el && !el.dataset.bound) {
+            // Een groep moet open blijven zodat je erin kunt scrollen en een kaart kunt kiezen.
+            el.dataset.bound = '1'
+            el.addEventListener('mouseenter', () => window.clearTimeout(closeTimer))
+            el.addEventListener('mouseleave', () => { closeTimer = window.setTimeout(() => marker.closePopup(), 150) })
+            el.addEventListener('click', (ev) => {
+              const card = (ev.target as HTMLElement).closest<HTMLElement>('[data-event-index]')
+              const picked = card ? items[Number(card.dataset.eventIndex)] : undefined
+              if (!picked) return
+              marker.closePopup()
+              eventPick.current?.(picked)
+            })
+          }
         })
-        .on('mouseout', (e) => e.target.closePopup())
+        .on('mouseout', (e) => {
+          const marker = e.target as L.Marker
+          if (!grouped) return marker.closePopup()
+          closeTimer = window.setTimeout(() => marker.closePopup(), 250)
+        })
         .on('click', (e) => {
           L.DomEvent.stopPropagation(e)
-          eventPick.current?.(item)
+          eventPick.current?.(first)
         })
         .addTo(group)
     }
     eventLayer.current = group
+    }
+
+    draw()
+    m.on('zoomend', draw)
+    return () => {
+      m.off('zoomend', draw)
+      eventLayer.current?.remove()
+      eventLayer.current = null
+    }
   }, [events])
 
   // De spelden: bij elke vernieuwing opnieuw tekenen. Vijftig spelden is niets.
@@ -390,6 +443,8 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
   return <div ref={host} className="map" role="application" aria-label="Kaart van de parkings in Gent" />
 }
 
+const EVENT_CLUSTER_PX = 34
+
 const calendarSvg =
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'
 
@@ -398,13 +453,13 @@ const eventWeekday = new Intl.DateTimeFormat('nl-BE', { timeZone: 'Europe/Brusse
 const eventTime = new Intl.DateTimeFormat('nl-BE', { timeZone: 'Europe/Brussels', hour: '2-digit', minute: '2-digit' })
 
 // Zelfde opbouw en klassen als EventCard op de evenementenpagina.
-function eventCardHtml(e: GentEvent): string {
+function eventCardHtml(e: GentEvent, index?: number): string {
   const start = e.startsAtUtc ? new Date(e.startsAtUtc) : null
   const [day, month] = start ? eventDate.format(start).split(' ') : ['', '']
   const cover = e.coverImageUrl
     ? `<img src="${escape(e.coverImageUrl)}" alt="${escape(e.coverCaption ?? e.name)}" referrerpolicy="no-referrer" />`
     : `<div class="event-cover-fallback" aria-hidden="true">${escape(e.name.slice(0, 1).toUpperCase())}</div>`
-  return `<div class="card event-card">
+  return `<div class="card event-card"${index === undefined ? '' : ` data-event-index="${index}"`}>
     <div class="event-cover">${cover}
       ${start ? `<div class="event-date"><b>${escape(day)}</b><span>${escape((month ?? '').replace('.', ''))}</span></div>` : ''}
       ${e.isHappeningNow ? '<span class="event-live">Nu bezig</span>' : ''}
@@ -417,6 +472,11 @@ function eventCardHtml(e: GentEvent): string {
       <p class="event-hint">Klik voor de route naar dit evenement</p>
     </div>
   </div>`
+}
+
+function eventGroupHtml(items: MapEvent[]): string {
+  if (items.length === 1) return eventCardHtml(items[0].event)
+  return `<div class="event-group">${items.map((item, i) => eventCardHtml(item.event, i)).join('')}</div>`
 }
 
 function icon(p: Parking, blue = false): L.DivIcon {

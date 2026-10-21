@@ -5,6 +5,7 @@ import { GarageRate, StreetRate } from '../components/RateInfo'
 import type { EzOverlay } from '../components/EzParkPanel'
 import { ParkingMap, textOn } from '../components/ParkingMap'
 import { transitFareLabel } from '../fare'
+import { GENT_BOUNDS } from '../leaflet'
 import type { MapEvent } from '../components/ParkingMap'
 import { Fact } from '../components/ParkingInfo'
 import { useRouteInputs } from '../components/RouteInputs'
@@ -47,8 +48,8 @@ export function RoutePlanner() {
   const [error, setError] = useState<string | null>(null)
   const [route, setRoute] = useState<RoutePlanResult | null>(null)
   const [transitRoute, setTransitRoute] = useState<TransitRouteResult | null>(null)
-  const [mode, setMode] = useState<Mode>('car')
-  const [ezOn, setEzOn] = useState(true)
+  const [mode, setMode] = useState<Mode>('foot')
+  const [ezOn, setEzOn] = useState(false)
   const [lezBlocked, setLezBlocked] = useState(false)
   const [ezOverlay, setEzOverlay] = useState<EzOverlay | null>(null)
   const [overviewEl, setOverviewEl] = useState<HTMLElement | null>(null)
@@ -281,7 +282,7 @@ export function RoutePlanner() {
   )
 }
 
-const GEO_CACHE = 'parkinggent.eventGeo.v1'
+const GEO_CACHE = 'parkinggent.eventGeo.v3'
 
 function readGeoCache(): Record<string, { lat: number; lon: number } | null> {
   try {
@@ -300,6 +301,18 @@ function addressCandidates(place: string): string[] {
   if (firstWithNumber > 0) candidates.push(parts.slice(firstWithNumber).join(', '))
   return candidates
 }
+
+// Een loutere naam staat zelden zo in OpenStreetMap: probeer ook zonder "in Gent" en zonder
+// soortwoord ("Club Wintercircus" → "Wintercircus").
+function nameCandidates(place: string): string[] {
+  const first = place.split(',')[0].trim()
+  const base = first.replace(/\s+(in\s+)?(gent|ghent)$/i, '')
+  const bare = base.replace(/^(club|feestzaal|muziekcentrum|kunstencentrum)\s+/i, '')
+  return [...new Set([first, base, bare])].filter(Boolean)
+}
+
+const inGentArea = (hit: { lat: number; lon: number }) =>
+  hit.lat >= GENT_BOUNDS[0][0] && hit.lat <= GENT_BOUNDS[1][0] && hit.lon >= GENT_BOUNDS[0][1] && hit.lon <= GENT_BOUNDS[1][1]
 
 /** Evenementen van de komende 7 dagen, met coördinaat uit de Vlaamse geolocatie (onthouden in localStorage). */
 function useWeekEvents(): MapEvent[] {
@@ -325,19 +338,35 @@ function useWeekEvents(): MapEvent[] {
 
       const cache = readGeoCache()
       const found: MapEvent[] = []
+      const failedPlaces = new Set<string>()
       for (const e of thisWeek) {
         const key = e.place!
-        if (!(key in cache)) {
-          cache[key] = null
-          for (const q of addressCandidates(key)) {
+        if (!cache[key] && !failedPlaces.has(key)) {
+          for (const q of /\d/.test(key) ? addressCandidates(key) : []) {
             try {
               const hit = await api.geocode(q)
+              if (!inGentArea(hit)) continue
               cache[key] = { lat: hit.lat, lon: hit.lon }
               break
             } catch {
               // volgende kandidaat
             }
           }
+          if (!cache[key]) {
+            // Alleen een naam, of een adres dat niet gevonden werd: zoek de plaats zelf.
+            for (const q of nameCandidates(key)) {
+              try {
+                const hit = await api.placeByName(q)
+                if (!inGentArea(hit)) continue
+                cache[key] = { lat: hit.lat, lon: hit.lon }
+                break
+              } catch {
+                // volgende kandidaat
+              }
+              await new Promise((r) => setTimeout(r, 1100))
+            }
+          }
+          if (!cache[key]) failedPlaces.add(key)
           localStorage.setItem(GEO_CACHE, JSON.stringify(cache))
         }
         const at = cache[key]
