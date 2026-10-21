@@ -310,7 +310,6 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
       const first = items[0]
       const lat = items.reduce((sum, i) => sum + i.lat, 0) / items.length
       const lon = items.reduce((sum, i) => sum + i.lon, 0) / items.length
-      const grouped = items.length > 1
       let closeTimer: number | undefined
       L.marker([lat, lon], {
         title: items.length > 1 ? `${items.length} evenementen` : first.event.name,
@@ -328,7 +327,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
           maxWidth: 800,
           minWidth: 260,
           autoPan: false,
-          className: grouped ? 'event-popup event-popup-group' : 'event-popup',
+          className: 'event-popup event-popup-group',
         })
         .on('mouseover', (e) => {
           const marker = e.target as L.Marker
@@ -351,8 +350,8 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
             popup.update()
           }
           const el = popup.getElement()
-          if (grouped && el && !el.dataset.bound) {
-            // Een groep moet open blijven zodat je erin kunt scrollen en een kaart kunt kiezen.
+          if (el && !el.dataset.bound) {
+            // De kaart blijft open zolang de muis erboven staat, om te scrollen en een kaart aan te klikken.
             el.dataset.bound = '1'
             el.addEventListener('mouseenter', () => window.clearTimeout(closeTimer))
             el.addEventListener('mouseleave', () => { closeTimer = window.setTimeout(() => marker.closePopup(), 150) })
@@ -361,13 +360,12 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
               const picked = card ? items[Number(card.dataset.eventIndex)] : undefined
               if (!picked) return
               marker.closePopup()
-              eventPick.current?.(picked)
+              navigate(`/events/${encodeURIComponent(picked.event.id)}`)
             })
           }
         })
         .on('mouseout', (e) => {
           const marker = e.target as L.Marker
-          if (!grouped) return marker.closePopup()
           closeTimer = window.setTimeout(() => marker.closePopup(), 250)
         })
         .on('click', (e) => {
@@ -469,14 +467,13 @@ function eventCardHtml(e: GentEvent, index?: number): string {
       ${start ? `<p class="event-when">${escape(eventWeekday.format(start))} · ${escape(eventTime.format(start))}</p>` : ''}
       ${e.place ? `<p class="event-place">${escape(e.place)}</p>` : ''}
       <div class="event-foot">${e.socialSummary ? `<span>${escape(e.socialSummary)}</span>` : ''}${e.ticketPriceLabel ? `<span class="event-price">${escape(e.ticketPriceLabel)}</span>` : ''}</div>
-      <p class="event-hint">Klik voor de route naar dit evenement</p>
+      <p class="event-hint">Klik op de kaart voor details · klik op de speld voor de route</p>
     </div>
   </div>`
 }
 
 function eventGroupHtml(items: MapEvent[]): string {
-  if (items.length === 1) return eventCardHtml(items[0].event)
-  return `<div class="event-group">${items.map((item, i) => eventCardHtml(item.event, i)).join('')}</div>`
+  return `<div class="event-group${items.length === 1 ? ' event-group-single' : ''}">${items.map((item, i) => eventCardHtml(item.event, i)).join('')}</div>`
 }
 
 function icon(p: Parking, blue = false): L.DivIcon {

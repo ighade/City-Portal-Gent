@@ -516,6 +516,7 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
 /* De kaart mag de muis niet opvangen (anders sluit hij onder de cursor en flikkert hij) en moet meteen staan. */
 .event-popup, .event-popup * { pointer-events: none !important; }
 .event-popup-group, .event-popup-group * { pointer-events: auto !important; }
+.event-group-single { display: block; width: 260px; }
 .event-popup-group .event-card { cursor: pointer; }
 .event-popup-group .event-card:hover { background: var(--surface-2); }
 .leaflet-fade-anim .event-popup, .event-popup { transition: none !important; animation: none !important; opacity: 1 !important; }
