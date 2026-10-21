@@ -98,7 +98,7 @@ export interface RoutePlanRequest {
   startLon: number
   endLat: number
   endLon: number
-  mode: 'car'
+  mode: 'car' | 'foot-walking' | 'cycling-regular'
   checkLez?: boolean
 }
 
@@ -137,7 +137,7 @@ export interface ParkingRate {
 }
 
 export interface RoutePlanResult {
-  mode: 'car'
+  mode: 'car' | 'foot-walking' | 'cycling-regular'
   distanceKm: number
   durationMinutes: number
   coordinates: number[][]
@@ -167,6 +167,8 @@ export interface EzParkLeg {
   distanceKm: number
   /** [lat, lon] */
   coordinates: number[][]
+  /** Lijnkleur zonder #, alleen bij bus en tram */
+  color?: string
 }
 
 export interface EzParkVariant {
@@ -251,6 +253,7 @@ export interface TransitLeg {
   distanceKm: number
   delayMinutes: number
   coordinates: number[][]
+  color?: string
 }
 
 export interface TransitRouteResult {

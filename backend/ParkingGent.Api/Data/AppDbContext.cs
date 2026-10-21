@@ -76,6 +76,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(r => r.Id).HasMaxLength(120);
             e.Property(r => r.Name).HasMaxLength(250);
             e.Property(r => r.Mode).HasMaxLength(20);
+            e.Property(r => r.Color).HasMaxLength(6);
         });
 
         b.Entity<TransitStopRouteEntity>(e =>

@@ -406,6 +406,10 @@ namespace ParkingGent.Api.Data.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<string>("Color")
+                        .HasMaxLength(6)
+                        .HasColumnType("character varying(6)");
+
                     b.Property<string>("Mode")
                         .IsRequired()
                         .HasMaxLength(20)

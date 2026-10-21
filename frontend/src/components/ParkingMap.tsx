@@ -10,7 +10,7 @@ import L, {
 } from '../leaflet'
 import { api } from '../api'
 import { busyness, busynessLabel, kindLabel } from '../types'
-import type { EzParkLeg, Parking } from '../types'
+import type { EzParkLeg, GentEvent, Parking } from '../types'
 
 interface RoutePoint {
   lat: number
@@ -21,8 +21,15 @@ interface RoutePoint {
 interface RouteOverlay {
   start: RoutePoint
   end: RoutePoint
-  mode: 'car'
+  mode: 'car' | 'foot-walking' | 'cycling-regular'
   points: Array<{ lat: number; lon: number }>
+}
+
+/** Een evenement met coördinaat, voor de kalenderspelden op de routekaart. */
+export interface MapEvent {
+  event: GentEvent
+  lat: number
+  lon: number
 }
 
 interface Props {
@@ -44,6 +51,9 @@ interface Props {
   hoverInfo?: boolean
   /** Klik op een EZ Park-speld. */
   onEzParkPick?: (slug: string) => void
+  /** Evenementen als kalenderspeld; hoveren toont de kaart, klikken meldt het evenement. */
+  events?: MapEvent[]
+  onEventPick?: (event: MapEvent) => void
 }
 
 interface EzParkOverlay {
@@ -61,7 +71,15 @@ interface EzParkOverlay {
  * groen verschillen hier ook in wat erin staat. Een parking zonder meting krijgt een open ring
  * met haar capaciteit — zichtbaar anders dan een gemeten plek.
  */
-export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick }: Props) {
+/** Zwarte of witte tekst, afhankelijk van de lijnkleur. */
+export function textOn(hex?: string) {
+  if (!hex) return '#fff'
+  const n = parseInt(hex, 16)
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
+  return lum > 0.6 ? '#111827' : '#fff'
+}
+
+export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick, events, onEventPick }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
@@ -69,6 +87,9 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
   const ezLayer = useRef<L.LayerGroup | null>(null)
   const clickHandler = useRef(onMapClick)
   clickHandler.current = onMapClick
+  const eventLayer = useRef<L.LayerGroup | null>(null)
+  const eventPick = useRef(onEventPick)
+  eventPick.current = onEventPick
   const ezPick = useRef(onEzParkPick)
   ezPick.current = onEzParkPick
   const base = useRef<{ remove(): void; bringToBack(): void } | null>(null)
@@ -177,7 +198,9 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
     const group = L.layerGroup().addTo(m)
     const polyline = L.polyline(
       route.points.map((p) => [p.lat, p.lon] as [number, number]),
-      { color: '#d94a4a', weight: 5, opacity: 0.9 },
+      route.mode === 'foot-walking' ? { color: '#475569', weight: 4, opacity: 0.9, dashArray: '2 8' }
+        : route.mode === 'cycling-regular' ? { color: '#16a34a', weight: 5, opacity: 0.9 }
+        : { color: '#d94a4a', weight: 5, opacity: 0.9 },
     )
     polyline.addTo(group)
 
@@ -239,17 +262,78 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
     for (const leg of ezpark.legs) {
       if (leg.coordinates.length < 2) continue
       const points = leg.coordinates.map(([lat, lon]) => [lat, lon] as [number, number])
+      const transitColor = leg.color ? `#${leg.color}` : leg.mode === 'tram' ? '#d97706' : '#0f766e'
       const style =
         leg.mode === 'drive' ? { color: '#d94a4a', weight: 5 }
         : leg.mode === 'walk' ? { color: '#475569', weight: 4, dashArray: '2 8' }
-        : { color: '#0f766e', weight: 5 }
+        : { color: transitColor, weight: 6 }
       L.polyline(points, { ...style, opacity: 0.9 }).addTo(group)
+      if ((leg.mode === 'bus' || leg.mode === 'tram') && leg.line) {
+        const mid = points[Math.floor(points.length / 2)]
+        L.marker(mid, {
+          interactive: false,
+          icon: L.divIcon({
+            className: '',
+            html: `<span class="line-badge" style="background:${transitColor};color:${textOn(leg.color)}">${leg.line}</span>`,
+            iconSize: [0, 0],
+          }),
+        }).addTo(group)
+      }
       bounds.push(...points)
     }
 
     ezLayer.current = group
     if (ezpark.legs.length > 0 && bounds.length > 0) m.fitBounds(L.latLngBounds(bounds).pad(0.15), { animate: true })
   }, [ezpark])
+
+  // Evenementen van deze week: kalenderspeld, kaart bij hoveren, route bij klikken.
+  useEffect(() => {
+    const m = map.current
+    if (!m) return
+    eventLayer.current?.remove()
+    eventLayer.current = null
+    if (!events || events.length === 0) return
+
+    const group = L.layerGroup().addTo(m)
+    for (const item of events) {
+      L.marker([item.lat, item.lon], {
+        title: item.event.name,
+        zIndexOffset: 500,
+        icon: L.divIcon({
+          className: '',
+          html: `<span class="event-pin" title="${escape(item.event.name)}">${calendarSvg}</span>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
+          popupAnchor: [0, -14],
+        }),
+      })
+        .bindPopup(eventCardHtml(item.event), { closeButton: false, maxWidth: 280, minWidth: 260, autoPan: false, className: 'event-popup' })
+        .on('mouseover', (e) => {
+          const marker = e.target as L.Marker
+          const popup = marker.getPopup()
+          if (!popup) return
+          popup.options.offset = L.point(0, 0)
+          marker.openPopup()
+          // Staat de speld te hoog voor de kaart, dan gaat de kaart onder de speld open.
+          const height = popup.getElement()?.offsetHeight ?? 0
+          const y = m.latLngToContainerPoint(marker.getLatLng()).y
+          const below = y - 34 - height < 8
+          popup.getElement()?.classList.toggle('event-popup-below', below)
+          if (below) {
+            // Kaart helemaal onder de speld: boven de wrapper zit 20 px marge, de speld is 30 px hoog.
+            popup.options.offset = L.point(0, height + 56)
+            popup.update()
+          }
+        })
+        .on('mouseout', (e) => e.target.closePopup())
+        .on('click', (e) => {
+          L.DomEvent.stopPropagation(e)
+          eventPick.current?.(item)
+        })
+        .addTo(group)
+    }
+    eventLayer.current = group
+  }, [events])
 
   // De spelden: bij elke vernieuwing opnieuw tekenen. Vijftig spelden is niets.
   useEffect(() => {
@@ -304,6 +388,35 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
   }, [selected, parkings])
 
   return <div ref={host} className="map" role="application" aria-label="Kaart van de parkings in Gent" />
+}
+
+const calendarSvg =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'
+
+const eventDate = new Intl.DateTimeFormat('nl-BE', { timeZone: 'Europe/Brussels', day: 'numeric', month: 'short' })
+const eventWeekday = new Intl.DateTimeFormat('nl-BE', { timeZone: 'Europe/Brussels', weekday: 'long' })
+const eventTime = new Intl.DateTimeFormat('nl-BE', { timeZone: 'Europe/Brussels', hour: '2-digit', minute: '2-digit' })
+
+// Zelfde opbouw en klassen als EventCard op de evenementenpagina.
+function eventCardHtml(e: GentEvent): string {
+  const start = e.startsAtUtc ? new Date(e.startsAtUtc) : null
+  const [day, month] = start ? eventDate.format(start).split(' ') : ['', '']
+  const cover = e.coverImageUrl
+    ? `<img src="${escape(e.coverImageUrl)}" alt="${escape(e.coverCaption ?? e.name)}" referrerpolicy="no-referrer" />`
+    : `<div class="event-cover-fallback" aria-hidden="true">${escape(e.name.slice(0, 1).toUpperCase())}</div>`
+  return `<div class="card event-card">
+    <div class="event-cover">${cover}
+      ${start ? `<div class="event-date"><b>${escape(day)}</b><span>${escape((month ?? '').replace('.', ''))}</span></div>` : ''}
+      ${e.isHappeningNow ? '<span class="event-live">Nu bezig</span>' : ''}
+    </div>
+    <div class="event-body">
+      <h3>${escape(e.name)}</h3>
+      ${start ? `<p class="event-when">${escape(eventWeekday.format(start))} · ${escape(eventTime.format(start))}</p>` : ''}
+      ${e.place ? `<p class="event-place">${escape(e.place)}</p>` : ''}
+      <div class="event-foot">${e.socialSummary ? `<span>${escape(e.socialSummary)}</span>` : ''}${e.ticketPriceLabel ? `<span class="event-price">${escape(e.ticketPriceLabel)}</span>` : ''}</div>
+      <p class="event-hint">Klik voor de route naar dit evenement</p>
+    </div>
+  </div>`
 }
 
 function icon(p: Parking, blue = false): L.DivIcon {

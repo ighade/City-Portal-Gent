@@ -62,7 +62,8 @@ public sealed record TransitLegDto(
     DateTime ArrivalAt,
     double DistanceKm,
     int DelayMinutes,
-    double[][] Coordinates);
+    double[][] Coordinates,
+    string? Color = null);
 
 public sealed class TransitService(
     HttpClient http,
@@ -76,6 +77,7 @@ public sealed class TransitService(
     private readonly Dictionary<string, TransitStop> stops = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<TransitConnection>> connections = new(StringComparer.Ordinal);
     private readonly Dictionary<string, double[][]> shapes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> routeColors = new(StringComparer.Ordinal);
     private readonly Dictionary<(string TripId, string StopId), int> realtimeDelays = new();
     private DateTime staticUpdatedAtUtc;
     private DateTime realtimeUpdatedAtUtc;
@@ -264,7 +266,8 @@ public sealed class TransitService(
                 ArrivalAt: last.EffectiveArrival,
                 DistanceKm: distance,
                 DelayMinutes: group.Max(e => e.DelayMinutes),
-                Coordinates: coordinates));
+                Coordinates: coordinates,
+                Color: routeColors.GetValueOrDefault(first.RouteId)));
         }
 
         var lastTransitAt = path[^1].EffectiveArrival;
@@ -326,14 +329,15 @@ public sealed class TransitService(
             newStops[id] = new TransitStop(id, row.GetValueOrDefault("stop_name") ?? id, lat, lon);
         }
 
-        var routes = new Dictionary<string, (string Name, string Mode)>(StringComparer.Ordinal);
+        var routes = new Dictionary<string, (string Name, string Mode, string? Color)>(StringComparer.Ordinal);
         await foreach (var row in readRows("routes.txt", ct))
         {
             var id = row.GetValueOrDefault("route_id");
             if (string.IsNullOrWhiteSpace(id)) continue;
             routes[id] = (
                 FirstNonEmpty(row.GetValueOrDefault("route_short_name"), row.GetValueOrDefault("route_long_name"), id),
-                ModeForRouteType(row.GetValueOrDefault("route_type")));
+                ModeForRouteType(row.GetValueOrDefault("route_type")),
+                NormalizeColor(row.GetValueOrDefault("route_color")));
         }
 
         var trips = new Dictionary<string, (string RouteId, string ServiceId, string ShapeId)>(StringComparer.Ordinal);
@@ -390,7 +394,7 @@ public sealed class TransitService(
                 var from = times[i];
                 var to = times[i + 1];
                 if (from.Departure >= to.Arrival) continue;
-                var routeInfo = routes.GetValueOrDefault(from.RouteId, (Name: from.RouteId, Mode: "bus"));
+                var routeInfo = routes.GetValueOrDefault(from.RouteId, (Name: from.RouteId, Mode: "bus", Color: (string?)null));
                 var connection = new TransitConnection(
                     TripId: tripId,
                     RouteId: from.RouteId,
@@ -463,6 +467,10 @@ public sealed class TransitService(
             stops[stop.Id] = new TransitStop(stop.Id, stop.Name, stop.Latitude, stop.Longitude, lines);
         }
 
+        routeColors.Clear();
+        foreach (var route in storedRoutes.Values.Where(r => r.Color is not null))
+            routeColors[route.Id] = route.Color!;
+
         shapes.Clear();
         foreach (var shape in storedShapes.GroupBy(x => x.ShapeId, StringComparer.Ordinal))
             shapes[shape.Key] = shape.OrderBy(x => x.Sequence).Select(x => new[] { x.Latitude, x.Longitude }).ToArray();
@@ -498,7 +506,7 @@ public sealed class TransitService(
 
     private async Task PersistStaticAsync(
         Dictionary<string, TransitStop> newStops,
-        Dictionary<string, (string Name, string Mode)> routes,
+        Dictionary<string, (string Name, string Mode, string? Color)> routes,
         Dictionary<string, List<TransitConnection>> newConnections,
         Dictionary<string, double[][]> importedShapes,
         CancellationToken ct)
@@ -524,6 +532,7 @@ public sealed class TransitService(
             Id = route.Key,
             Name = route.Value.Name,
             Mode = route.Value.Mode,
+            Color = route.Value.Color,
             UpdatedAtUtc = updatedAtUtc,
         }));
 
@@ -714,6 +723,11 @@ public sealed class TransitService(
 
     private static TransitStopDto ToDto(TransitStop stop) => new(stop.Id, stop.Name, stop.Lat, stop.Lon, stop.Lines);
     private bool InsideGent(double lat, double lon) => lat >= options.Value.GentMinLatitude && lat <= options.Value.GentMaxLatitude && lon >= options.Value.GentMinLongitude && lon <= options.Value.GentMaxLongitude;
+    private static string? NormalizeColor(string? value)
+    {
+        var hex = value?.Trim().TrimStart('#');
+        return hex is { Length: 6 } && hex.All(Uri.IsHexDigit) ? hex.ToUpperInvariant() : null;
+    }
     private static string FirstNonEmpty(params string?[] values) => values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty;
     private static string ModeForRouteType(string? routeType) => routeType switch
     {

@@ -176,6 +176,8 @@ public class TransitRouteEntity
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Mode { get; set; } = "bus";
+    /// <summary>De lijnkleur uit routes.txt, zonder #, bv. "8C2B87".</summary>
+    public string? Color { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
     public List<TransitStopRouteEntity> Stops { get; set; } = new();
 }

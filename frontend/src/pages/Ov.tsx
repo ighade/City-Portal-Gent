@@ -1,3 +1,4 @@
+import { transitFareLabel } from '../fare'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
 import { TransitMap } from '../components/TransitMap'
@@ -171,6 +172,7 @@ function RouteSummary({ route }: { route: TransitRouteResult }) {
       <div className="ov-route-meta">
         <span>Vertrek <b>{formatTime(route.departureAt)}</b></span>
         <span>Aankomst <b>{formatTime(route.arrivalAt)}</b></span>
+        {transitFareLabel(route.legs) && <span>Prijs <b>{transitFareLabel(route.legs)}</b></span>}
       </div>
       <div className="ov-legs">
         {route.legs.map((leg, index) => (

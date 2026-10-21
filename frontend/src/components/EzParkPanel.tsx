@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
+import { transitFareLabel } from '../fare'
 import { GarageRate, EndTimeSelect, endOptions, estimateCost } from './RateInfo'
 import type { RoutePoint } from './RouteInputs'
 import type { EzParkLeg, EzParkOption, EzParkResult, EzParkVariant, ParkingRate } from '../types'
@@ -193,6 +194,7 @@ export function Legs({ variant, rate }: { variant: EzParkVariant; rate?: Parking
   return (
     <div style={{ marginTop: 16 }}>
       <h3>Jouw traject · {Math.round(variant.totalMinutes)} min</h3>
+      {transitFareLabel(variant.legs) && <p className="small muted">OV-ticket: <strong>{transitFareLabel(variant.legs)}</strong> (overstappen inbegrepen)</p>}
       <div className="ov-legs">
         {variant.legs.map((leg, i) => (
           <div className="ov-leg" key={`${leg.mode}-${i}`}>

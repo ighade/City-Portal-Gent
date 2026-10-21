@@ -53,8 +53,10 @@ public sealed class RoutePlanner(
             return null;
         }
 
-        var walking = string.Equals(mode, "foot-walking", StringComparison.OrdinalIgnoreCase);
-        var normalizedMode = walking ? "foot-walking" : "car";
+        var normalizedMode =
+            string.Equals(mode, "foot-walking", StringComparison.OrdinalIgnoreCase) ? "foot-walking"
+            : string.Equals(mode, "cycling-regular", StringComparison.OrdinalIgnoreCase) ? "cycling-regular"
+            : "car";
         var lezRestricted = false;
         var lezWarning = (string?)null;
 
@@ -83,7 +85,7 @@ public sealed class RoutePlanner(
         var start = Uri.EscapeDataString($"{startLon.ToString(CultureInfo.InvariantCulture)},{startLat.ToString(CultureInfo.InvariantCulture)}");
         var end = Uri.EscapeDataString($"{endLon.ToString(CultureInfo.InvariantCulture)},{endLat.ToString(CultureInfo.InvariantCulture)}");
         var baseUrl = options.Value.BaseUrl.TrimEnd('/');
-        var profile = walking ? "foot-walking" : "driving-car";
+        var profile = normalizedMode == "car" ? "driving-car" : normalizedMode;
         var cacheKey = via is { Count: > 0 }
             ? null
             : string.Create(CultureInfo.InvariantCulture, $"{profile}:{startLat:0.0000},{startLon:0.0000}:{endLat:0.0000},{endLon:0.0000}");

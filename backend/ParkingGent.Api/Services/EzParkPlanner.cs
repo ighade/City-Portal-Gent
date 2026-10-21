@@ -21,7 +21,8 @@ public sealed record EzParkLeg(
     DateTime DepartureAt,
     DateTime ArrivalAt,
     double DistanceKm,
-    double[][] Coordinates);
+    double[][] Coordinates,
+    string? Color = null);
 
 /// <summary>One way to finish the trip from a parking: "walk" or "transit".</summary>
 public sealed record EzParkVariant(
@@ -153,7 +154,8 @@ public sealed class EzParkPlanner(
                         l.DepartureAt,
                         l.ArrivalAt,
                         l.DistanceKm,
-                        l.Coordinates)));
+                        l.Coordinates,
+                        l.Color)));
                     variants.Add(new EzParkVariant("transit", ov.ArrivalAt, (ov.ArrivalAt - departure).TotalMinutes, legs.ToArray()));
                 }
             }
