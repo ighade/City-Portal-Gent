@@ -295,3 +295,23 @@ export const busynessLabel: Record<Busyness, string> = {
   vol: 'Vol',
   onbekend: 'Geen meting',
 }
+
+export interface GentEvent {
+  id: string
+  url: string
+  name: string
+  coverImageUrl?: string | null
+  coverCaption?: string | null
+  isOnline: boolean
+  isPast: boolean
+  isHappeningNow: boolean
+  startsAtUtc?: string | null
+  dayTimeLabel?: string | null
+  place?: string | null
+  kind?: string | null
+  socialSummary?: string | null
+  interestedCount?: number | null
+  goingCount?: number | null
+  wentCount?: number | null
+  ticketPriceLabel?: string | null
+}

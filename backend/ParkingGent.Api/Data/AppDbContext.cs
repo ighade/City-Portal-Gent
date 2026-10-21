@@ -9,6 +9,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<ParkingStatus> Statuses => Set<ParkingStatus>();
     public DbSet<Measurement> Measurements => Set<Measurement>();
     public DbSet<SyncRun> Runs => Set<SyncRun>();
+    public DbSet<EventEntity> Events => Set<EventEntity>();
+    public DbSet<EventPlaceEntity> EventPlaces => Set<EventPlaceEntity>();
     public DbSet<TransitStopEntity> TransitStops => Set<TransitStopEntity>();
     public DbSet<TransitRouteEntity> TransitRoutes => Set<TransitRouteEntity>();
     public DbSet<TransitStopRouteEntity> TransitStopRoutes => Set<TransitStopRouteEntity>();
@@ -94,6 +96,31 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.ShapeId).HasMaxLength(160);
             e.HasIndex(x => new { x.FromStopId, x.DepartureSeconds });
             e.HasIndex(x => new { x.RouteId, x.TripId });
+        });
+
+        b.Entity<EventPlaceEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasMaxLength(60);
+            e.Property(x => x.Name).HasMaxLength(500);
+        });
+
+        b.Entity<EventEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasMaxLength(60);
+            e.Property(x => x.Url).HasMaxLength(500);
+            e.Property(x => x.Name).HasMaxLength(500);
+            e.Property(x => x.CoverImageUrl).HasMaxLength(2000);
+            e.Property(x => x.CoverPhotoId).HasMaxLength(60);
+            e.Property(x => x.CoverAccessibilityCaption).HasMaxLength(1000);
+            e.Property(x => x.DayTimeLabel).HasMaxLength(100);
+            e.Property(x => x.PlaceId).HasMaxLength(60);
+            e.Property(x => x.Kind).HasMaxLength(30);
+            e.Property(x => x.SocialSummary).HasMaxLength(200);
+            e.Property(x => x.TicketPriceLabel).HasMaxLength(100);
+            e.HasOne(x => x.Place).WithMany(x => x.Events).HasForeignKey(x => x.PlaceId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => x.StartsAtUtc);
         });
 
         b.Entity<StreetParkingTariff>(e =>

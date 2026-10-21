@@ -307,6 +307,17 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
 }
 
 function icon(p: Parking, blue = false): L.DivIcon {
+  // Op de routepagina is het een blauwe P-speld; de vrije plaatsen staan in de popup bij hover.
+  if (blue) {
+    return L.divIcon({
+      className: '',
+      html: `<span title="${escape(p.name)}" style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#3b82f6;color:#fff;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);font:700 16px/1 sans-serif">P</span>`,
+      iconSize: [30, 30],
+      iconAnchor: [15, 15],
+      popupAnchor: [0, -14],
+    })
+  }
+
   const level = busyness(p.status)
   const open = p.status?.isOpen !== false
   const blueStyle = blue ? ' style="background:#3b82f6;border-color:#3b82f6;color:#fff"' : ''

@@ -34,6 +34,7 @@ public static class Api
         api.MapGet("/geojson", GeoJson).CacheOutput("kort");
         // De lage-emissiezone verandert hooguit eens in de zoveel jaar; die mag lang blijven staan.
         api.MapGet("/lez", LowEmissionZone).CacheOutput("lang");
+        api.MapGet("/events", Events).CacheOutput("lang");
         api.MapGet("/transit/stops", TransitStops).CacheOutput("lang");
         api.MapGet("/transit/stops/{stopId}/realtime", TransitStopRealtime);
         api.MapGet("/transit/status", TransitStatus).CacheOutput("kort");
@@ -277,6 +278,18 @@ public static class Api
         {
             return Results.Json(new { error = "De OV-dienstregeling is tijdelijk niet beschikbaar." }, statusCode: StatusCodes.Status503ServiceUnavailable);
         }
+    }
+
+    private static async Task<IResult> Events(AppDbContext db, CancellationToken ct)
+    {
+        var rows = await db.Events.AsNoTracking()
+            .OrderBy(e => e.StartsAtUtc == null).ThenBy(e => e.StartsAtUtc)
+            .Select(e => new EventDto(
+                e.Id, e.Url, e.Name, e.CoverImageUrl, e.CoverAccessibilityCaption, e.IsOnline, e.IsPast,
+                e.IsHappeningNow, e.StartsAtUtc, e.DayTimeLabel, e.Place == null ? null : e.Place.Name,
+                e.Kind, e.SocialSummary, e.InterestedCount, e.GoingCount, e.WentCount, e.TicketPriceLabel))
+            .ToListAsync(ct);
+        return Results.Ok(rows);
     }
 
     private static async Task<IResult> TransitStatus(TransitService transit, CancellationToken ct)

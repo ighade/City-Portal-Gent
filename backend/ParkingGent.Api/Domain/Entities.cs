@@ -227,3 +227,36 @@ public class StreetParkingTariff
     /// <summary>Totaalbedrag voor die duur; 0 is gratis. Een duur die niet kan, heeft geen rij.</summary>
     public decimal AmountEur { get; set; }
 }
+
+/// <summary>Een locatie waar evenementen plaatsvinden, zoals Facebook ze kent.</summary>
+public class EventPlaceEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public List<EventEntity> Events { get; set; } = [];
+}
+
+/// <summary>Een evenement in Gent, eenmalig opgehaald met scripts/import-events.sh.</summary>
+public class EventEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string? CoverImageUrl { get; set; }
+    public string? CoverPhotoId { get; set; }
+    public string? CoverAccessibilityCaption { get; set; }
+    public bool IsOnline { get; set; }
+    public bool IsPast { get; set; }
+    public bool IsHappeningNow { get; set; }
+    public DateTime? StartsAtUtc { get; set; }
+    public string? DayTimeLabel { get; set; }
+    public string? PlaceId { get; set; }
+    public EventPlaceEntity? Place { get; set; }
+    public string? Kind { get; set; }
+    public string? SocialSummary { get; set; }
+    public int? InterestedCount { get; set; }
+    public int? GoingCount { get; set; }
+    public int? WentCount { get; set; }
+    public string? TicketPriceLabel { get; set; }
+    public DateTime ImportedAtUtc { get; set; }
+}

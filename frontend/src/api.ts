@@ -1,4 +1,4 @@
-import type { EzParkRequest, EzParkResult, GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, SyncRun, TransitRouteRequest, TransitRouteResult, TransitStatus, TransitStop, TransitStopRealtime, Trend } from './types'
+import type { EzParkRequest, GentEvent, EzParkResult, GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, SyncRun, TransitRouteRequest, TransitRouteResult, TransitStatus, TransitStop, TransitStopRealtime, Trend } from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {
@@ -85,6 +85,7 @@ export const api = {
     status: () => call<TransitStatus>('GET', '/api/transit/status'),
     route: (payload: TransitRouteRequest) => call<TransitRouteResult>('POST', '/api/transit/route', payload),
   },
+  events: () => call<GentEvent[]>('GET', '/api/events'),
   meta: () => call<Meta>('GET', '/api/meta'),
 
   /**

@@ -24,6 +24,12 @@ export function RoutePlanner() {
   const [ezPick, setEzPick] = useState<{ slug: string; n: number } | null>(null)
 
   const carParkings = useMemo(() => parkings.filter((p) => p.kind !== 'bicycle'), [parkings])
+  // Parkings staan alleen op de kaart als EZ Park aan staat; de parkings uit het EZ Park-voorstel
+  // hebben al een eigen P-speld, dus die tekenen we hier niet dubbel.
+  const mapParkings = useMemo(() => {
+    const proposed = new Set((ezOverlay?.parks ?? []).map((k) => k.slug))
+    return carParkings.filter((c) => !proposed.has(c.slug))
+  }, [carParkings, ezOverlay])
   const inputs = useRouteInputs(carParkings, mapClick)
   const { start, end } = inputs
 
@@ -73,14 +79,6 @@ export function RoutePlanner() {
     }
   }
 
-  function pickParking(slug: string | null) {
-    const p = carParkings.find((c) => c.slug === slug)
-    if (!p) return
-    const point = { lat: p.lat, lon: p.lon, label: p.name }
-    inputs.chooseEnd(point)
-    if (inputs.hasStart) void handlePlan(point)
-  }
-
   function startEzPark() {
     setError(null)
     setLezBlocked(false)
@@ -107,12 +105,11 @@ export function RoutePlanner() {
     <div className="route-stage">
       <div className="route-map">
           <ParkingMap
-            parkings={ezOn ? [] : carParkings}
+            parkings={ezOn ? mapParkings : []}
             bluePins
             basemap="grb"
             showLez={showLez}
             selected={null}
-            onSelect={pickParking}
             hoverInfo
             onEzParkPick={(slug) => setEzPick({ slug, n: Date.now() })}
             route={ezOn ? null : routeOverlay}

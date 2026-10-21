@@ -220,6 +220,105 @@ namespace ParkingGent.Api.Data.Migrations
                     b.ToTable("Runs");
                 });
 
+            modelBuilder.Entity("ParkingGent.Api.Domain.EventEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("CoverAccessibilityCaption")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("CoverImageUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("CoverPhotoId")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("DayTimeLabel")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("GoingCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ImportedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("InterestedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsHappeningNow")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsOnline")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPast")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("PlaceId")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("SocialSummary")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("StartsAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TicketPriceLabel")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("WentCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlaceId");
+
+                    b.HasIndex("StartsAtUtc");
+
+                    b.ToTable("Events");
+                });
+
+            modelBuilder.Entity("ParkingGent.Api.Domain.EventPlaceEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("EventPlaces");
+                });
+
             modelBuilder.Entity("ParkingGent.Api.Domain.StreetParkingTariff", b =>
                 {
                     b.Property<long>("Id")
@@ -410,6 +509,21 @@ namespace ParkingGent.Api.Data.Migrations
 
                     b.Navigation("Route");
                     b.Navigation("Stop");
+                });
+
+            modelBuilder.Entity("ParkingGent.Api.Domain.EventEntity", b =>
+                {
+                    b.HasOne("ParkingGent.Api.Domain.EventPlaceEntity", "Place")
+                        .WithMany("Events")
+                        .HasForeignKey("PlaceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Place");
+                });
+
+            modelBuilder.Entity("ParkingGent.Api.Domain.EventPlaceEntity", b =>
+                {
+                    b.Navigation("Events");
                 });
 
             modelBuilder.Entity("ParkingGent.Api.Domain.TransitRouteEntity", b =>

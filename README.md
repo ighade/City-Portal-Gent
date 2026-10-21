@@ -136,6 +136,12 @@ beheerknoppen dicht, niet open.
 De app zelf heeft verder niets nodig: er is geen sleutel of registratie voor de open data van
 Stad Gent.
 
+Voor de evenementenimport is er één extra sleutel nodig:
+
+| | |
+|---|---|
+| `Socialfetch__ApiKey` | API-sleutel voor `api.socialfetch.dev` (Facebook events) |
+
 ## Ontwikkelen
 
 ```bash
@@ -147,6 +153,12 @@ cd backend/ParkingGent.Api
 ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://127.0.0.1:5101 dotnet run
 
 cd ../../frontend && npm install && npm run dev      # :5175, proxyt /api naar :5101
+```
+
+Evenementen inladen (volgt de paginering, maximaal 10 oproepen = 10 credits):
+
+```bash
+./scripts/import-events.sh
 ```
 
 Poort 5434 en niet de gebruikelijke 5432: zo botst deze databank niet met een postgres die
@@ -164,6 +176,7 @@ echt adres in de broncode staat.
 | `GET /api/parkings/{slug}/trend?days=60` | gemiddelde per weekdag en uur |
 | `GET /api/stats` | de optelsom over wat gemeten wordt |
 | `GET /api/meta` | bron, versheid, aantal bewaarde metingen |
+| `GET /api/events` | evenementen in Gent, ingelezen via `scripts/import-events.sh` |
 | `GET /api/geojson` | hetzelfde als `application/geo+json` |
 | `GET /api/lez` | de lage-emissiezone als GeoJSON, voor de laag op de kaart |
 | `GET /api/health` | leeft de container (databank) |

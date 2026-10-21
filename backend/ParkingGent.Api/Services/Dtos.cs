@@ -116,3 +116,8 @@ public static class Mapping
             p.Status.FetchedAtUtc,
             now - p.Status.MeasuredAtUtc > StaleAfter));
 }
+
+public sealed record EventDto(
+    string Id, string Url, string Name, string? CoverImageUrl, string? CoverCaption, bool IsOnline, bool IsPast,
+    bool IsHappeningNow, DateTime? StartsAtUtc, string? DayTimeLabel, string? Place, string? Kind,
+    string? SocialSummary, int? InterestedCount, int? GoingCount, int? WentCount, string? TicketPriceLabel);

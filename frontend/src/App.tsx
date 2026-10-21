@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { Shell } from './components/Shell'
 import { useApp } from './context/AppContext'
 import { Beheer } from './pages/Beheer'
+import { Events } from './pages/Events'
 import { Detail } from './pages/Detail'
 import { Kaart } from './pages/Kaart'
 import { Over } from './pages/Over'
@@ -16,6 +17,7 @@ export default function App() {
         <Route index element={<Kaart />} />
         <Route path="route" element={<RoutePlanner />} />
         <Route path="ov" element={<Ov />} />
+        <Route path="events" element={<Events />} />
         <Route path="parking/:slug" element={<Detail />} />
         <Route path="over" element={<Over />} />
         {/* Pas omleiden als vaststaat dat het antwoord "nee" is; anders kaatst een
