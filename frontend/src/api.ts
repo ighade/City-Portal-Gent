@@ -1,4 +1,4 @@
-import type { EzParkRequest, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, SyncRun, TransitRouteRequest, TransitRouteResult, TransitStatus, TransitStop, TransitStopRealtime, Trend } from './types'
+import type { EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, SyncRun, TransitRouteRequest, TransitRouteResult, TransitStatus, TransitStop, TransitStopRealtime, Trend } from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {
@@ -124,6 +124,25 @@ export const api = {
   events: () => call<GentEvent[]>('GET', '/api/events'),
   event: (id: string) => call<GentEventDetail>('GET', `/api/events/${encodeURIComponent(id)}`),
   meta: () => call<Meta>('GET', '/api/meta'),
+
+  /** De vriendenservice: alles hier vraagt een aanmelding (cookie), behalve register en login. */
+  friends: {
+    me: () => call<FriendSessionInfo>('GET', '/api/friends/me'),
+    register: (b: { username: string; email: string; password: string; avatar?: string }) =>
+      call<FriendSessionInfo>('POST', '/api/friends/register', b),
+    login: (identifier: string, password: string) =>
+      call<FriendSessionInfo>('POST', '/api/friends/login', { identifier, password }),
+    logout: () => call<void>('POST', '/api/friends/logout'),
+    settings: (b: { shareLocation?: boolean; showFriendsOnMap?: boolean; avatar?: string; clearAvatar?: boolean }) =>
+      call<FriendMe>('PUT', '/api/friends/me', b),
+    location: (lat: number, lon: number) => call<void>('POST', '/api/friends/location', { lat, lon }),
+    overview: () => call<FriendsOverview>('GET', '/api/friends/overview'),
+    request: (username: string) => call<void>('POST', '/api/friends/requests', { username }),
+    accept: (id: string) => call<void>('POST', `/api/friends/requests/${id}/accept`),
+    remove: (id: string) => call<void>('DELETE', `/api/friends/${id}`),
+    interest: (eventId: string, on: boolean) =>
+      call<void>(on ? 'PUT' : 'DELETE', `/api/friends/interests/${encodeURIComponent(eventId)}`),
+  },
 
   /**
    * Beheer. Extern komt hier altijd een 401 uit — de identiteitskoppen worden alleen door de

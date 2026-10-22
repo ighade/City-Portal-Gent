@@ -55,6 +55,27 @@ export function EventDetail() {
   const [data, setData] = useState<GentEventDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [imageFailed, setImageFailed] = useState(false)
+  // null = niet aangemeld bij de vriendenservice: dan tonen we geen knop.
+  const [interested, setInterested] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    api.friends.me()
+      .then((s) => { if (!cancelled) setInterested(s.interests.includes(id)) })
+      .catch(() => { if (!cancelled) setInterested(null) })
+    return () => { cancelled = true }
+  }, [id])
+
+  async function toggleInterest() {
+    if (interested === null) return
+    const next = !interested
+    setInterested(next)
+    try {
+      await api.friends.interest(id, next)
+    } catch {
+      setInterested(!next)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -110,6 +131,11 @@ export function EventDetail() {
                 Tickets kopen <small>({host(url)})</small>
               </a>
             ))}
+            {interested !== null && (
+              <button type="button" className={`btn${interested ? ' btn-primary' : ''}`} onClick={toggleInterest} aria-pressed={interested}>
+                {interested ? '★ Geïnteresseerd' : '☆ Ik ben geïnteresseerd'}
+              </button>
+            )}
             {canRoute && (
               <button
                 type="button"

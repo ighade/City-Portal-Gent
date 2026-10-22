@@ -75,6 +75,8 @@ builder.Services.AddScoped<ParkingSync>();
 builder.Services.AddScoped<Backfill>();
 builder.Services.AddScoped<Trends>();
 builder.Services.AddScoped<EzParkPlanner>();
+builder.Services.AddScoped<Friends>();
+builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddHostedService<ParkingSyncService>();
 
 builder.Services.ConfigureHttpJsonOptions(o =>
@@ -197,6 +199,45 @@ using (var scope = app.Services.CreateScope())
         SELECT '20261007150000_TransitData', '10.0.12'
         WHERE NOT EXISTS (SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261007150000_TransitData');
         """, CancellationToken.None);
+    // Vriendenservice: idempotent aangemaakt om dezelfde reden als de transit-tabellen hierboven.
+    await db.Database.ExecuteSqlRawAsync("""
+        CREATE TABLE IF NOT EXISTS "FriendUsers" (
+            "Id" uuid NOT NULL PRIMARY KEY,
+            "Username" character varying(40) NOT NULL,
+            "Email" character varying(200) NOT NULL,
+            "PasswordHash" character varying(200) NOT NULL,
+            "AvatarDataUrl" character varying(150000) NULL,
+            "ShareLocation" boolean NOT NULL DEFAULT FALSE,
+            "ShowFriendsOnMap" boolean NOT NULL DEFAULT FALSE,
+            "Latitude" double precision NULL,
+            "Longitude" double precision NULL,
+            "LocationAtUtc" timestamp with time zone NULL,
+            "CreatedAtUtc" timestamp with time zone NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_FriendUsers_Username" ON "FriendUsers" ("Username");
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_FriendUsers_Email" ON "FriendUsers" ("Email");
+        CREATE TABLE IF NOT EXISTS "FriendLinks" (
+            "RequesterId" uuid NOT NULL,
+            "AddresseeId" uuid NOT NULL,
+            "Accepted" boolean NOT NULL,
+            "CreatedAtUtc" timestamp with time zone NOT NULL,
+            PRIMARY KEY ("RequesterId", "AddresseeId")
+        );
+        CREATE INDEX IF NOT EXISTS "IX_FriendLinks_AddresseeId" ON "FriendLinks" ("AddresseeId");
+        CREATE TABLE IF NOT EXISTS "FriendInterests" (
+            "UserId" uuid NOT NULL,
+            "EventId" character varying(60) NOT NULL,
+            "CreatedAtUtc" timestamp with time zone NOT NULL,
+            PRIMARY KEY ("UserId", "EventId")
+        );
+        CREATE INDEX IF NOT EXISTS "IX_FriendInterests_EventId" ON "FriendInterests" ("EventId");
+        CREATE TABLE IF NOT EXISTS "FriendSessions" (
+            "TokenHash" character varying(64) NOT NULL PRIMARY KEY,
+            "UserId" uuid NOT NULL,
+            "ExpiresAtUtc" timestamp with time zone NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS "IX_FriendSessions_UserId" ON "FriendSessions" ("UserId");
+        """, CancellationToken.None);
     await db.Database.MigrateAsync();
 
     if (args.Contains("--import-transit", StringComparer.Ordinal))
@@ -234,5 +275,6 @@ app.MapGet("/api/health/source", async (GentOpenData gent, CancellationToken ct)
 });
 
 app.MapApi();
+app.MapFriendsApi();
 
 app.Run();

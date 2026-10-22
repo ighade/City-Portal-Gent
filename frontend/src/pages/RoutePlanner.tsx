@@ -12,7 +12,7 @@ import { Fact } from '../components/ParkingInfo'
 import { useRouteInputs } from '../components/RouteInputs'
 import type { RoutePoint } from '../components/RouteInputs'
 import { useApp } from '../context/AppContext'
-import type { EzParkLeg, GentEvent, RoutePlanResult, TransitRouteResult } from '../types'
+import type { EzParkLeg, Friend, GentEvent, RoutePlanResult, TransitRouteResult } from '../types'
 
 type Mode = 'foot' | 'bike' | 'car' | 'transit'
 
@@ -65,6 +65,7 @@ export function RoutePlanner() {
     return carParkings.filter((c) => !proposed.has(c.slug))
   }, [carParkings, ezOverlay])
   const weekEvents = useWeekEvents()
+  const friendsOnMap = useFriendsOnMap()
   const inputs = useRouteInputs(carParkings, mapClick)
   const { start, end } = inputs
 
@@ -197,6 +198,7 @@ export function RoutePlanner() {
             selected={null}
             hoverInfo
             events={weekEvents}
+            friends={friendsOnMap}
             onEventPick={pickEvent}
             onEzParkPick={(slug) => setEzPick({ slug, n: Date.now() })}
             route={ezOn ? null : routeOverlay}
@@ -294,6 +296,38 @@ export function RoutePlanner() {
       </div>
     </div>
   )
+}
+
+/** Vrienden met locatie, alleen als je bent aangemeld en "toon op routekaart" aanstaat; ververst elke 30 seconden. */
+function useFriendsOnMap(): Friend[] {
+  const [friends, setFriends] = useState<Friend[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    let timer: number | undefined
+    const tick = async () => {
+      try {
+        const { user } = await api.friends.me()
+        if (!user.showFriendsOnMap) {
+          if (!cancelled) setFriends([])
+        } else {
+          const overview = await api.friends.overview()
+          if (!cancelled) setFriends(overview.friends.filter((f) => f.lat != null && f.lon != null))
+        }
+      } catch {
+        // niet aangemeld of offline: dan is er niets te tonen
+        if (!cancelled) setFriends([])
+      }
+      if (!cancelled) timer = window.setTimeout(tick, 30_000)
+    }
+    void tick()
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [])
+
+  return friends
 }
 
 /** Evenementen van de komende 7 dagen, met coördinaat uit de Vlaamse geolocatie (onthouden in localStorage). */

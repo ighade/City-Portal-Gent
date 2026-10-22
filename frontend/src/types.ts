@@ -323,3 +323,53 @@ export interface GentEventDetail {
   event: GentEvent
   description?: string | null
 }
+
+export interface FriendMe {
+  id: string
+  username: string
+  email: string
+  avatar?: string | null
+  shareLocation: boolean
+  showFriendsOnMap: boolean
+}
+
+export interface FriendSessionInfo {
+  user: FriendMe
+  interests: string[]
+}
+
+export interface Friend {
+  id: string
+  username: string
+  avatar?: string | null
+  lat?: number | null
+  lon?: number | null
+  locationAtUtc?: string | null
+  locationAgeSeconds?: number | null
+  /** Locatie is recent (< 2 min); anders "x geleden" tonen. */
+  online: boolean
+  eventIds: string[]
+}
+
+export interface FriendEvent {
+  id: string
+  name: string
+  coverImageUrl?: string | null
+  dayTimeLabel?: string | null
+  startsAtUtc?: string | null
+  place?: string | null
+  friendIds: string[]
+}
+
+export interface FriendPending {
+  id: string
+  username: string
+  avatar?: string | null
+}
+
+export interface FriendsOverview {
+  friends: Friend[]
+  events: FriendEvent[]
+  incoming: FriendPending[]
+  outgoing: FriendPending[]
+}

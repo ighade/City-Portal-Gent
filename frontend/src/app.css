@@ -532,3 +532,32 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
 
 .line-badge { position: absolute; transform: translate(-50%, -50%); min-width: 24px; padding: 1px 6px; border-radius: 999px; border: 2px solid #fff; font: 700 12px/18px system-ui, sans-serif; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.35); white-space: nowrap; }
 .ov-mode { min-width: 28px; padding: 0 4px; }
+
+/* ---- Vrienden ---- */
+.avatar { display: inline-grid; place-items: center; flex: none; border-radius: 50%; overflow: hidden; background: var(--brand); color: var(--brand-ink); font-weight: 700; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--border-strong); }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-off { filter: grayscale(1); opacity: .75; }
+.avatar-stack { display: flex; }
+.avatar-stack .avatar + .avatar { margin-left: -10px; }
+.auth-card { max-width: 420px; margin: 0 auto; }
+.auth-form { display: grid; gap: 12px; margin-top: 14px; }
+.auth-form label, .avatar-pick { display: grid; gap: 4px; font-weight: 500; }
+.seg { display: flex; gap: 6px; margin-top: 12px; }
+.friend-me { display: flex; align-items: center; gap: 10px; }
+.friend-events { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+.friend-event { display: grid; gap: 6px; min-width: 200px; max-width: 240px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-md, 12px); background: var(--surface); color: inherit; }
+.friend-event:hover { border-color: var(--brand); text-decoration: none; }
+.friends-map { height: 340px; border-radius: var(--r-md, 12px); overflow: hidden; margin-bottom: 12px; }
+.friend-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.friend-list li, .friend-request { display: flex; align-items: center; gap: 10px; }
+.friend-list li > div { flex: 1; }
+.friend-add { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.friend-request { margin-top: 8px; flex-wrap: wrap; }
+.friend-settings { display: grid; gap: 12px; }
+.banner-ok { background: var(--surface-2); }
+.friend-pin { position: relative; display: block; width: 42px; height: 42px; border-radius: 50%; border: 3px solid var(--brand); background: var(--brand); box-shadow: 0 1px 5px rgba(0, 0, 0, .45); }
+.friend-pin img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.friend-pin-initial { display: grid; place-items: center; height: 100%; color: var(--brand-ink); font-weight: 700; }
+.friend-pin-off { border-color: #6b7280; background: #6b7280; }
+.friend-pin-off img { filter: grayscale(1); }
+.friend-pin-ago { position: absolute; left: 50%; bottom: -16px; transform: translateX(-50%); white-space: nowrap; padding: 1px 6px; border-radius: 999px; background: #374151; color: #fff; font-size: 10px; font-weight: 600; }

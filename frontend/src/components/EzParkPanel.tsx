@@ -140,7 +140,7 @@ export function EzParkPanel({ avoidLez, start, end, canPlan, resolveStart, resol
 }
 
 function OccupancyBar({ available, capacity }: { available: number | null; capacity: number }) {
-  if (available === null || capacity <= 0) return <div className="small muted">Beschikbaarheid onbekend</div>
+  if (available == null || capacity <= 0) return <div className="small muted">Beschikbaarheid onbekend</div>
   const pct = Math.min(100, Math.max(0, Math.round(((capacity - available) / capacity) * 100)))
   const color = pct < 50 ? '#16a34a' : pct < 80 ? '#f59e0b' : '#dc2626'
   return (

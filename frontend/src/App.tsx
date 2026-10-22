@@ -9,6 +9,7 @@ import { Kaart } from './pages/Kaart'
 import { Over } from './pages/Over'
 import { RoutePlanner } from './pages/RoutePlanner'
 import { Ov } from './pages/Ov'
+import { Vrienden } from './pages/Vrienden'
 
 export default function App() {
   const { isAdmin, adminChecked } = useApp()
@@ -18,6 +19,7 @@ export default function App() {
         <Route index element={<Kaart />} />
         <Route path="route" element={<RoutePlanner />} />
         <Route path="ov" element={<Ov />} />
+        <Route path="vrienden" element={<Vrienden />} />
         <Route path="events" element={<Events />} />
         <Route path="events/:id" element={<EventDetail />} />
         <Route path="parking/:slug" element={<Detail />} />

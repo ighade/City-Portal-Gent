@@ -58,8 +58,8 @@ public sealed class EzParkPlanner(
     ILogger<EzParkPlanner> log)
 {
     public const int ParkMinutes = 5;
-    private const int Shortlist = 7;
-    private const int Suggestions = 4;
+    private const int Shortlist = 9;
+    private const int Suggestions = 6;
     private const double WalkMetersPerSecond = 1.35;
 
     public async Task<EzParkResult?> PlanAsync(EzParkRequest request, CancellationToken ct)
@@ -70,15 +70,14 @@ public sealed class EzParkPlanner(
         var rows = await db.Parkings
             .Include(p => p.Status)
             .AsNoTracking()
-            .Where(p => p.Kind != ParkingKind.Bicycle && p.IsPublic && p.Status != null)
+            .Where(p => p.Kind != ParkingKind.Bicycle && p.IsPublic)
             .ToListAsync(ct);
 
                 var open = rows.Where(p => p.Status is null
-                        ? !p.HasLiveData
+                        ? true
                         : p.Status.IsOpen
                             && !p.Status.TemporarilyClosed
-                            && p.Status.IsPlausible
-                            && p.Status.AvailableSpaces > 0
+                            && (!p.Status.IsPlausible || p.Status.AvailableSpaces > 0)
                             && utcNow - p.Status.MeasuredAtUtc <= Mapping.StaleAfter);
 
         if (request.AvoidLez)
@@ -98,7 +97,7 @@ public sealed class EzParkPlanner(
         if (candidates.Count == 0)
             return new EzParkResult(departure, [], "Geen open parkings met vrije plaatsen gevonden.");
 
-        var built = await Task.WhenAll(candidates.Select(p => BuildAsync(p, request, departure, ct)));
+        var built = await Task.WhenAll(candidates.Select(p => TryBuildAsync(p, request, departure, ct)));
         var options = built
             .Where(o => o is not null)
             .Select(o => o!)
@@ -107,6 +106,16 @@ public sealed class EzParkPlanner(
             .ToArray();
 
         return new EzParkResult(departure, options, options.Length == 0 ? "De routes konden niet berekend worden." : null);
+    }
+
+    private async Task<EzParkOption?> TryBuildAsync(Parking p, EzParkRequest request, DateTime departure, CancellationToken ct)
+    {
+        try { return await BuildAsync(p, request, departure, ct); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            log.LogWarning(ex, "EZ Park-optie {Parking} kon niet berekend worden.", p.Name);
+            return null;
+        }
     }
 
     private async Task<EzParkOption?> BuildAsync(Parking p, EzParkRequest request, DateTime departure, CancellationToken ct)
@@ -167,7 +176,7 @@ public sealed class EzParkPlanner(
 
         return new EzParkOption(
             p.Slug, p.Name, p.Address, p.Latitude, p.Longitude,
-            p.Status?.AvailableSpaces, p.Status?.TotalCapacity ?? p.Capacity,
+            p.Status is { IsPlausible: true } ? p.Status.AvailableSpaces : null, p.Status?.TotalCapacity ?? p.Capacity,
             drive.DurationMinutes, drive.DistanceKm, ParkMinutes,
             variants.ToArray(),
             ParkingRates.For(p.Slug, parked));

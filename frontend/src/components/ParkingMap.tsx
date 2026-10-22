@@ -9,8 +9,9 @@ import L, {
   OSM_TILES,
 } from '../leaflet'
 import { api } from '../api'
+import { drawFriends } from './FriendsMap'
 import { busyness, busynessLabel, kindLabel } from '../types'
-import type { EzParkLeg, GentEvent, Parking } from '../types'
+import type { EzParkLeg, Friend, GentEvent, Parking } from '../types'
 
 interface RoutePoint {
   lat: number
@@ -53,6 +54,8 @@ interface Props {
   onEzParkPick?: (slug: string) => void
   /** Evenementen als kalenderspeld; hoveren toont de kaart, klikken meldt het evenement. */
   events?: MapEvent[]
+  /** Vrienden met een gedeelde locatie, getekend met hun profielfoto. */
+  friends?: Friend[]
   onEventPick?: (event: MapEvent) => void
 }
 
@@ -79,7 +82,7 @@ export function textOn(hex?: string) {
   return lum > 0.6 ? '#111827' : '#fff'
 }
 
-export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick, events, onEventPick }: Props) {
+export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick, events, onEventPick, friends }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
@@ -88,6 +91,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
   const clickHandler = useRef(onMapClick)
   clickHandler.current = onMapClick
   const eventLayer = useRef<L.LayerGroup | null>(null)
+  const friendLayer = useRef<L.LayerGroup | null>(null)
   const eventPick = useRef(onEventPick)
   eventPick.current = onEventPick
   const ezPick = useRef(onEzParkPick)
@@ -246,7 +250,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
         }),
       })
         .bindPopup(
-          `<div class="pin-popup"><strong>${escape(park.name)}</strong>${park.available !== null && park.capacity > 0 ? occupancyBar(park.available, park.capacity) : '<p>Beschikbaarheid onbekend</p>'}${park.details.map((d) => `<p>${escape(d)}</p>`).join('')}</div>`,
+          `<div class="pin-popup"><strong>${escape(park.name)}</strong>${park.available != null && park.capacity > 0 ? occupancyBar(park.available, park.capacity) : '<p>Beschikbaarheid onbekend</p>'}${park.details.map((d) => `<p>${escape(d)}</p>`).join('')}</div>`,
           { closeButton: false, maxWidth: 260, autoPan: false, offset: [0, -8] },
         )
         .on('mouseover', (e) => e.target.openPopup())
@@ -385,6 +389,22 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
       eventLayer.current = null
     }
   }, [events])
+
+  // Vrienden met profielfoto; offline vrienden tonen hoe lang geleden hun locatie was.
+  useEffect(() => {
+    const m = map.current
+    if (!m) return
+    friendLayer.current?.remove()
+    friendLayer.current = null
+    if (!friends || friends.length === 0) return
+    const group = L.layerGroup().addTo(m)
+    drawFriends(group, friends)
+    friendLayer.current = group
+    return () => {
+      friendLayer.current?.remove()
+      friendLayer.current = null
+    }
+  }, [friends])
 
   // De spelden: bij elke vernieuwing opnieuw tekenen. Vijftig spelden is niets.
   useEffect(() => {
@@ -544,8 +564,8 @@ function describe(p: Parking): string {
 
 function popup(p: Parking, withLink = true): string {
   const kind = kindLabel[p.kind] + (p.isPublic ? '' : ' · privaat, voor personeel')
-  const available = p.status?.available === null
-    ? `<b>Onbekend</b> vrij van ${p.status.capacity.toLocaleString('nl-BE')}`
+  const available = p.status?.available == null
+    ? p.status ? `<b>Onbekend</b> vrij van ${p.status.capacity.toLocaleString('nl-BE')}` : ''
     : p.status
       ? `<b>${p.status.available.toLocaleString('nl-BE')}</b> vrij van ${p.status.capacity.toLocaleString('nl-BE')}`
       : ''
@@ -555,7 +575,7 @@ function popup(p: Parking, withLink = true): string {
       ? available + occupancy
       : '<b>Gesloten</b>'
     : `${p.capacity.toLocaleString('nl-BE')} plaatsen · de stad meet hier niet`
-  const bar = !withLink && p.status?.isOpen && p.status.available !== null && p.status.capacity > 0
+  const bar = !withLink && p.status?.isOpen && p.status.available != null && p.status.capacity > 0
     ? occupancyBar(p.status.available, p.status.capacity)
     : ''
   return `

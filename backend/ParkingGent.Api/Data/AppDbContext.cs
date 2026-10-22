@@ -17,6 +17,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<TransitConnectionEntity> TransitConnections => Set<TransitConnectionEntity>();
     public DbSet<TransitShapePointEntity> TransitShapePoints => Set<TransitShapePointEntity>();
     public DbSet<StreetParkingTariff> StreetParkingTariffs => Set<StreetParkingTariff>();
+    public DbSet<FriendUser> FriendUsers => Set<FriendUser>();
+    public DbSet<FriendLink> FriendLinks => Set<FriendLink>();
+    public DbSet<FriendInterest> FriendInterests => Set<FriendInterest>();
+    public DbSet<FriendSession> FriendSessions => Set<FriendSession>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -131,6 +135,37 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.Period).HasMaxLength(10);
             e.Property(x => x.AmountEur).HasPrecision(8, 2);
             e.HasIndex(x => new { x.Zone, x.Period, x.Hours }).IsUnique();
+        });
+
+        b.Entity<FriendUser>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Username).HasMaxLength(40);
+            e.Property(x => x.Email).HasMaxLength(200);
+            e.Property(x => x.PasswordHash).HasMaxLength(200);
+            e.Property(x => x.AvatarDataUrl).HasMaxLength(150000);
+            e.HasIndex(x => x.Username).IsUnique();
+            e.HasIndex(x => x.Email).IsUnique();
+        });
+
+        b.Entity<FriendLink>(e =>
+        {
+            e.HasKey(x => new { x.RequesterId, x.AddresseeId });
+            e.HasIndex(x => x.AddresseeId);
+        });
+
+        b.Entity<FriendInterest>(e =>
+        {
+            e.HasKey(x => new { x.UserId, x.EventId });
+            e.Property(x => x.EventId).HasMaxLength(60);
+            e.HasIndex(x => x.EventId);
+        });
+
+        b.Entity<FriendSession>(e =>
+        {
+            e.HasKey(x => x.TokenHash);
+            e.Property(x => x.TokenHash).HasMaxLength(64);
+            e.HasIndex(x => x.UserId);
         });
 
         b.Entity<TransitShapePointEntity>(e =>
