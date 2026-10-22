@@ -4,6 +4,8 @@ Waar er plaats is in de parkings en park-and-rides van Gent, uit de open data va
 Begonnen als de graduaatsproef van **Asilhan Tavukcu** (HoGent, maart 2025) en in september
 2026 herbouwd (.NET + React).
 
+De webapp opent met Gentse evenementen; de routeplanner behoudt onder meer de OV-routeoptie.
+
 De backend houdt één regel aan: **lezen mag iedereen, schrijven vraagt een identiteit.**
 
 Omdat de dienst op het open internet staat, is de begrenzing strakker dan elders: 60 verzoeken
@@ -165,6 +167,16 @@ Poort 5434 en niet de gebruikelijke 5432: zo botst deze databank niet met een po
 al op je machine draait. In Development geldt `Auth:DevEmail` als identiteit en staat datzelfde
 adres in `Auth:AdminEmails`, dus is de beheerpagina lokaal meteen zichtbaar — zonder dat er een
 echt adres in de broncode staat.
+
+### Tests
+
+```bash
+cd backend && dotnet test ParkingGent.Api.Tests     # Docker moet draaien: Testcontainers start een postgres
+```
+
+Zonder Testcontainers: zet `TEST_POSTGRES="Host=localhost;Port=5433;Username=postgres;Password=pw"` naar een
+bestaande server; elke testklasse krijgt daarin een eigen lege database. Stad Gent, OpenRouteService en de
+evenementenbron worden vervangen door vaste nepantwoorden, dus er gaat niets het internet op.
 
 ## Eindpunten
 

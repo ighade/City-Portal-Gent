@@ -18,7 +18,7 @@ interface AppState {
   isAdmin: boolean
   /**
    * Is die vraag al beantwoord? Zonder dit stuurt /beheer een rechtstreekse bezoeker meteen
-   * terug naar de kaart: bij de eerste render is `isAdmin` nog false omdat het antwoord van
+   * terug naar Events: bij de eerste render is `isAdmin` nog false omdat het antwoord van
    * /api/admin/whoami onderweg is.
    */
   adminChecked: boolean

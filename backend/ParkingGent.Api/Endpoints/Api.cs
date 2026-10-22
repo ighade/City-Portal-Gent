@@ -38,8 +38,6 @@ public static class Api
         // Zonder uitvoercache: de eerste aanvraag haalt de beschrijving op (1 credit) en bewaart ze.
         api.MapGet("/events/{id}", EventDetail);
         api.MapGet("/transit/stops", TransitStops).CacheOutput("lang");
-        api.MapGet("/transit/stops/{stopId}/realtime", TransitStopRealtime);
-        api.MapGet("/transit/status", TransitStatus).CacheOutput("kort");
         api.MapPost("/transit/route", TransitRoute);
         api.MapPost("/route/plan", RoutePlan);
         api.MapPost("/route/ezpark", EzPark);
@@ -316,33 +314,6 @@ public static class Api
             e.IsHappeningNow, e.StartsAtUtc, e.DayTimeLabel, e.Place?.Name,
             e.Kind, e.SocialSummary, e.InterestedCount, e.GoingCount, e.WentCount, e.TicketPriceLabel);
         return Results.Ok(new EventDetailDto(dto, e.Description));
-    }
-
-    private static async Task<IResult> TransitStatus(TransitService transit, CancellationToken ct)
-    {
-        try
-        {
-            return Results.Ok(await transit.GetStatusAsync(ct));
-        }
-        catch (TransitUnavailableException)
-        {
-            return Results.Json(new { error = "De OV-dienstregeling is tijdelijk niet beschikbaar." }, statusCode: StatusCodes.Status503ServiceUnavailable);
-        }
-    }
-
-    private static async Task<IResult> TransitStopRealtime(TransitService transit, string stopId, CancellationToken ct)
-    {
-        try
-        {
-            var result = await transit.GetStopRealtimeAsync(stopId, ct);
-            return result is null
-                ? Results.NotFound(new { error = "Die halte kennen we niet." })
-                : Results.Ok(result);
-        }
-        catch (TransitUnavailableException)
-        {
-            return Results.Json(new { error = "De realtime OV-gegevens zijn tijdelijk niet beschikbaar." }, statusCode: StatusCodes.Status503ServiceUnavailable);
-        }
     }
 
     private static async Task<IResult> TransitRoute(TransitService transit, TransitRouteRequest request, CancellationToken ct)

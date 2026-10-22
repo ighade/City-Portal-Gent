@@ -8,7 +8,7 @@ export function Shell() {
     <div className="shell">
       <header className="topbar">
         <div className="topbar-inner">
-          <NavLink to="/" className="brand">
+          <NavLink to="/events" className="brand">
             <span className="brand-mark" aria-hidden="true">
               P
             </span>
@@ -18,11 +18,7 @@ export function Shell() {
             </span>
           </NavLink>
           <nav className="nav">
-            <NavLink to="/" end>
-              Kaart
-            </NavLink>
             <NavLink to="/route">Route</NavLink>
-            <NavLink to="/ov">OV</NavLink>
             <NavLink to="/events">Events</NavLink>
             <NavLink to="/vrienden">Vrienden</NavLink>
             <NavLink to="/over">Over</NavLink>

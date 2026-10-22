@@ -11,7 +11,7 @@ export function Over() {
     <>
       <div className="page-head">
         <div>
-          <h1>Over deze kaart</h1>
+          <h1>Over Parkeren in Gent</h1>
           <p>Wat er getoond wordt, waar het vandaan komt, en wat het niet is.</p>
         </div>
       </div>

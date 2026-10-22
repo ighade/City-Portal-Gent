@@ -5,10 +5,8 @@ import { Beheer } from './pages/Beheer'
 import { Events } from './pages/Events'
 import { EventDetail } from './pages/EventDetail'
 import { Detail } from './pages/Detail'
-import { Kaart } from './pages/Kaart'
 import { Over } from './pages/Over'
 import { RoutePlanner } from './pages/RoutePlanner'
-import { Ov } from './pages/Ov'
 import { Vrienden } from './pages/Vrienden'
 
 export default function App() {
@@ -16,9 +14,8 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Shell />}>
-        <Route index element={<Kaart />} />
+        <Route index element={<Navigate to="/events" replace />} />
         <Route path="route" element={<RoutePlanner />} />
-        <Route path="ov" element={<Ov />} />
         <Route path="vrienden" element={<Vrienden />} />
         <Route path="events" element={<Events />} />
         <Route path="events/:id" element={<EventDetail />} />
@@ -28,9 +25,9 @@ export default function App() {
             rechtstreekse link naar /beheer terug voordat de controle binnen is. */}
         <Route
           path="beheer"
-          element={!adminChecked ? <div className="empty">Even geduld…</div> : isAdmin ? <Beheer /> : <Navigate to="/" replace />}
+          element={!adminChecked ? <div className="empty">Even geduld…</div> : isAdmin ? <Beheer /> : <Navigate to="/events" replace />}
         />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/events" replace />} />
       </Route>
     </Routes>
   )

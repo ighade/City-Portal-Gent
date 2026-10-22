@@ -207,31 +207,6 @@ export interface TransitStop {
   lines: string[]
 }
 
-export interface TransitStatus {
-  staticLoaded: boolean
-  staticUpdatedAtUtc?: string
-  realtimeUpdatedAtUtc?: string
-  stopCount: number
-  connectionCount: number
-  source: string
-}
-
-export interface TransitStopRealtime {
-  stopId: string
-  stopName: string
-  updatedAt: string
-  departures: TransitDeparture[]
-}
-
-export interface TransitDeparture {
-  line: string
-  mode: 'bus' | 'tram'
-  destination: string
-  scheduledAt: string
-  expectedAt: string
-  delayMinutes: number
-}
-
 export interface TransitRouteRequest {
   startLat: number
   startLon: number

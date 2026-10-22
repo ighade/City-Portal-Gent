@@ -2,3 +2,8 @@
 .env.*
 !.env.example
 backend/ParkingGent.Api/seed/delijn-gtfs.zip
+
+# .NET build-uitvoer (de testmap kopieert ook de GTFS-data mee)
+bin/
+obj/
+TestResults/

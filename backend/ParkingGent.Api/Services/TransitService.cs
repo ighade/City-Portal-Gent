@@ -19,28 +19,6 @@ public sealed record TransitStopDto(
     double Lon,
     string[] Lines);
 
-public sealed record TransitStatusDto(
-    bool StaticLoaded,
-    DateTime? StaticUpdatedAtUtc,
-    DateTime? RealtimeUpdatedAtUtc,
-    int StopCount,
-    int ConnectionCount,
-    string Source);
-
-public sealed record TransitStopRealtimeDto(
-    string StopId,
-    string StopName,
-    DateTime UpdatedAt,
-    TransitDepartureDto[] Departures);
-
-public sealed record TransitDepartureDto(
-    string Line,
-    string Mode,
-    string Destination,
-    DateTime ScheduledAt,
-    DateTime ExpectedAt,
-    int DelayMinutes);
-
 public sealed record TransitRouteResult(
     double DistanceKm,
     double DurationMinutes,
@@ -91,49 +69,6 @@ public sealed class TransitService(
             .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
             .Select(ToDto)
             .ToArray();
-    }
-
-    public async Task<TransitStatusDto> GetStatusAsync(CancellationToken ct)
-    {
-        await EnsureStaticAsync(ct);
-        await RefreshRealtimeAsync(ct);
-        return new TransitStatusDto(
-            StaticLoaded: staticLoaded,
-            StaticUpdatedAtUtc: staticUpdatedAtUtc == default ? null : staticUpdatedAtUtc,
-            RealtimeUpdatedAtUtc: realtimeUpdatedAtUtc == default ? null : realtimeUpdatedAtUtc,
-            StopCount: stops.Count,
-            ConnectionCount: connectionCount,
-            Source: options.Value.StaticFilePath);
-    }
-
-    public async Task<TransitStopRealtimeDto?> GetStopRealtimeAsync(string stopId, CancellationToken ct)
-    {
-        await EnsureStaticAsync(ct);
-        await RefreshRealtimeAsync(ct);
-        if (!stops.TryGetValue(stopId, out var stop)) return null;
-
-        var now = DateTime.Now;
-        var departures = connections.Values
-            .SelectMany(x => x)
-            .Where(connection => connection.FromId == stopId)
-            .Select(connection =>
-            {
-                var delay = realtimeDelays.GetValueOrDefault((connection.TripId, connection.FromId));
-                var scheduled = AtDate(connection.Departure);
-                return new TransitDepartureDto(
-                    Line: connection.Line,
-                    Mode: connection.Mode,
-                    Destination: stops.GetValueOrDefault(connection.ToId)?.Name ?? connection.ToId,
-                    ScheduledAt: scheduled,
-                    ExpectedAt: scheduled.AddMinutes(delay),
-                    DelayMinutes: delay);
-            })
-            .Where(departure => departure.ExpectedAt >= now.AddMinutes(-1) && departure.ExpectedAt <= now.AddHours(2))
-            .OrderBy(departure => departure.ExpectedAt)
-            .Take(30)
-            .ToArray();
-
-        return new TransitStopRealtimeDto(stop.Id, stop.Name, DateTime.UtcNow, departures);
     }
 
     public async Task<TransitRouteResult?> PlanAsync(

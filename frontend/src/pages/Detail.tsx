@@ -35,7 +35,7 @@ export function Detail() {
   if (error) {
     return (
       <div className="empty">
-        {error} <Link to="/">Terug naar de kaart</Link>
+        {error} <Link to="/route">Terug naar de routeplanner</Link>
       </div>
     )
   }
@@ -47,8 +47,8 @@ export function Detail() {
     <>
       <div className="page-head">
         <div>
-          <Link to="/" className="back">
-            ← Alle parkings
+          <Link to="/route" className="back">
+            ← Naar routeplanner
           </Link>
           <h1>{parking.name}</h1>
           <p>
