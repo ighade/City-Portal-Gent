@@ -65,7 +65,8 @@ export function Events() {
     const weekAhead = now + 7 * 24 * 3600 * 1000
     const q = query.trim().toLowerCase()
     return events.filter((e) => {
-      if (e.isPast) return false
+      const startedAt = e.startsAtUtc ? new Date(e.startsAtUtc).getTime() : null
+      if (e.isPast || (!e.isHappeningNow && startedAt !== null && startedAt < now)) return false
       if (q && !`${e.name} ${e.place ?? ''}`.toLowerCase().includes(q)) return false
       if (filter === 'week') return e.startsAtUtc != null && new Date(e.startsAtUtc).getTime() <= weekAhead
       if (filter === 'free') return !e.ticketPriceLabel

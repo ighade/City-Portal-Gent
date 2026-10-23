@@ -95,3 +95,44 @@ public class TransitStopsFactory : ApiFactory
         await db.SaveChangesAsync();
     }
 }
+
+public class TransitRouteSelectionFactory : ApiFactory
+{
+    protected override async Task SeedAsync(AppDbContext db)
+    {
+        var updated = DateTime.UtcNow;
+        var a = new TransitStopEntity { Id = "a", Name = "Start", Latitude = 51.0500, Longitude = 3.7000, UpdatedAtUtc = updated };
+        var b = new TransitStopEntity { Id = "b", Name = "Vroege halte", Latitude = 51.0500, Longitude = 3.7100, UpdatedAtUtc = updated };
+        var c = new TransitStopEntity { Id = "c", Name = "Bestemming", Latitude = 51.0500, Longitude = 3.7200, UpdatedAtUtc = updated };
+        var d = new TransitStopEntity { Id = "d", Name = "Snelle halte", Latitude = 51.0500, Longitude = 3.7300, UpdatedAtUtc = updated };
+        var x = new TransitStopEntity { Id = "x", Name = "Overstaphalte", Latitude = 51.0500, Longitude = 3.6900, UpdatedAtUtc = updated };
+        var direct = new TransitRouteEntity { Id = "direct", Name = "Tram 1", Mode = "tram", UpdatedAtUtc = updated };
+        var fastBus = new TransitRouteEntity { Id = "fast-bus", Name = "Bus 2", Mode = "bus", UpdatedAtUtc = updated };
+        var fastTram = new TransitRouteEntity { Id = "fast-tram", Name = "Tram 3", Mode = "tram", UpdatedAtUtc = updated };
+        var baseTime = DateTime.Now.AddMinutes(2).TimeOfDay;
+
+        db.TransitStops.AddRange(a, b, c, d, x);
+        db.TransitRoutes.AddRange(direct, fastBus, fastTram);
+        db.TransitConnections.AddRange(
+            Connection("direct-trip", direct.Id, a.Id, b.Id, baseTime.Add(TimeSpan.FromMinutes(4)), baseTime.Add(TimeSpan.FromMinutes(5))),
+            Connection("direct-trip", direct.Id, b.Id, c.Id, baseTime.Add(TimeSpan.FromMinutes(6)), baseTime.Add(TimeSpan.FromMinutes(10))),
+            Connection("fast-bus-trip", fastBus.Id, a.Id, x.Id, baseTime, baseTime.Add(TimeSpan.FromMinutes(1))),
+            Connection("fast-tram-trip", fastTram.Id, x.Id, d.Id, baseTime.Add(TimeSpan.FromMinutes(2)), baseTime.Add(TimeSpan.FromMinutes(3))),
+            Connection("fast-tram-trip", fastTram.Id, d.Id, c.Id, baseTime.Add(TimeSpan.FromMinutes(4)), baseTime.Add(TimeSpan.FromMinutes(5))));
+        await db.SaveChangesAsync();
+    }
+
+    private static TransitConnectionEntity Connection(
+        string tripId, string routeId, string from, string to, TimeSpan departure, TimeSpan arrival) => new()
+    {
+        TripId = tripId,
+        RouteId = routeId,
+        FromStopId = from,
+        ToStopId = to,
+        DepartureSeconds = (int)departure.TotalSeconds,
+        ArrivalSeconds = (int)arrival.TotalSeconds,
+        ServiceId = "test",
+        ShapeId = string.Empty,
+        UpdatedAtUtc = DateTime.UtcNow,
+    };
+}

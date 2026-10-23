@@ -82,37 +82,62 @@ public sealed class TransitService(
         await EnsureStaticAsync(ct);
         await RefreshRealtimeAsync(ct);
 
-        var originCandidates = Nearest(startLat, startLon, 6, 2_500);
+        var originCandidates = Nearest(startLat, startLon, 25, 1_500);
         var destinationCandidates = Nearest(endLat, endLon, 50, 1_000);
         if (originCandidates.Count == 0 || destinationCandidates.Count == 0) return null;
 
         var now = departAt ?? DateTime.Now;
-        var best = new Dictionary<TransitSearchState, (int Transfers, DateTime Arrival)>();
-        var previous = new Dictionary<TransitSearchState, (TransitSearchState State, TransitConnection Connection)>();
-        var origins = new Dictionary<TransitSearchState, (double DistanceKm, DateTime At)>();
-        var queue = new PriorityQueue<TransitSearchState, (int Transfers, DateTime Arrival)>();
+        var best = new Dictionary<TransitSearchState, List<TransitSearchLabel>>();
+        var previous = new Dictionary<TransitSearchLabel, (TransitSearchLabel Label, TransitConnection Connection)>();
+        var origins = new Dictionary<TransitSearchLabel, (double DistanceKm, DateTime At)>();
+        var queue = new PriorityQueue<TransitSearchLabel, DateTime>();
+
+        // Alleen om routes te rangschikken; de getoonde tijden blijven de echte tijden.
+        // Lager is beter. Wandelen krijgt een straf (met een omwegfactor voor echte straten),
+        // het begin zwaarder dan het einde, en elke overstap kost strafpunten.
+        const double transferPenalty = 6;
+        const double startWalkPenaltyPerMinute = 1.0;
+        const double endWalkPenaltyPerMinute = 0.5;
+        const double walkDetour = 1.3;
+        const int maxTransfers = 3;
+        double Score(DateTime arrival, int transfers, double startWalkMinutes, double endWalkMinutes)
+            => (arrival - now).TotalMinutes
+               + transfers * transferPenalty
+               + startWalkMinutes * walkDetour * startWalkPenaltyPerMinute
+               + endWalkMinutes * walkDetour * endWalkPenaltyPerMinute;
 
         foreach (var candidate in originCandidates)
         {
             var walkingSeconds = candidate.DistanceMeters / 1.35;
             var at = now.AddSeconds(walkingSeconds);
             var state = new TransitSearchState(candidate.Stop.Id, null);
-            var label = (Transfers: 0, Arrival: at);
-            if (best.TryGetValue(state, out var old) && old.CompareTo(label) <= 0) continue;
-            best[state] = label;
-            origins[state] = (candidate.DistanceMeters / 1000d, at);
-            queue.Enqueue(state, label);
+            var label = new TransitSearchLabel(state, 0, at, walkingSeconds / 60);
+            best[state] = [label];
+            origins[label] = (candidate.DistanceMeters / 1000d, at);
+            queue.Enqueue(label, label.Arrival);
         }
 
-        var destinationIds = destinationCandidates.Select(c => c.Stop.Id).ToHashSet(StringComparer.Ordinal);
-        TransitSearchState? destinationState = null;
-        while (queue.TryDequeue(out var state, out var label))
+        var destinationById = destinationCandidates.ToDictionary(c => c.Stop.Id, StringComparer.Ordinal);
+        TransitSearchLabel? bestDestination = null;
+        DateTime bestFinalArrival = default;
+        var bestScore = double.MaxValue;
+        while (queue.TryDequeue(out var label, out _))
         {
-            if (!best.TryGetValue(state, out var known) || known != label) continue;
-            if (destinationIds.Contains(state.StopId))
+            var state = label.State;
+            if (!best.TryGetValue(state, out var labels) || !labels.Contains(label)) continue;
+            if (Score(label.Arrival, label.Transfers, label.OriginWalkMinutes, 0) >= bestScore) continue;
+
+            if (previous.ContainsKey(label) && destinationById.TryGetValue(state.StopId, out var destination))
             {
-                destinationState = state;
-                break;
+                var walkSeconds = destination.DistanceMeters / 1.35;
+                var finalArrival = label.Arrival.AddSeconds(walkSeconds);
+                var score = Score(finalArrival, label.Transfers, label.OriginWalkMinutes, walkSeconds / 60);
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestDestination = label;
+                    bestFinalArrival = finalArrival;
+                }
             }
 
             if (!connections.TryGetValue(state.StopId, out var outgoing)) continue;
@@ -124,34 +149,39 @@ public sealed class TransitService(
                 var edgeArrival = AtDate(connection.Arrival).AddMinutes(delayTo);
                 if (edgeDeparture < label.Arrival || edgeArrival <= label.Arrival) continue;
 
-                var nextState = new TransitSearchState(connection.ToId, connection.Line);
-                var nextLabel = (
-                    Transfers: label.Transfers
-                        + (state.Line is not null && !string.Equals(state.Line, connection.Line, StringComparison.OrdinalIgnoreCase) ? 1 : 0),
-                    Arrival: edgeArrival);
-                if (best.TryGetValue(nextState, out var existing) && existing.CompareTo(nextLabel) <= 0) continue;
+                var nextState = new TransitSearchState(connection.ToId, connection.RouteId);
+                var nextLabel = new TransitSearchLabel(
+                    nextState,
+                    label.Transfers
+                        + (state.RouteId is not null && !string.Equals(state.RouteId, connection.RouteId, StringComparison.OrdinalIgnoreCase) ? 1 : 0),
+                    edgeArrival,
+                    label.OriginWalkMinutes);
+                if (nextLabel.Transfers > maxTransfers || Score(nextLabel.Arrival, nextLabel.Transfers, nextLabel.OriginWalkMinutes, 0) >= bestScore) continue;
+                if (!best.TryGetValue(nextState, out var nextLabels)) best[nextState] = nextLabels = [];
+                if (nextLabels.Any(existing => existing.Transfers <= nextLabel.Transfers && existing.Arrival <= nextLabel.Arrival && existing.OriginWalkMinutes <= nextLabel.OriginWalkMinutes)) continue;
+                nextLabels.RemoveAll(existing => nextLabel.Transfers <= existing.Transfers && nextLabel.Arrival <= existing.Arrival && nextLabel.OriginWalkMinutes <= existing.OriginWalkMinutes);
+                nextLabels.Add(nextLabel);
                 var effective = connection with { EffectiveDeparture = edgeDeparture, EffectiveArrival = edgeArrival, DelayMinutes = delayTo };
-                best[nextState] = nextLabel;
-                previous[nextState] = (state, effective);
-                queue.Enqueue(nextState, nextLabel);
+                previous[nextLabel] = (label, effective);
+                queue.Enqueue(nextLabel, nextLabel.Arrival);
             }
         }
 
-        if (destinationState is null || !best.TryGetValue(destinationState, out var destinationLabel)) return null;
-        var finalStop = stops[destinationState.StopId];
-        var destinationCandidate = destinationCandidates.First(c => c.Stop.Id == destinationState.StopId);
+        if (bestDestination is null) return null;
+        var finalStop = stops[bestDestination.State.StopId];
+        var finalDistanceKm = destinationById[bestDestination.State.StopId].DistanceMeters / 1000d;
 
         var path = new List<TransitConnection>();
-        var cursor = destinationState;
+        var cursor = bestDestination;
         while (previous.TryGetValue(cursor, out var step))
         {
             path.Add(step.Connection);
-            cursor = step.State;
+            cursor = step.Label;
         }
         path.Reverse();
         if (path.Count == 0 || !origins.TryGetValue(cursor, out var originInfo)) return null;
 
-        var originStop = stops[cursor.StopId];
+        var originStop = stops[cursor.State.StopId];
         var legs = new List<TransitLegDto>();
         if (originInfo.DistanceKm > 0.02)
         {
@@ -206,21 +236,19 @@ public sealed class TransitService(
         }
 
         var lastTransitAt = path[^1].EffectiveArrival;
-        var finalDistanceKm = destinationCandidate.DistanceMeters / 1000d;
-        var finalArrival = destinationLabel.Arrival.AddSeconds(destinationCandidate.DistanceMeters / 1.35);
         if (finalDistanceKm > 0.02)
         {
-            legs.Add(await WalkLegAsync(finalStop.Name, finalStop.Lat, finalStop.Lon, "Eindpunt", endLat, endLon, lastTransitAt, finalArrival, finalDistanceKm, ct));
+            legs.Add(await WalkLegAsync(finalStop.Name, finalStop.Lat, finalStop.Lon, "Eindpunt", endLat, endLon, lastTransitAt, bestFinalArrival, finalDistanceKm, ct));
         }
 
         var departure = legs.Count == 0 ? now : legs[0].DepartureAt;
         var distanceKm = legs.Sum(l => l.DistanceKm);
         return new TransitRouteResult(
             DistanceKm: distanceKm,
-            DurationMinutes: Math.Max(0, (finalArrival - departure).TotalMinutes),
+            DurationMinutes: Math.Max(0, (bestFinalArrival - departure).TotalMinutes),
             DepartureAt: departure,
-            ArrivalAt: finalArrival,
-            Summary: $"{distanceKm:0.0} km · {Math.Round((finalArrival - departure).TotalMinutes):0} min",
+            ArrivalAt: bestFinalArrival,
+            Summary: $"{distanceKm:0.0} km · {Math.Round((bestFinalArrival - departure).TotalMinutes):0} min",
             Legs: legs.ToArray());
     }
 
@@ -698,7 +726,8 @@ public sealed class TransitService(
     }
 
     private sealed record TransitStop(string Id, string Name, double Lat, double Lon, string[] Lines = null!);
-    private sealed record TransitSearchState(string StopId, string? Line);
+    private sealed record TransitSearchState(string StopId, string? RouteId);
+    private sealed record TransitSearchLabel(TransitSearchState State, int Transfers, DateTime Arrival, double OriginWalkMinutes);
     private sealed record StopTime(string StopId, int Sequence, TimeSpan Departure, TimeSpan Arrival, string RouteId, string ServiceId, string ShapeId);
     private sealed record TransitConnection(
         string TripId, string RouteId, string ServiceId, string FromId, string ToId, string Line, string Mode, string ShapeId,

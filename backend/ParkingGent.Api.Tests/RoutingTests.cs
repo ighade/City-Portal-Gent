@@ -451,3 +451,21 @@ public class TransitWithStopsTests(TransitStopsFactory factory) : IClassFixture<
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }
+
+public class TransitRouteSelectionTests(TransitRouteSelectionFactory factory) : IClassFixture<TransitRouteSelectionFactory>
+{
+    [Fact]
+    public async Task Route_minimizes_line_changes_and_keeps_riding_to_the_closest_destination_stop()
+    {
+        var response = await factory.NewClient().PostAsJsonAsync("/api/transit/route",
+            new { startLat = 51.0500, startLon = 3.7000, endLat = 51.0500, endLon = 3.7200 });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var legs = (await response.JsonAsync()).GetProperty("legs").EnumerateArray().ToArray();
+        var transitLegs = legs.Where(leg => leg.GetProperty("mode").GetString() != "walk").ToArray();
+        Assert.Single(transitLegs);
+        Assert.Equal("Tram 1", transitLegs[0].GetProperty("line").GetString());
+        Assert.Equal("Bestemming", transitLegs[0].GetProperty("to").GetString());
+        Assert.DoesNotContain(legs, leg => leg.GetProperty("to").GetString() == "Eindpunt");
+    }
+}
