@@ -1,4 +1,4 @@
-import type { EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, SyncRun, TransitRouteRequest, TransitRouteResult, TransitStop, Trend } from './types'
+import type { AdminEvent, AdminParking, ManualEventInput, EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, ManualParkingRate, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, StreetTariffAdmin, SyncRun, TransitRouteRequest, TransitRouteResult, TransitStop, Trend } from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {
@@ -149,8 +149,31 @@ export const api = {
    */
   admin: {
     whoami: () => call<{ email: string; name: string; isAdmin: boolean }>('GET', '/api/admin/whoami'),
+    login: (email: string, password: string) =>
+      call<{ email: string; name: string; isAdmin: boolean }>('POST', '/api/admin/login', { email, password }),
+    logout: () => call<void>('POST', '/api/admin/logout'),
     sync: () => call<SyncRun>('POST', '/api/admin/sync'),
     backfill: () => call<{ added: number }>('POST', '/api/admin/backfill'),
     runs: (take = 50) => call<SyncRun[]>('GET', `/api/admin/runs?take=${take}`),
+    streetTariffs: () => call<StreetTariffAdmin[]>('GET', '/api/admin/street-tariffs'),
+    updateStreetTariffs: (rows: StreetTariffAdmin[]) =>
+      call<void>('PUT', '/api/admin/street-tariffs', rows),
+    parkings: () => call<AdminParking[]>('GET', '/api/admin/parkings'),
+    createParking: (parking: {
+      name: string
+      address: string
+      latitude: number
+      longitude: number
+      rate: ManualParkingRate
+    }) => call<AdminParking>('POST', '/api/admin/parkings', parking),
+    updateParkingRate: (slug: string, rate: ManualParkingRate) =>
+      call<ManualParkingRate>('PUT', `/api/admin/parkings/${encodeURIComponent(slug)}/rate`, rate),
+    deleteParkingRate: (slug: string) =>
+      call<void>('DELETE', `/api/admin/parkings/${encodeURIComponent(slug)}/rate`),
+    deleteParking: (slug: string) =>
+      call<void>('DELETE', `/api/admin/parkings/${encodeURIComponent(slug)}`),
+    events: () => call<AdminEvent[]>('GET', '/api/admin/events'),
+    createEvent: (event: ManualEventInput) => call<AdminEvent>('POST', '/api/admin/events', event),
+    deleteEvent: (id: string) => call<void>('DELETE', `/api/admin/events/${encodeURIComponent(id)}`),
   },
 }

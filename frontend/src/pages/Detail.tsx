@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { OccupancyMeter } from '../components/OccupancyMeter'
+import { ManualRateInfo } from '../components/RateInfo'
 import { TimeChart } from '../components/TimeChart'
 import { TrendHeatmap } from '../components/TrendHeatmap'
 import { kindLabel } from '../types'
@@ -82,6 +83,7 @@ export function Detail() {
             </Fact>
           )}
         </dl>
+        <ManualRateInfo rate={parking.manualRate} />
         <div className="row">
           <a
             className="btn"
@@ -129,8 +131,9 @@ export function Detail() {
       ) : (
         <div className="card">
           <p className="muted">
-            Stad Gent publiceert voor deze plek geen bezetting — alleen waar ze ligt en hoeveel
-            plaatsen ze heeft. Zodra daar een meetreeks voor komt, verschijnt ze hier vanzelf.
+            {parking.isManual
+              ? 'Deze parking is handmatig toegevoegd. Er zijn geen gegevens over de bezetting beschikbaar.'
+              : 'Stad Gent publiceert voor deze plek geen bezetting — alleen waar ze ligt en hoeveel plaatsen ze heeft. Zodra daar een meetreeks voor komt, verschijnt ze hier vanzelf.'}
           </p>
         </div>
       )}

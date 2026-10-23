@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import { EzParkPanel } from '../components/EzParkPanel'
-import { GarageRate, StreetRate } from '../components/RateInfo'
+import { GarageRate, ManualRateInfo, StreetRate } from '../components/RateInfo'
 import type { EzOverlay } from '../components/EzParkPanel'
 import { ParkingMap, textOn } from '../components/ParkingMap'
 import { transitFareLabel } from '../fare'
@@ -288,7 +288,9 @@ export function RoutePlanner() {
             {route?.destinationGarage && (
               <div style={{ marginTop: 16 }}>
                 <h3>Tarief {route.destinationGarage.name}</h3>
-                <GarageRate rate={route.destinationGarage.rate} />
+                {route.destinationGarage.manualRate
+                  ? <ManualRateInfo rate={route.destinationGarage.manualRate} />
+                  : <GarageRate rate={route.destinationGarage.rate ?? undefined} />}
               </div>
             )}
             {route?.destinationParking && <StreetRate info={route.destinationParking} arrival={arriveAt} />}

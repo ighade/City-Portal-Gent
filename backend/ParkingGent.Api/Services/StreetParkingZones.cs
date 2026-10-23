@@ -78,6 +78,26 @@ public sealed class StreetParkingZones(IServiceScopeFactory scopes, ILogger<Stre
             SourceUrl);
     }
 
+    public async Task ReplaceTariffsAsync(IReadOnlyCollection<StreetParkingTariff> updated, CancellationToken ct)
+    {
+        await gate.WaitAsync(ct);
+        try
+        {
+            tariffs = updated.Select(t => new StreetParkingTariff
+            {
+                Id = t.Id,
+                Zone = t.Zone,
+                Period = t.Period,
+                Hours = t.Hours,
+                AmountEur = t.AmountEur,
+            }).ToList();
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     private static string? KeyOf(string id)
     {
         var u = id.ToUpperInvariant();

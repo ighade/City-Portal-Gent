@@ -24,12 +24,15 @@ services:
     env_file:
       - .env
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_ENVIRONMENT: ${PARKINGGENT_ASPNETCORE_ENVIRONMENT:-Production}
       ASPNETCORE_URLS: http://+:5000
       ConnectionStrings__DefaultConnection: ${ConnectionStrings__DefaultConnection}
+      Auth__ProxyKey: ${PARKINGGENT_PROXY_KEY:-}
+      Auth__AdminEmails: ${PARKINGGENT_ADMIN_EMAILS:-}
+      Auth__AdminPassword: ${PARKINGGENT_ADMIN_PASSWORD:-}
       TZ: Europe/Brussels
     ports:
-      - "5101:5000"
+      - "${PARKINGGENT_BIND_ADDRESS:-127.0.0.1}:5101:5000"
     restart: unless-stopped
 
   frontend:
@@ -40,7 +43,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "8080:80"
+      - "${PARKINGGENT_BIND_ADDRESS:-127.0.0.1}:8080:80"
     restart: unless-stopped
 
 volumes:

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
 import { transitFareLabel } from '../fare'
-import { GarageRate, EndTimeSelect, endOptions, estimateCost } from './RateInfo'
+import { GarageRate, ManualRateInfo, EndTimeSelect, endOptions, estimateCost } from './RateInfo'
 import type { RoutePoint } from './RouteInputs'
 import type { EzParkLeg, EzParkOption, EzParkResult, EzParkVariant, ParkingRate } from '../types'
 
@@ -127,7 +127,7 @@ export function EzParkPanel({ avoidLez, start, end, canPlan, resolveStart, resol
                 <span>Gekozen: <strong>{option.name}</strong> · {variant.type === 'walk' ? 'te voet' : 'OV'}</span>
                 <button className="btn" onClick={() => setSelected(null)}>Andere optie kiezen</button>
               </div>
-              <Legs variant={variant} rate={option.rate} />
+              <Legs variant={variant} rate={option.rate} manualRate={option.manualRate} />
             </>
           )}
 
@@ -183,12 +183,18 @@ function OptionCard({ option, selected, onSelect }: {
           )
         })}
       </div>
-      <GarageRate rate={option.rate} />
+      {option.manualRate
+        ? <ManualRateInfo rate={option.manualRate} />
+        : <GarageRate rate={option.rate} />}
     </div>
   )
 }
 
-export function Legs({ variant, rate }: { variant: EzParkVariant; rate?: ParkingRate }) {
+export function Legs({ variant, rate, manualRate }: {
+  variant: EzParkVariant
+  rate?: ParkingRate
+  manualRate?: EzParkOption['manualRate']
+}) {
   const [idx, setIdx] = useState(0)
 
   return (
@@ -206,7 +212,9 @@ export function Legs({ variant, rate }: { variant: EzParkVariant; rate?: Parking
                 {formatTime(leg.departureAt)}–{formatTime(leg.arrivalAt)}
                 {leg.distanceKm > 0 ? ` · ${leg.distanceKm.toFixed(1)} km` : ''}
               </div>
-              {leg.mode === 'park' && <ParkCost leg={leg} rate={rate} index={idx} onIndex={setIdx} />}
+              {leg.mode === 'park' && (manualRate
+                ? <ManualRateInfo rate={manualRate} />
+                : <ParkCost leg={leg} rate={rate} index={idx} onIndex={setIdx} />)}
             </div>
           </div>
         ))}

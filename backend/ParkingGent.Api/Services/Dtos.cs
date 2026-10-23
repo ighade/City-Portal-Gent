@@ -17,9 +17,24 @@ public sealed record ParkingDto(
     bool? InLowEmissionZone,
     bool? IsFree,
     bool HasLiveData,
+    bool IsManual,
     /// <summary>Onwaar voor de personeelsstalling van het Stadskantoor; het scherm zegt dat erbij.</summary>
     bool IsPublic,
-    StatusDto? Status);
+    StatusDto? Status,
+    ManualParkingRateDto? ManualRate);
+
+public sealed record ManualParkingRateDto(
+    decimal WeekdayHourlyEur,
+    TimeOnly WeekdayStart,
+    TimeOnly WeekdayEnd,
+    decimal? DaytimeMaximumEur,
+    TimeOnly? DaytimeStart,
+    TimeOnly? DaytimeEnd,
+    decimal? NighttimeMaximumEur,
+    TimeOnly? NighttimeStart,
+    TimeOnly? NighttimeEnd,
+    decimal? DailyMaximumEur,
+    decimal WeekendHourlyEur);
 
 /// <summary>
 /// De stand van nu. <see cref="Occupancy"/> is leeg als de meting zichzelf tegensprak — dan toont
@@ -105,7 +120,7 @@ public static class Mapping
     public static ParkingDto ToDto(this Parking p, DateTime now) => new(
         p.Slug, p.Name, KindSlug(p.Kind),
         p.Latitude, p.Longitude, p.Address, p.Capacity, p.Url, p.Operator, p.OpeningHours,
-        p.InLowEmissionZone, p.IsFree, p.HasLiveData, p.IsPublic,
+        p.InLowEmissionZone, p.IsFree, p.HasLiveData, p.IsManual, p.IsPublic,
         p.Status is null ? null : new StatusDto(
             p.Status.AvailableSpaces,
             p.Status.TotalCapacity,
@@ -114,7 +129,14 @@ public static class Mapping
             p.Status.TemporarilyClosed,
             p.Status.MeasuredAtUtc,
             p.Status.FetchedAtUtc,
-            now - p.Status.MeasuredAtUtc > StaleAfter));
+            now - p.Status.MeasuredAtUtc > StaleAfter),
+        p.ManualRate is null ? null : p.ManualRate.ToDto());
+
+    public static ManualParkingRateDto ToDto(this ManualParkingRate rate) => new(
+        rate.WeekdayHourlyEur, rate.WeekdayStart, rate.WeekdayEnd,
+        rate.DaytimeMaximumEur, rate.DaytimeStart, rate.DaytimeEnd,
+        rate.NighttimeMaximumEur, rate.NighttimeStart, rate.NighttimeEnd,
+        rate.DailyMaximumEur, rate.WeekendHourlyEur);
 }
 
 public sealed record EventDto(

@@ -87,6 +87,9 @@ namespace ParkingGent.Api.Data.Migrations
                     b.Property<bool?>("IsFree")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsManual")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsPublic")
                         .HasColumnType("boolean");
 
@@ -130,6 +133,8 @@ namespace ParkingGent.Api.Data.Migrations
                         .IsUnique();
 
                     b.HasIndex("Kind");
+
+                    b.HasIndex("IsManual");
 
                     b.HasIndex("Slug")
                         .IsUnique();
@@ -358,6 +363,54 @@ namespace ParkingGent.Api.Data.Migrations
                     b.ToTable("StreetParkingTariffs");
                 });
 
+            modelBuilder.Entity("ParkingGent.Api.Domain.ManualParkingRate", b =>
+                {
+                    b.Property<int>("ParkingId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("DailyMaximumEur")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.Property<decimal?>("DaytimeMaximumEur")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.Property<TimeOnly?>("DaytimeEnd")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<TimeOnly?>("DaytimeStart")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<decimal?>("NighttimeMaximumEur")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.Property<TimeOnly?>("NighttimeEnd")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<TimeOnly?>("NighttimeStart")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<decimal>("WeekdayHourlyEur")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.Property<TimeOnly>("WeekdayEnd")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<TimeOnly>("WeekdayStart")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<decimal>("WeekendHourlyEur")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.HasKey("ParkingId");
+
+                    b.ToTable("ManualParkingRates");
+                });
+
             modelBuilder.Entity("ParkingGent.Api.Domain.TransitConnectionEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -496,9 +549,22 @@ namespace ParkingGent.Api.Data.Migrations
                     b.Navigation("Parking");
                 });
 
+            modelBuilder.Entity("ParkingGent.Api.Domain.ManualParkingRate", b =>
+                {
+                    b.HasOne("ParkingGent.Api.Domain.Parking", "Parking")
+                        .WithOne("ManualRate")
+                        .HasForeignKey("ParkingGent.Api.Domain.ManualParkingRate", "ParkingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Parking");
+                });
+
             modelBuilder.Entity("ParkingGent.Api.Domain.Parking", b =>
                 {
                     b.Navigation("Measurements");
+
+                    b.Navigation("ManualRate");
 
                     b.Navigation("Status");
                 });

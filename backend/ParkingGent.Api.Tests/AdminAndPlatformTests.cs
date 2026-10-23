@@ -12,6 +12,7 @@ public class AdminFactory : ApiFactory
     {
         settings["Auth:ProxyKey"] = ProxyKey;
         settings["Auth:AdminEmails"] = "Admin@Example.be; tweede@example.be";
+        settings["Auth:AdminPassword"] = "test-admin-password";
     }
 
     protected override void ConfigureFakes() => GentFixtures.Fill(Gent);
@@ -33,7 +34,6 @@ public class DevelopmentFactory : ApiFactory
 
     protected override void Configure(Dictionary<string, string?> settings)
     {
-        settings["Auth:DevEmail"] = "dev@example.be";
         settings["Auth:AdminEmails"] = "dev@example.be";
     }
 }
@@ -63,6 +63,9 @@ public static class GentFixtures
 /// <summary>/api/admin/*: toegang, whoami, sync, backfill en het logboek.</summary>
 public class AdminEndpointsTests(AdminFactory factory) : IClassFixture<AdminFactory>
 {
+    private sealed record StreetRateAdmin(string Zone, string Period, int Hours, decimal AmountEur);
+    private const string AdminPassword = "test-admin-password";
+
     private HttpRequestMessage Request(HttpMethod method, string url, string? email = AdminFactory.Admin,
         string? key = AdminFactory.ProxyKey, string? name = null)
     {
@@ -78,9 +81,46 @@ public class AdminEndpointsTests(AdminFactory factory) : IClassFixture<AdminFact
     [InlineData("POST", "/api/admin/sync")]
     [InlineData("POST", "/api/admin/backfill")]
     [InlineData("GET", "/api/admin/runs")]
+    [InlineData("GET", "/api/admin/street-tariffs")]
+    [InlineData("GET", "/api/admin/parkings")]
     public async Task Anonymous_callers_get_401(string method, string url)
     {
         var response = await factory.NewClient().SendAsync(Request(new HttpMethod(method), url, email: null, key: null));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_login_requires_an_allowlisted_email_and_correct_password_then_issues_a_session()
+    {
+        var client = factory.NewClient(handleCookies: true);
+        var rejected = await client.PostAsJsonAsync("/api/admin/login", new
+        {
+            email = "other@example.be",
+            password = AdminPassword,
+        });
+        Assert.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
+
+        var accepted = await client.PostAsJsonAsync("/api/admin/login", new
+        {
+            email = AdminFactory.Admin,
+            password = AdminPassword,
+        });
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/admin/whoami")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsync("/api/admin/logout", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/admin/whoami")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_login_rejects_a_wrong_password()
+    {
+        var response = await factory.NewClient().PostAsJsonAsync("/api/admin/login", new
+        {
+            email = AdminFactory.Admin,
+            password = "wrong-password",
+        });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -201,18 +241,189 @@ public class AdminEndpointsTests(AdminFactory factory) : IClassFixture<AdminFact
         var starts = runs.Select(r => r.GetProperty("startedUtc").GetDateTime()).ToArray();
         Assert.Equal(starts.OrderByDescending(s => s), starts);
     }
+
+    [Fact]
+    public async Task Street_tariffs_can_be_updated_but_their_structure_cannot_be_changed()
+    {
+        var client = factory.NewClient();
+        var before = await (await client.SendAsync(Request(HttpMethod.Get, "/api/admin/street-tariffs"))).JsonAsync();
+        var rows = JsonSerializer.Deserialize<List<StreetRateAdmin>>(
+            before.GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        rows[0] = rows[0] with { AmountEur = rows[0].AmountEur + 0.25m };
+
+        using var update = Request(HttpMethod.Put, "/api/admin/street-tariffs");
+        update.Content = JsonContent.Create(rows);
+        var saved = await client.SendAsync(update);
+
+        Assert.Equal(HttpStatusCode.NoContent, saved.StatusCode);
+        var after = await (await client.SendAsync(Request(HttpMethod.Get, "/api/admin/street-tariffs"))).JsonAsync();
+        Assert.Equal(rows[0].AmountEur, after[0].GetProperty("amountEur").GetDecimal());
+
+        using var invalid = Request(HttpMethod.Put, "/api/admin/street-tariffs");
+        invalid.Content = JsonContent.Create(rows.Take(rows.Count - 1));
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(invalid)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Manual_parking_and_rate_are_public_and_can_be_deleted()
+    {
+        var client = factory.NewClient();
+        var name = $"Testparking {Guid.NewGuid():N}";
+        var requestBody = new
+        {
+            name,
+            address = "Teststraat 1, Gent",
+            latitude = 51.05,
+            longitude = 3.72,
+            rate = new
+            {
+                weekdayHourlyEur = 2.5m,
+                weekdayStart = "07:00:00",
+                weekdayEnd = "19:00:00",
+                daytimeMaximumEur = 12m,
+                daytimeStart = "07:00:00",
+                daytimeEnd = "19:00:00",
+                nighttimeMaximumEur = 7m,
+                nighttimeStart = "19:00:00",
+                nighttimeEnd = "07:00:00",
+                dailyMaximumEur = 18m,
+                weekendHourlyEur = 3m,
+            },
+        };
+        using var create = Request(HttpMethod.Post, "/api/admin/parkings");
+        create.Content = JsonContent.Create(requestBody);
+        var response = await client.SendAsync(create);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.JsonAsync();
+        var slug = created.GetProperty("slug").GetString()!;
+        Assert.True(created.GetProperty("isManual").GetBoolean());
+
+        var publicRows = await (await client.GetAsync("/api/parkings?manual-test=1")).JsonAsync();
+        var listed = Assert.Single(publicRows.EnumerateArray(), p => p.GetProperty("slug").GetString() == slug);
+        Assert.True(listed.GetProperty("isManual").GetBoolean());
+        Assert.Equal(2.5m, listed.GetProperty("manualRate").GetProperty("weekdayHourlyEur").GetDecimal());
+        Assert.False(listed.GetProperty("hasLiveData").GetBoolean());
+
+        var updateRate = new
+        {
+            weekdayHourlyEur = 3m,
+            weekdayStart = "07:00:00",
+            weekdayEnd = "19:00:00",
+            daytimeMaximumEur = 12m,
+            daytimeStart = "07:00:00",
+            daytimeEnd = "19:00:00",
+            nighttimeMaximumEur = 7m,
+            nighttimeStart = "19:00:00",
+            nighttimeEnd = "07:00:00",
+            dailyMaximumEur = 18m,
+            weekendHourlyEur = 3m,
+        };
+        using var update = Request(HttpMethod.Put, $"/api/admin/parkings/{slug}/rate");
+        update.Content = JsonContent.Create(updateRate);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(update)).StatusCode);
+
+        using var delete = Request(HttpMethod.Delete, $"/api/admin/parkings/{slug}");
+        Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(delete)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_can_add_list_and_delete_a_manual_event_that_shows_publicly()
+    {
+        var client = factory.NewClient();
+        using var create = Request(HttpMethod.Post, "/api/admin/events");
+        create.Content = JsonContent.Create(new
+        {
+            name = "Handmatig feest",
+            url = "https://example.be/feest",
+            coverImageUrl = "https://example.be/feest.jpg",
+            coverPhotoId = "photo-1",
+            coverAccessibilityCaption = "Een feest",
+            isOnline = false,
+            isPast = false,
+            isHappeningNow = false,
+            startsAtUtc = "2030-05-01T18:00:00Z",
+            dayTimeLabel = "Wo 1 mei, 20:00",
+            placeName = "Vooruit",
+            kind = "feest",
+            socialSummary = "12 gaan",
+            interestedCount = 30,
+            goingCount = 12,
+            wentCount = 0,
+            ticketPriceLabel = "Gratis",
+            description = "Een testbeschrijving.",
+        });
+        var response = await client.SendAsync(create);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var id = (await response.JsonAsync()).GetProperty("id").GetString()!;
+        Assert.StartsWith("manual-", id);
+
+        var detail = await (await client.GetAsync($"/api/events/{id}")).JsonAsync();
+        Assert.Equal("Een testbeschrijving.", detail.GetProperty("description").GetString());
+        Assert.Equal("Vooruit", detail.GetProperty("event").GetProperty("place").GetString());
+        Assert.DoesNotContain(factory.Social.Urls, u => u.Contains(id));
+
+        var list = await (await client.GetAsync("/api/events")).JsonAsync();
+        Assert.Contains(list.EnumerateArray(), e => e.GetProperty("id").GetString() == id);
+
+        using var listAdmin = Request(HttpMethod.Get, "/api/admin/events");
+        var admins = await (await client.SendAsync(listAdmin)).JsonAsync();
+        Assert.Contains(admins.EnumerateArray(), e => e.GetProperty("id").GetString() == id);
+
+        using var delete = Request(HttpMethod.Delete, $"/api/admin/events/{id}");
+        Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(delete)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/events/{id}")).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("", "https://example.be", "2030-05-01T18:00:00Z", false)]
+    [InlineData("Naam", "javascript:alert(1)", "2030-05-01T18:00:00Z", false)]
+    [InlineData("Naam", "https://example.be", "2030-05-01T18:00:00", false)]
+    [InlineData("Naam", "https://example.be", "2030-05-01T18:00:00Z", true)]
+    public async Task Invalid_manual_events_are_rejected(string name, string url, string startsAt, bool pastAndNow)
+    {
+        using var create = Request(HttpMethod.Post, "/api/admin/events");
+        create.Content = JsonContent.Create(new
+        {
+            name, url, startsAtUtc = startsAt, isPast = pastAndNow, isHappeningNow = pastAndNow,
+        });
+
+        var response = await factory.NewClient().SendAsync(create);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Imported_events_cannot_be_deleted_through_the_admin_api()
+    {
+        using var delete = Request(HttpMethod.Delete, $"/api/admin/events/{SeededFactory.EventUpcoming}");
+
+        Assert.Equal(HttpStatusCode.NotFound, (await factory.NewClient().SendAsync(delete)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("POST", "/api/admin/events")]
+    [InlineData("GET", "/api/admin/events")]
+    [InlineData("DELETE", "/api/admin/events/manual-x")]
+    public async Task Anonymous_callers_cannot_manage_events(string method, string url)
+    {
+        var response = await factory.NewClient().SendAsync(new HttpRequestMessage(new HttpMethod(method), url));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 }
 
 public class AdminWithoutProxyKeyTests(OpenProxyFactory factory) : IClassFixture<OpenProxyFactory>
 {
     [Fact]
-    public async Task Without_a_configured_proxy_key_the_identity_header_is_trusted()
+    public async Task Without_a_configured_proxy_key_the_identity_header_is_not_trusted()
     {
         var request = new HttpRequestMessage(HttpMethod.Get, "/api/admin/whoami").With("Remote-Email", "tweede@example.be");
 
         var response = await factory.NewClient().SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
@@ -251,16 +462,15 @@ public class AdminWithoutAdminsTests(NoAdminsFactory factory) : IClassFixture<No
 public class AdminInDevelopmentTests(DevelopmentFactory factory) : IClassFixture<DevelopmentFactory>
 {
     [Fact]
-    public async Task In_development_the_dev_email_is_used_when_there_is_no_header()
+    public async Task Development_mode_does_not_implicitly_authenticate_a_configured_admin_email()
     {
         var response = await factory.NewClient().GetAsync("/api/admin/whoami");
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("dev@example.be", (await response.JsonAsync()).GetProperty("email").GetString());
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
-    public async Task A_real_header_wins_over_the_dev_email()
+    public async Task A_real_header_is_still_checked_against_the_admin_allowlist()
     {
         var request = new HttpRequestMessage(HttpMethod.Get, "/api/admin/whoami").With("Remote-Email", "iemand@example.be");
 

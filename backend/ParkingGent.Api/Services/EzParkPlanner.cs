@@ -43,7 +43,8 @@ public sealed record EzParkOption(
     double DriveKm,
     int ParkMinutes,
     EzParkVariant[] Variants,
-    ParkingRate? Rate);
+    ParkingRate? Rate,
+    ManualParkingRateDto? ManualRate);
 
 public sealed record EzParkResult(
     DateTime DepartureAt,
@@ -69,6 +70,7 @@ public sealed class EzParkPlanner(
 
         var rows = await db.Parkings
             .Include(p => p.Status)
+            .Include(p => p.ManualRate)
             .AsNoTracking()
             .Where(p => p.Kind != ParkingKind.Bicycle && p.IsPublic)
             .ToListAsync(ct);
@@ -179,7 +181,8 @@ public sealed class EzParkPlanner(
             p.Status is { IsPlausible: true } ? p.Status.AvailableSpaces : null, p.Status?.TotalCapacity ?? p.Capacity,
             drive.DurationMinutes, drive.DistanceKm, ParkMinutes,
             variants.ToArray(),
-            ParkingRates.For(p.Slug, parked));
+            ParkingRates.For(p.Slug, parked),
+            p.ManualRate?.ToDto());
     }
 
     private static double[][] Flip(double[][] lonLat) =>

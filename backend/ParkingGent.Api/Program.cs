@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,23 @@ builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOpt
 builder.Services.Configure<RoutePlannerOptions>(builder.Configuration.GetSection(RoutePlannerOptions.SectionName));
 builder.Services.Configure<TransitOptions>(builder.Configuration.GetSection(TransitOptions.SectionName));
 builder.Services.Configure<SocialfetchOptions>(builder.Configuration.GetSection(SocialfetchOptions.SectionName));
+
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "ParkingGent.Admin";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.Cookie.Path = "/api/admin";
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.SlidingExpiration = false;
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+    });
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? "Host=parkinggent-postgres;Database=parkinggent;Username=parkinggent;Password=parkinggent";
@@ -106,7 +124,9 @@ builder.Services.AddRateLimiter(o =>
 builder.Services.AddOutputCache(o =>
 {
     o.AddPolicy("kort", p => p.Expire(TimeSpan.FromSeconds(30)).SetVaryByQuery("hours", "days"));
+    o.AddPolicy("parkings", p => p.Expire(TimeSpan.FromSeconds(30)).SetVaryByQuery("hours", "days").Tag("parking-details"));
     o.AddPolicy("lang", p => p.Expire(TimeSpan.FromMinutes(30)).SetVaryByQuery("days"));
+    o.AddPolicy("events", p => p.Expire(TimeSpan.FromMinutes(30)).SetVaryByQuery("days").Tag("events"));
 });
 
 builder.Services.AddHealthChecks()
@@ -126,6 +146,7 @@ builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = 256 * 1024);
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseAuthentication();
 app.UseSerilogRequestLogging();
 app.UseRateLimiter();
 app.UseOutputCache();

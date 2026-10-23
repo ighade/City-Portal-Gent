@@ -22,6 +22,8 @@ interface AppState {
    * /api/admin/whoami onderweg is.
    */
   adminChecked: boolean
+  loginAdmin: (email: string, password: string) => Promise<void>
+  logoutAdmin: () => Promise<void>
   theme: Theme
   toggleTheme: () => void
 }
@@ -61,6 +63,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       busy.current = false
       setLoading(false)
     }
+  }, [])
+
+  const loginAdmin = useCallback(async (email: string, password: string) => {
+    const user = await api.admin.login(email, password)
+    setIsAdmin(user.isAdmin)
+    setAdminChecked(true)
+  }, [])
+
+  const logoutAdmin = useCallback(async () => {
+    await api.admin.logout()
+    setIsAdmin(false)
+    setAdminChecked(true)
   }, [])
 
   useEffect(() => {
@@ -106,10 +120,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refresh,
       isAdmin,
       adminChecked,
+      loginAdmin,
+      logoutAdmin,
       theme,
       toggleTheme: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')),
     }),
-    [parkings, stats, meta, loading, error, refreshedAt, refresh, isAdmin, adminChecked, theme],
+    [parkings, stats, meta, loading, error, refreshedAt, refresh, isAdmin, adminChecked, loginAdmin, logoutAdmin, theme],
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

@@ -58,7 +58,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             ["Gent:BackfillOnStartup"] = "false",
             ["Auth:ProxyKey"] = "",
             ["Auth:AdminEmails"] = "",
-            ["Auth:DevEmail"] = "",
+            ["Auth:AdminPassword"] = "",
             ["RoutePlanner:BaseUrl"] = "http://ors.test/openrouteservice",
             ["RoutePlanner:ApiKey"] = "",
             ["Socialfetch:BaseUrl"] = "http://social.test",
@@ -80,9 +80,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     }
 
     /// <summary>Een client met een eigen IP, zodat de snelheidsbegrenzer tests niet door elkaar haalt.</summary>
-    public HttpClient NewClient()
+    public HttpClient NewClient(bool handleCookies = false)
     {
-        var client = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false, AllowAutoRedirect = false });
+        var client = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = handleCookies, AllowAutoRedirect = false });
         var n = Interlocked.Increment(ref ipCounter);
         client.DefaultRequestHeaders.Add("X-Forwarded-For", $"10.{(n >> 16) & 255}.{(n >> 8) & 255}.{n & 255}");
         return client;

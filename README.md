@@ -123,16 +123,17 @@ laadde zichtbaar traag; met tegels van 512 px in plaats van 256 zijn het er vijf
 
 ## Instellen
 
-Drie waarden komen uit de omgeving en staan **niet in de broncode**:
+Deze waarden komen uit de omgeving en staan **niet in de broncode**:
 
 | | |
 |---|---|
 | `PARKINGGENT_DB_PASSWORD` | het wachtwoord van de postgres-sidecar; zonder dit start die niet |
-| `PARKINGGENT_PROXY_KEY` | het proxygeheim; leeg betekent dat de backend de identiteitskop niet meer controleert |
+| `PARKINGGENT_PROXY_KEY` | het proxygeheim; zonder geheim worden proxy-identiteitskoppen geweigerd |
 | `PARKINGGENT_ADMIN_EMAILS` | wie beheerder is, gescheiden door een puntkomma; **leeg = niemand** |
+| `PARKINGGENT_ADMIN_PASSWORD` | gedeeld sterk wachtwoord voor admin-aanmelding; leeg schakelt admin-aanmelding uit |
 
-Die laatste staat bewust buiten de repo: zo draagt de broncode geen persoonsgegevens mee als ze
-wordt doorgegeven. Alle drie falen ze naar de veilige kant — zonder beheerders zijn de
+Deze waarden staan bewust buiten de repo: zo draagt de broncode geen persoonsgegevens of
+wachtwoorden mee als ze wordt doorgegeven. Zonder beheerders of ingesteld wachtwoord zijn de
 beheerknoppen dicht, niet open.
 
 De app zelf heeft verder niets nodig: er is geen sleutel of registratie voor de open data van
@@ -164,9 +165,8 @@ Evenementen inladen (volgt de paginering, maximaal 10 oproepen = 10 credits):
 ```
 
 Poort 5434 en niet de gebruikelijke 5432: zo botst deze databank niet met een postgres die
-al op je machine draait. In Development geldt `Auth:DevEmail` als identiteit en staat datzelfde
-adres in `Auth:AdminEmails`, dus is de beheerpagina lokaal meteen zichtbaar — zonder dat er een
-echt adres in de broncode staat.
+al op je machine draait. Ook lokaal is een expliciete admin-aanmelding vereist; Development geeft
+geen automatische identiteit meer.
 
 ### Tests
 
@@ -194,3 +194,33 @@ evenementenbron worden vervangen door vaste nepantwoorden, dus er gaat niets het
 | `GET /api/health` | leeft de container (databank) |
 | `GET /api/health/source` | is data.stad.gent bereikbaar |
 | `POST /api/admin/sync` · `POST /api/admin/backfill` · `GET /api/admin/runs` | alleen voor een beheerder |
+| `GET /api/admin/street-tariffs` · `PUT /api/admin/street-tariffs` | beheer van de bestaande straatzonetarieven |
+| `GET /api/admin/parkings` · `POST /api/admin/parkings` · `PUT/DELETE /api/admin/parkings/{slug}/rate` | handmatige garagetarieven en publieke parkings |
+| `DELETE /api/admin/parkings/{slug}` | alleen een handmatig toegevoegde parking verwijderen |
+| `GET/POST /api/admin/events` · `DELETE /api/admin/events/{id}` | evenementen met alle opgeslagen velden handmatig toevoegen; alleen handmatige evenementen zijn te verwijderen |
+
+De pagina **Beheer** bevat nu twee tariefschermen. Straatzonetarieven passen alleen de bedragen aan;
+de door de stad bepaalde zones en tijdsduren blijven vast. Bij parkingen kan een tarief worden
+gekoppeld aan een bestaande parking, of kan een parking met naam en adres worden toegevoegd. De
+locatie wordt in Gent bepaald; die parking verschijnt publiek op de kaart en heeft geen
+bezettingsmeting. Handmatige tarieven tonen het weekdag- en weekenduurtarief, de maxima met hun
+tijdvakken en het maximum per 24 uur.
+
+### Lokaal beheren
+
+De lokale Compose-configuratie draait standaard in `Production`. Om op je eigen computer lokaal als
+beheerder te werken, zet in `.env`:
+
+```dotenv
+PARKINGGENT_ADMIN_EMAILS=jouw.admin@voorbeeld.be
+PARKINGGENT_ADMIN_PASSWORD=een-lang-uniek-wachtwoord
+PARKINGGENT_BIND_ADDRESS=127.0.0.1
+```
+
+Gebruik een eigen, lang en uniek wachtwoord en deel het niet in de chat of broncode. Zonder
+`PARKINGGENT_PROXY_KEY` worden identiteitskoppen niet vertrouwd; admin-aanmelding loopt dan via
+e-mailadres en wachtwoord. Herstart daarna met
+`docker compose up -d --force-recreate backend frontend` en open `http://localhost:8080/beheer`.
+De beheerpagina verschijnt pas na aanmelden met het toegestane e-mailadres en wachtwoord. Na vijf
+mislukte pogingen wordt aanmelden tijdelijk geblokkeerd. De Compose-poorten zijn standaard alleen
+aan localhost gebonden; op een publieke server hoort de loginproxy de identiteit door te geven.

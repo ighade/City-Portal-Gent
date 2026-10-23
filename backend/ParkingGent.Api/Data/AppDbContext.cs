@@ -17,6 +17,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<TransitConnectionEntity> TransitConnections => Set<TransitConnectionEntity>();
     public DbSet<TransitShapePointEntity> TransitShapePoints => Set<TransitShapePointEntity>();
     public DbSet<StreetParkingTariff> StreetParkingTariffs => Set<StreetParkingTariff>();
+    public DbSet<ManualParkingRate> ManualParkingRates => Set<ManualParkingRate>();
     public DbSet<FriendUser> FriendUsers => Set<FriendUser>();
     public DbSet<FriendLink> FriendLinks => Set<FriendLink>();
     public DbSet<FriendInterest> FriendInterests => Set<FriendInterest>();
@@ -36,6 +37,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(p => p.Operator).HasMaxLength(200);
             e.Property(p => p.OpeningHours).HasMaxLength(200);
             e.HasIndex(p => p.Kind);
+            e.HasIndex(p => p.IsManual);
         });
 
         b.Entity<ParkingStatus>(e =>
@@ -135,6 +137,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(x => x.Period).HasMaxLength(10);
             e.Property(x => x.AmountEur).HasPrecision(8, 2);
             e.HasIndex(x => new { x.Zone, x.Period, x.Hours }).IsUnique();
+        });
+
+        b.Entity<ManualParkingRate>(e =>
+        {
+            e.HasKey(x => x.ParkingId);
+            e.HasOne(x => x.Parking).WithOne(x => x.ManualRate)
+                .HasForeignKey<ManualParkingRate>(x => x.ParkingId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.WeekdayHourlyEur).HasPrecision(8, 2);
+            e.Property(x => x.DaytimeMaximumEur).HasPrecision(8, 2);
+            e.Property(x => x.NighttimeMaximumEur).HasPrecision(8, 2);
+            e.Property(x => x.DailyMaximumEur).HasPrecision(8, 2);
+            e.Property(x => x.WeekendHourlyEur).HasPrecision(8, 2);
         });
 
         b.Entity<FriendUser>(e =>

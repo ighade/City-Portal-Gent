@@ -76,10 +76,8 @@ public sealed class GentOptions
 /// Wie de beheerknoppen mag gebruiken. Het lézen is openbaar — dit is data van de stad en de
 /// hele opzet is dat een Gentenaar de kaart gewoon kan bekijken.
 /// <para>
-/// Voor het schrijven gelden dezelfde twee sloten als in LvCRM (bouwsteen 21) en AlgemeneTaken:
-/// de identiteitskop wordt alleen geloofd samen met het proxygeheim dat enkel het eigen
-/// Caddy-blok meestuurt. Deze dienst staat openbaar, dus zet alleen de afgeschermde ingang op
-/// poort 8105 die kop — van buiten komt er nooit een identiteit binnen, en dus ook geen beheer.
+/// Schrijven vraagt een beheerdersidentiteit uit een beveiligde proxy of een ingelogde
+/// admin-sessie. Proxy-identiteitskoppen worden alleen geloofd met het proxygeheim.
 /// </para>
 /// </summary>
 public sealed class AuthOptions
@@ -105,8 +103,8 @@ public sealed class AuthOptions
     /// </summary>
     public string? AdminEmails { get; set; }
 
-    /// <summary>Alleen in Development: de identiteit als er geen kop is.</summary>
-    public string? DevEmail { get; set; }
+    /// <summary>Gedeeld wachtwoord voor beheerders die met e-mailadres en wachtwoord aanmelden.</summary>
+    public string? AdminPassword { get; set; }
 
     /// <summary>De adressen uit <see cref="AdminEmails"/>, opgesplitst en genormaliseerd.</summary>
     public IEnumerable<string> Admins() =>

@@ -80,12 +80,16 @@ public class Parking
     /// </summary>
     public bool IsPublic { get; set; } = true;
 
+    /// <summary>Deze parking is handmatig toegevoegd en hoort niet bij een bronronde van de stad.</summary>
+    public bool IsManual { get; set; }
+
     public DateTime FirstSeenUtc { get; set; }
 
     /// <summary>Wanneer een bron deze plek voor het laatst noemde. Verdwijnt ze uit beide, dan verouderd dit.</summary>
     public DateTime LastSeenUtc { get; set; }
 
     public ParkingStatus? Status { get; set; }
+    public ManualParkingRate? ManualRate { get; set; }
     public List<Measurement> Measurements { get; set; } = new();
 }
 
@@ -228,6 +232,25 @@ public class StreetParkingTariff
 
     /// <summary>Totaalbedrag voor die duur; 0 is gratis. Een duur die niet kan, heeft geen rij.</summary>
     public decimal AmountEur { get; set; }
+}
+
+/// <summary>Handmatig beheerd tarief voor een parking waarvan de prijs niet automatisch wordt opgehaald.</summary>
+public class ManualParkingRate
+{
+    public int ParkingId { get; set; }
+    public Parking Parking { get; set; } = null!;
+
+    public decimal WeekdayHourlyEur { get; set; }
+    public TimeOnly WeekdayStart { get; set; }
+    public TimeOnly WeekdayEnd { get; set; }
+    public decimal? DaytimeMaximumEur { get; set; }
+    public TimeOnly? DaytimeStart { get; set; }
+    public TimeOnly? DaytimeEnd { get; set; }
+    public decimal? NighttimeMaximumEur { get; set; }
+    public TimeOnly? NighttimeStart { get; set; }
+    public TimeOnly? NighttimeEnd { get; set; }
+    public decimal? DailyMaximumEur { get; set; }
+    public decimal WeekendHourlyEur { get; set; }
 }
 
 /// <summary>Een locatie waar evenementen plaatsvinden, zoals Facebook ze kent.</summary>

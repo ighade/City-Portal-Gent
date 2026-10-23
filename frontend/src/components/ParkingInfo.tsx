@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { ManualRateInfo } from './RateInfo'
 import { kindLabel } from '../types'
 import type { Parking } from '../types'
 
@@ -28,6 +29,7 @@ export function ParkingInfo({ parking, onBack }: { parking: Parking; onBack: () 
       {status?.occupancy != null && <Fact label="Bezetting">{status.occupancy} %</Fact>}
       {parking.openingHours && <Fact label="Openingsuren">{parking.openingHours}</Fact>}
       {parking.operator && <Fact label="Uitbater">{parking.operator}</Fact>}
+      <ManualRateInfo rate={parking.manualRate} />
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <Link className="btn" to={`/parking/${parking.slug}`}>Verloop en drukte</Link>
         <button className="btn" onClick={onBack}>Terug naar route</button>

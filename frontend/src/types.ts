@@ -26,8 +26,10 @@ export interface Parking {
   inLowEmissionZone?: boolean
   isFree?: boolean
   hasLiveData: boolean
+  isManual: boolean
   /** Onwaar voor de personeelsstalling van het Stadskantoor: gemeten, maar je kunt er niet terecht. */
   isPublic: boolean
+  manualRate?: ManualParkingRate
   status?: Status
 }
 
@@ -136,6 +138,65 @@ export interface ParkingRate {
   sourceUrl: string
 }
 
+export interface ManualParkingRate {
+  weekdayHourlyEur: number
+  weekdayStart: string
+  weekdayEnd: string
+  daytimeMaximumEur?: number | null
+  daytimeStart?: string | null
+  daytimeEnd?: string | null
+  nighttimeMaximumEur?: number | null
+  nighttimeStart?: string | null
+  nighttimeEnd?: string | null
+  dailyMaximumEur?: number | null
+  weekendHourlyEur: number
+}
+
+export interface AdminEvent {
+  id: string
+  name: string
+  startsAtUtc?: string | null
+  place?: string | null
+}
+
+export interface ManualEventInput {
+  name: string
+  url: string | null
+  coverImageUrl: string | null
+  coverPhotoId: string | null
+  coverAccessibilityCaption: string | null
+  isOnline: boolean
+  isPast: boolean
+  isHappeningNow: boolean
+  startsAtUtc: string | null
+  dayTimeLabel: string | null
+  placeName: string | null
+  kind: string | null
+  socialSummary: string | null
+  interestedCount: number | null
+  goingCount: number | null
+  wentCount: number | null
+  ticketPriceLabel: string | null
+  description: string | null
+}
+
+export interface AdminParking {
+  slug: string
+  name: string
+  address?: string | null
+  latitude: number
+  longitude: number
+  isManual: boolean
+  rate?: ManualParkingRate | null
+}
+
+export interface StreetTariffAdmin {
+  zone: string
+  period: string
+  hours: number
+  amountEur: number
+}
+
 export interface RoutePlanResult {
   mode: 'car' | 'foot-walking' | 'cycling-regular'
   distanceKm: number
@@ -145,7 +206,7 @@ export interface RoutePlanResult {
   lezRestricted?: boolean
   lezWarning?: string
   destinationParking?: StreetParking
-  destinationGarage?: { name: string; rate: ParkingRate }
+  destinationGarage?: { name: string; rate?: ParkingRate | null; manualRate?: ManualParkingRate | null }
 }
 
 export interface EzParkRequest {
@@ -191,6 +252,7 @@ export interface EzParkOption {
   parkMinutes: number
   variants: EzParkVariant[]
   rate?: ParkingRate
+  manualRate?: ManualParkingRate | null
 }
 
 export interface EzParkResult {

@@ -24,7 +24,7 @@ public sealed record RoutePlanResult(
     StreetParkingDto? DestinationParking = null,
     DestinationGarage? DestinationGarage = null);
 
-public sealed record DestinationGarage(string Name, ParkingRate Rate);
+public sealed record DestinationGarage(string Name, ParkingRate? Rate, ManualParkingRateDto? ManualRate);
 
 public sealed class RoutePlanner(
     HttpClient http,

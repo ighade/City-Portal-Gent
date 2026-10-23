@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ParkingRate, StreetParking, StreetTariff } from '../types'
+import type { ManualParkingRate, ParkingRate, StreetParking, StreetTariff } from '../types'
 
 const euro = (n: number) => `€ ${n.toLocaleString('nl-BE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 
@@ -173,5 +173,26 @@ export function GarageRate({ rate }: { rate?: ParkingRate }) {
         <a className="small" href={rate.sourceUrl} target="_blank" rel="noreferrer">Bron: Stad Gent</a>
       </div>
     </details>
+  )
+}
+
+export function ManualRateInfo({ rate }: { rate?: ManualParkingRate | null }) {
+  if (!rate) return null
+  const euroText = (n: number) => euro(n)
+  const time = (value?: string | null) => value?.slice(0, 5) ?? ''
+
+  return (
+    <div className="small" style={{ display: 'grid', gap: 4, marginTop: 8 }}>
+      <strong>Handmatig beheerd tarief</strong>
+      <div>Maandag–vrijdag, {time(rate.weekdayStart)}–{time(rate.weekdayEnd)}: {euroText(rate.weekdayHourlyEur)} / uur</div>
+      <div>Weekend: {euroText(rate.weekendHourlyEur)} / uur</div>
+      {rate.daytimeMaximumEur != null && (
+        <div>Maximum overdag, {time(rate.daytimeStart)}–{time(rate.daytimeEnd)}: max. {euroText(rate.daytimeMaximumEur)}</div>
+      )}
+      {rate.nighttimeMaximumEur != null && (
+        <div>Maximum 's nachts, {time(rate.nighttimeStart)}–{time(rate.nighttimeEnd)}: max. {euroText(rate.nighttimeMaximumEur)}</div>
+      )}
+      {rate.dailyMaximumEur != null && <div>Maximum per 24 uur: {euroText(rate.dailyMaximumEur)}</div>}
+    </div>
   )
 }

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Security.Claims;
 using Microsoft.Extensions.Options;
 
 namespace ParkingGent.Api.Services;
@@ -16,7 +17,7 @@ public sealed record Caller(string Email, string Name, bool IsAdmin);
 /// geen identiteit binnen, want alleen het <c>:8105</c>-blok in het Caddyfile zet de koppen.
 /// </para>
 /// </summary>
-public sealed class CallerResolver(IOptions<AuthOptions> auth, IHostEnvironment env)
+public sealed class CallerResolver(IOptions<AuthOptions> auth)
 {
     public Caller Resolve(HttpContext context)
     {
@@ -27,10 +28,7 @@ public sealed class CallerResolver(IOptions<AuthOptions> auth, IHostEnvironment 
         {
             email = context.Request.Headers[a.HeaderName].FirstOrDefault();
         }
-        if (string.IsNullOrWhiteSpace(email) && env.IsDevelopment())
-        {
-            email = a.DevEmail;
-        }
+        email ??= context.User.FindFirstValue(ClaimTypes.Email);
         if (string.IsNullOrWhiteSpace(email))
         {
             return new Caller(string.Empty, string.Empty, false);
@@ -46,8 +44,8 @@ public sealed class CallerResolver(IOptions<AuthOptions> auth, IHostEnvironment 
     private bool ProxyKeyMatches(HttpContext context)
     {
         var key = auth.Value.ProxyKey;
-        // Geen geheim ingesteld = niet in gebruik (ontwikkelen, of een opzet zonder Caddy ervoor).
-        if (string.IsNullOrEmpty(key)) return true;
+        // Zonder geheim zijn identiteitskoppen nooit te vertrouwen; aanmelden kan via de sessiecookie.
+        if (string.IsNullOrEmpty(key)) return false;
         var offered = context.Request.Headers[auth.Value.ProxyKeyHeader].FirstOrDefault() ?? string.Empty;
         return CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(offered), Encoding.UTF8.GetBytes(key));
     }

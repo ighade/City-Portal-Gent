@@ -145,7 +145,7 @@ export function EventDetail() {
                 Route naar dit evenement
               </button>
             )}
-            <a className="btn" href={event.url} target="_blank" rel="noreferrer noopener">Bekijk op Facebook</a>
+            {event.url && <a className="btn" href={event.url} target="_blank" rel="noreferrer noopener">Bekijk op Facebook</a>}
           </div>
           {tickets.length === 0 && description && (
             <p className="muted small">In de beschrijving staat geen ticketlink.</p>
