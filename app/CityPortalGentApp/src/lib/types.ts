@@ -1,0 +1,355 @@
+export type ParkingKind = 'garage' | 'park-and-ride' | 'bicycle'
+
+export interface Status {
+  available: number | null
+  capacity: number
+  /** Leeg als de meting zichzelf tegensprak — dan is er wel een aantal vrije plaatsen, maar geen percentage. */
+  occupancy?: number
+  isOpen: boolean
+  temporarilyClosed: boolean
+  measuredAtUtc: string
+  fetchedAtUtc: string
+  isStale: boolean
+}
+
+export interface Parking {
+  slug: string
+  name: string
+  kind: ParkingKind
+  lat: number
+  lon: number
+  address?: string
+  capacity: number
+  url?: string
+  operator?: string
+  openingHours?: string
+  inLowEmissionZone?: boolean
+  isFree?: boolean
+  hasLiveData: boolean
+  isManual: boolean
+  /** Onwaar voor de personeelsstalling van het Stadskantoor: gemeten, maar je kunt er niet terecht. */
+  isPublic: boolean
+  manualRate?: ManualParkingRate
+  status?: Status
+}
+
+export const kindLabel: Record<ParkingKind, string> = {
+  garage: 'Parking',
+  'park-and-ride': 'Park and ride',
+  bicycle: 'Fietsenstalling',
+}
+
+export interface Point {
+  atUtc: string
+  available: number
+  occupancy: number
+}
+
+export interface TrendCell {
+  weekday: number
+  hour: number
+  occupancy: number
+  samples: number
+}
+
+export interface Trend {
+  slug: string
+  name: string
+  days: number
+  cells: TrendCell[]
+}
+
+export interface Stats {
+  parkings: number
+  withLiveData: number
+  open: number
+  totalCapacity: number
+  availableSpaces: number
+  occupancy?: number
+  measuredAtUtc?: string
+  /** Apart geteld: fietsplaatsen bij autoplaatsen optellen levert een getal op dat niets zegt. */
+  bicycle: BicycleStats
+}
+
+export interface BicycleStats {
+  facilities: number
+  totalCapacity: number
+  availableSpaces: number
+  occupancy?: number
+}
+
+/** Genoeg van GeoJSON om de zone als vlakken op de kaart te tekenen. */
+export interface GeoJsonCollection {
+  type: 'FeatureCollection'
+  features: unknown[]
+}
+
+export interface Meta {
+  source: string
+  sourceUrl: string
+  datasets: string[]
+  refreshMinutes: number
+  retentionDays: number
+  lastSyncUtc?: string
+  lastSyncOk: boolean
+  measurementCount: number
+}
+
+export interface RoutePlanRequest {
+  startLat: number
+  startLon: number
+  endLat: number
+  endLon: number
+  mode: 'car' | 'foot-walking' | 'cycling-regular'
+  checkLez?: boolean
+}
+
+export interface StreetTariff {
+  period: 'dag' | 'avond'
+  /** 0 = dagtarief (24 u) */
+  hours: number
+  amountEur: number
+}
+
+export interface StreetParking {
+  zone: 'rood' | 'oranje' | 'geel' | 'groen' | 'blauw'
+  name: string
+  subzone?: string
+  paidNow: boolean
+  rules: string
+  notes: string[]
+  tariffs: StreetTariff[]
+  sourceUrl: string
+}
+
+export interface RatePeriod {
+  key: 'weekday' | 'saturday' | 'sunday' | 'night'
+  label: string
+  hourlyEur: number
+  isMaximum: boolean
+  dayMaxEur?: number
+  extra?: string
+}
+
+export interface ParkingRate {
+  activeKey: RatePeriod['key']
+  periods: RatePeriod[]
+  notes: string[]
+  sourceUrl: string
+}
+
+export interface ManualParkingRate {
+  weekdayHourlyEur: number
+  weekdayStart: string
+  weekdayEnd: string
+  daytimeMaximumEur?: number | null
+  daytimeStart?: string | null
+  daytimeEnd?: string | null
+  nighttimeMaximumEur?: number | null
+  nighttimeStart?: string | null
+  nighttimeEnd?: string | null
+  dailyMaximumEur?: number | null
+  weekendHourlyEur: number
+}
+
+export interface RoutePlanResult {
+  mode: 'car' | 'foot-walking' | 'cycling-regular'
+  distanceKm: number
+  durationMinutes: number
+  coordinates: number[][]
+  routeSummary: string
+  lezRestricted?: boolean
+  lezWarning?: string
+  destinationParking?: StreetParking
+  destinationGarage?: { name: string; rate?: ParkingRate | null; manualRate?: ManualParkingRate | null }
+}
+
+export interface EzParkRequest {
+  startLat: number
+  startLon: number
+  endLat: number
+  endLon: number
+  departInMinutes: number
+  avoidLez: boolean
+}
+
+export interface EzParkLeg {
+  mode: 'drive' | 'park' | 'walk' | 'bus' | 'tram'
+  line?: string
+  from: string
+  to: string
+  departureAt: string
+  arrivalAt: string
+  distanceKm: number
+  /** [lat, lon] */
+  coordinates: number[][]
+  /** Lijnkleur zonder #, alleen bij bus en tram */
+  color?: string
+}
+
+export interface EzParkVariant {
+  type: 'walk' | 'transit'
+  arrivalAt: string
+  totalMinutes: number
+  legs: EzParkLeg[]
+}
+
+export interface EzParkOption {
+  slug: string
+  name: string
+  address?: string
+  lat: number
+  lon: number
+  available: number
+  capacity: number
+  driveMinutes: number
+  driveKm: number
+  parkMinutes: number
+  variants: EzParkVariant[]
+  rate?: ParkingRate
+  manualRate?: ManualParkingRate | null
+}
+
+export interface EzParkResult {
+  departureAt: string
+  options: EzParkOption[]
+  warning?: string
+}
+
+export interface TransitStop {
+  id: string
+  name: string
+  lat: number
+  lon: number
+  lines: string[]
+}
+
+export interface TransitRouteRequest {
+  startLat: number
+  startLon: number
+  endLat: number
+  endLon: number
+}
+
+export interface TransitLeg {
+  mode: 'walk' | 'bus' | 'tram'
+  line?: string
+  from: string
+  to: string
+  fromLat: number
+  fromLon: number
+  toLat: number
+  toLon: number
+  departureAt: string
+  arrivalAt: string
+  distanceKm: number
+  delayMinutes: number
+  coordinates: number[][]
+  color?: string
+}
+
+export interface TransitRouteResult {
+  distanceKm: number
+  durationMinutes: number
+  departureAt: string
+  arrivalAt: string
+  summary: string
+  legs: TransitLeg[]
+}
+
+/** Hoe vol, in woorden. De kleur alleen mag het nooit vertellen — zie het thema. */
+export type Busyness = 'vrij' | 'rustig' | 'druk' | 'bijna-vol' | 'vol' | 'onbekend'
+
+export function busyness(status: Status | undefined): Busyness {
+  if (!status || status.occupancy === undefined || status.occupancy === null) return 'onbekend'
+  if (!status.isOpen) return 'onbekend'
+  if (status.occupancy >= 97) return 'vol'
+  if (status.occupancy >= 90) return 'bijna-vol'
+  if (status.occupancy >= 70) return 'druk'
+  if (status.occupancy >= 40) return 'rustig'
+  return 'vrij'
+}
+
+export const busynessLabel: Record<Busyness, string> = {
+  vrij: 'Veel plaats',
+  rustig: 'Ruim',
+  druk: 'Druk',
+  'bijna-vol': 'Bijna vol',
+  vol: 'Vol',
+  onbekend: 'Geen meting',
+}
+
+export interface GentEvent {
+  id: string
+  url: string
+  name: string
+  coverImageUrl?: string | null
+  coverCaption?: string | null
+  isOnline: boolean
+  isPast: boolean
+  isHappeningNow: boolean
+  startsAtUtc?: string | null
+  dayTimeLabel?: string | null
+  place?: string | null
+  kind?: string | null
+  socialSummary?: string | null
+  interestedCount?: number | null
+  goingCount?: number | null
+  wentCount?: number | null
+  ticketPriceLabel?: string | null
+}
+
+export interface GentEventDetail {
+  event: GentEvent
+  description?: string | null
+}
+
+export interface FriendMe {
+  id: string
+  username: string
+  email: string
+  avatar?: string | null
+  shareLocation: boolean
+  showFriendsOnMap: boolean
+}
+
+export interface FriendSessionInfo {
+  user: FriendMe
+  interests: string[]
+}
+
+export interface Friend {
+  id: string
+  username: string
+  avatar?: string | null
+  lat?: number | null
+  lon?: number | null
+  locationAtUtc?: string | null
+  locationAgeSeconds?: number | null
+  /** Locatie is recent (< 2 min); anders "x geleden" tonen. */
+  online: boolean
+  eventIds: string[]
+}
+
+export interface FriendEvent {
+  id: string
+  name: string
+  coverImageUrl?: string | null
+  dayTimeLabel?: string | null
+  startsAtUtc?: string | null
+  place?: string | null
+  friendIds: string[]
+}
+
+export interface FriendPending {
+  id: string
+  username: string
+  avatar?: string | null
+}
+
+export interface FriendsOverview {
+  friends: Friend[]
+  events: FriendEvent[]
+  incoming: FriendPending[]
+  outgoing: FriendPending[]
+}
