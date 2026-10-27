@@ -1,6 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
 import { View } from 'react-native'
 
 import { EndTimeSelect, endOptions, estimateCost, GarageRate, ManualRateInfo } from '@/components/RateInfo'
@@ -31,10 +30,6 @@ interface Props {
   resolveStart: () => Promise<EzPoint>
   resolveEnd: () => Promise<EzPoint>
   departInMinutes: () => number
-  /** De gedeelde invoervelden van de routeplanner. */
-  fields: ReactNode
-  /** Schakelaars van de routeplanner. */
-  toggles: ReactNode
   hint: string | null
   onOverlay: (overlay: EzOverlay) => void
   /** Een P-speld op de kaart is aangetikt; kiest de snelste variant van die parking. */
@@ -55,7 +50,7 @@ function bestVariant(o: EzParkOption): EzParkVariant {
  * EZ Park: de invoer en de knop (`controls`) staan in het formulier, de voorstellen en het
  * gekozen traject (`overview`) in het Routeoverzicht.
  */
-export function useEzPark({ avoidLez, start, end, canPlan, resolveStart, resolveEnd, departInMinutes, fields, toggles, hint, onOverlay, pick }: Props) {
+export function useEzPark({ avoidLez, start, end, canPlan, resolveStart, resolveEnd, departInMinutes, hint, onOverlay, pick }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<EzParkResult | null>(null)
@@ -113,10 +108,8 @@ export function useEzPark({ avoidLez, start, end, canPlan, resolveStart, resolve
   }
 
   const controls = (
-    <View style={{ gap: 14 }}>
-      {fields}
-      {toggles}
-      <Btn variant="primary" label={loading ? 'Zoeken…' : 'Zoek parkings'} onPress={() => void plan()} disabled={loading || !canPlan} />
+    <View style={{ gap: 10 }}>
+      {loading && <Txt variant="note" style={{ marginTop: 0 }}>Parkings zoeken…</Txt>}
       {hint && <Txt variant="note" style={{ marginTop: 0 }}>{hint}</Txt>}
       {error && <Banner style={{ marginBottom: 0 }}>{error}</Banner>}
       {result?.warning && <Banner style={{ marginBottom: 0 }}>{result.warning}</Banner>}
@@ -135,11 +128,11 @@ export function useEzPark({ avoidLez, start, end, canPlan, resolveStart, resolve
 
       {variant && option && (
         <>
-          <View style={{ marginTop: 16, gap: 8 }}>
-            <Txt>
+          <View style={{ marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <Txt style={{ flex: 1 }}>
               Gekozen: <Txt variant="strong">{option.name}</Txt> · {variant.type === 'walk' ? 'te voet' : 'OV'}
             </Txt>
-            <Btn label="Andere optie kiezen" onPress={() => setSelected(null)} style={{ alignSelf: 'flex-start' }} />
+            <Btn label="Andere optie kiezen" onPress={() => setSelected(null)} />
           </View>
           <Legs variant={variant} rate={option.rate} manualRate={option.manualRate} />
         </>
@@ -149,7 +142,7 @@ export function useEzPark({ avoidLez, start, end, canPlan, resolveStart, resolve
     </View>
   )
 
-  return { controls, overview }
+  return { controls, overview, plan }
 }
 
 function OccupancyBar({ available, capacity }: { available: number | null; capacity: number }) {
@@ -199,7 +192,7 @@ function OptionCard({ option, selected, onSelect }: {
 export function LegBadge({ mode, line, color }: { mode: EzParkLeg['mode']; line?: string; color?: string }) {
   const p = usePalette()
   const transit = mode === 'bus' || mode === 'tram'
-  const bg = color ? `#${color}` : mode === 'drive' ? p.crit : mode === 'park' ? '#3b82f6' : mode === 'walk' ? '#475569' : mode === 'tram' ? '#d97706' : '#0f766e'
+  const bg = color ? `#${color}` : mode === 'drive' ? p.crit : mode === 'park' ? '#3b82f6' : mode === 'walk' ? '#2563eb' : mode === 'tram' ? '#d97706' : '#0f766e'
   const text = color ? textOn(color) : '#fff'
   const label = transit && line ? line : mode === 'drive' ? 'A' : mode === 'park' ? 'P' : mode === 'walk' ? '↗' : mode === 'tram' ? 'T' : 'B'
   return (

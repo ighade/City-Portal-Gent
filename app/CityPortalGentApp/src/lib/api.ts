@@ -66,8 +66,25 @@ interface Place { lat: number; lon: number; label: string }
 
 const inGent = (label: string) => /\bgent\b/i.test(label)
 
+// Eerst via onze eigen server (bereikbaar op het toestel), pas daarna rechtstreeks.
+async function geoFetch(kind: 'Location' | 'Suggestion', q: string): Promise<Response> {
+  const path = kind === 'Location' ? 'locate' : 'suggest'
+  try {
+    const viaServer = await fetch(`${API_URL}/api/geo/${path}?q=${encodeURIComponent(q)}`)
+    if (viaServer.ok) return viaServer
+  } catch {
+    // De server is onbereikbaar; probeer rechtstreeks.
+  }
+  return fetch(`${GEO}/${kind}?c=${kind === 'Location' ? 5 : 10}&q=${encodeURIComponent(q)}`)
+}
+
 async function flemishGeocode(q: string): Promise<Place> {
-  const res = await fetch(`${GEO}/Location?c=5&q=${encodeURIComponent(q)}`)
+  let res: Response
+  try {
+    res = await geoFetch('Location', q)
+  } catch {
+    throw new Error('Geen internetverbinding: adres kan niet opgezocht worden. Controleer de verbinding van je toestel of emulator.')
+  }
   const body = res.ok
     ? await res.json() as { LocationResult?: { FormattedAddress?: string; Municipality?: string; Location: { Lat_WGS84: number; Lon_WGS84: number } }[] }
     : {}
@@ -118,7 +135,12 @@ const suggestCache = new Map<string, string[]>()
 async function flemishSuggest(q: string): Promise<string[]> {
   const cached = suggestCache.get(q)
   if (cached) return cached
-  const res = await fetch(`${GEO}/Suggestion?c=10&q=${encodeURIComponent(q)}`)
+  let res: Response
+  try {
+    res = await geoFetch('Suggestion', q)
+  } catch {
+    return []
+  }
   if (!res.ok) return []
   const body = await res.json() as { SuggestionResult?: string[] }
   const all = body.SuggestionResult ?? []

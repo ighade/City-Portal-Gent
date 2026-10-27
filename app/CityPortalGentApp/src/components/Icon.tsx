@@ -1,8 +1,9 @@
 import Svg, { Path, Rect } from 'react-native-svg'
 
-export type IconName = 'foot' | 'bike' | 'car' | 'transit' | 'route' | 'events' | 'friends' | 'info' | 'sun' | 'moon' | 'calendar'
+export type IconName = 'foot' | 'bike' | 'car' | 'transit' | 'route' | 'events' | 'friends' | 'info' | 'sun' | 'moon' | 'calendar' | 'locate'
 
 const PATHS: Record<IconName, string> = {
+  locate: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM12 2v3M12 19v3M2 12h3M19 12h3',
   foot: 'M13 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM9 21l2-6-2-2 1-5 3 2 2 3M11 13l-3 1',
   bike: 'M5.5 18.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM18.5 18.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM12 18.5l-2-7h7M10.5 11.5 8 7H6M14 7h2',
   car: 'M5 16V11l2-5h10l2 5v5M3 16h18v3H3zM7 13h.01M17 13h.01',

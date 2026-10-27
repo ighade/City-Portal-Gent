@@ -137,13 +137,36 @@ export function LineBadge({ line, color }: { line: string; color: string }) {
   )
 }
 
-export function DotLabel({ label, color }: { label: string; color: string }) {
+/** Start (blauw) en einde (oranje): een label met het woord erin en een pijltje naar het punt. */
+export function DotLabel({ label }: { label: string; color?: string }) {
+  const isStart = label === 'Start'
+  const color = isStart ? '#2563eb' : '#c2410c'
   return (
-    <View style={{ alignItems: 'center' }}>
-      <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, backgroundColor: '#fff', marginBottom: 2 }}>
-        <Text style={{ color: '#111827', fontSize: 11, fontWeight: '600' }}>{label}</Text>
+    <View style={{ width: 48, height: 32, alignItems: 'center' }}>
+      <View
+        style={{
+          width: 44,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: '#fff',
+          borderWidth: 2,
+          borderColor: color,
+          overflow: 'hidden',
+        }}>
+        <Text allowFontScaling={false} numberOfLines={1} style={{ width: 40, height: 18, color, fontSize: 11, lineHeight: 18, fontWeight: '700', textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false }}>{isStart ? 'Start' : 'Eind'}</Text>
       </View>
-      <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: color, borderWidth: 3, borderColor: '#fff' }} />
+      <View
+        style={{
+          width: 0,
+          height: 0,
+          borderLeftWidth: 5,
+          borderRightWidth: 5,
+          borderTopWidth: 7,
+          borderLeftColor: 'transparent',
+          borderRightColor: 'transparent',
+          borderTopColor: color,
+        }}
+      />
     </View>
   )
 }

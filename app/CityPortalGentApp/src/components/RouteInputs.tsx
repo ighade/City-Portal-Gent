@@ -2,9 +2,11 @@
 import * as Location from 'expo-location'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Pressable, View } from 'react-native'
+import { Pressable, TextInput, View } from 'react-native'
+import type { TextInputProps } from 'react-native'
 
-import { Btn, Input, Label, Txt } from '@/components/ui'
+import { Icon } from '@/components/Icon'
+import { Txt } from '@/components/ui'
 import { Radius } from '@/constants/theme'
 import { usePalette } from '@/context/ThemeContext'
 import { api } from '@/lib/api'
@@ -15,8 +17,6 @@ export interface RoutePoint {
   lon: number
   label: string
 }
-
-type Pick = 'start' | 'end' | null
 
 /** Adresvoorstellen, alleen opgehaald door een toetsaanslag en niet door het kiezen van een voorstel. */
 function useSuggestions() {
@@ -64,14 +64,140 @@ function SuggestionList({ items, onPick }: { items: string[]; onPick: (label: st
   )
 }
 
+/** Invoerveld met het label als vast voorvoegsel binnen het kader. */
+function PrefixInput({ prefix, right, style, ...rest }: { prefix: string; right?: ReactNode } & TextInputProps) {
+  const p = usePalette()
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: p.borderStrong,
+        borderRadius: Radius.sm,
+        backgroundColor: p.surface,
+        minHeight: 44,
+        paddingHorizontal: 10,
+        gap: 8,
+      }}>
+      <Txt variant="smallMuted" style={{ fontWeight: '700', minWidth: 74 }}>{prefix}</Txt>
+      <TextInput
+        placeholderTextColor={p.muted}
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
+        {...rest}
+        style={[{ flex: 1, paddingVertical: 7, color: p.ink, fontSize: 14, minWidth: 0 }, style]}
+      />
+      {right}
+    </View>
+  )
+}
+
+const two = (n: number) => String(n).padStart(2, '0')
+
+/** Vertrekuur kiezen met uur- en minuutknoppen; leeg betekent "nu". */
+function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const p = usePalette()
+  const m = /^(\d{1,2}):(\d{2})$/.exec(value)
+  const base = () => {
+    if (m) return Number(m[1]) * 60 + Number(m[2])
+    const d = new Date()
+    return d.getHours() * 60 + d.getMinutes()
+  }
+  const shift = (delta: number) => {
+    const total = (((base() + delta) % 1440) + 1440) % 1440
+    onChange(`${two(Math.floor(total / 60))}:${two(total % 60)}`)
+  }
+  // Bij ingedrukt houden herhaalt de knop; de interval leest altijd de nieuwste shift.
+  const latestShift = useRef(shift)
+  latestShift.current = shift
+  const repeat = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+  const stopRepeat = () => {
+    clearInterval(repeat.current)
+    repeat.current = undefined
+  }
+  useEffect(() => stopRepeat, [])
+  const step = (label: string, delta: number) => {
+    // Minuten lopen bij vasthouden per 5, uren blijven per uur.
+    const hold = Math.abs(delta) === 1 ? delta * 5 : delta
+    return (
+      <Pressable
+        onPress={() => shift(delta)}
+        onLongPress={() => {
+          stopRepeat()
+          latestShift.current(hold)
+          repeat.current = setInterval(() => latestShift.current(hold), 225)
+        }}
+        delayLongPress={350}
+        onPressOut={stopRepeat}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        hitSlop={4}
+        style={{ width: 30, height: 30, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center', backgroundColor: p.brandSoft }}>
+        <Txt style={{ color: p.brandStrong, fontWeight: '700', fontSize: 17, lineHeight: 20 }}>{delta > 0 ? '+' : '−'}</Txt>
+      </Pressable>
+    )
+  }
+  // Zonder gekozen uur tonen we het huidige uur gedempt; elke stap kiest dan een vast uur.
+  const shown = m ? { h: two(Number(m[1])), min: m[2]! } : (() => {
+    const t = base()
+    return { h: two(Math.floor(t / 60) % 24), min: two(t % 60) }
+  })()
+  const part = (text: string) => (
+    <Txt style={{ fontSize: 17, fontWeight: '700', minWidth: 26, textAlign: 'center', color: value ? p.ink : p.muted }}>{text}</Txt>
+  )
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: p.borderStrong,
+        borderRadius: Radius.sm,
+        backgroundColor: p.surface,
+        paddingHorizontal: 10,
+        minHeight: 44,
+        gap: 8,
+      }}>
+      <Txt variant="smallMuted" style={{ fontWeight: '700', minWidth: 74 }}>Vertrek</Txt>
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+        {step('Uur eerder', -60)}
+        {part(shown.h)}
+        {step('Uur later', 60)}
+        <Txt style={{ fontSize: 17, fontWeight: '700', color: p.muted }}>:</Txt>
+        {step('Minuut eerder', -1)}
+        {part(shown.min)}
+        {step('Minuut later', 1)}
+      </View>
+      <Pressable
+        onPress={() => onChange('')}
+        accessibilityRole="button"
+        accessibilityState={{ selected: !value }}
+        accessibilityLabel="Vertrek nu"
+        hitSlop={6}
+        style={{
+          paddingVertical: 5,
+          paddingHorizontal: 10,
+          borderRadius: Radius.full,
+          borderWidth: 1,
+          borderColor: value ? p.borderStrong : p.brand,
+          backgroundColor: value ? p.surface : p.brandSoft,
+        }}>
+        <Txt variant="small" style={{ fontWeight: '700', color: value ? p.ink2 : p.brandStrong }}>Nu</Txt>
+      </Pressable>
+    </View>
+  )
+}
+
 /** Gedeelde invoer voor de gewone route en EZ Park: start, bestemming en vertrektijd. */
-export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon: number; n: number } | null) {
+export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon: number; n: number } | null, onSubmit?: () => void) {
+  const p = usePalette()
   const [start, setStart] = useState<RoutePoint | null>(null)
   const [startText, setStartText] = useState('')
   const [end, setEnd] = useState<RoutePoint | null>(null)
   const [endText, setEndText] = useState('')
   const [stops, setStops] = useState<TransitStop[]>([])
-  const [pick, setPick] = useState<Pick>(null)
   const [departTime, setDepartTime] = useState('')
   const [locating, setLocating] = useState(false)
   const [locateError, setLocateError] = useState<string | null>(null)
@@ -87,7 +213,13 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
       const perm = await Location.requestForegroundPermissionsAsync()
       if (perm.status !== 'granted') throw new Error('denied')
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-      setStart({ lat: pos.coords.latitude, lon: pos.coords.longitude, label: 'Mijn locatie' })
+      const { latitude, longitude } = pos.coords
+      // Een emulator geeft vaak een vaste locatie (Californië); daarmee is geen route naar Gent mogelijk.
+      if (Math.abs(latitude - 51.05) > 1.5 || Math.abs(longitude - 3.72) > 2.5) {
+        setLocateError('Je toestel-locatie ligt te ver van Gent om een route te berekenen; typ een startpunt of klik het op de kaart.')
+        return
+      }
+      setStart({ lat: latitude, lon: longitude, label: 'Mijn locatie' })
       setStartText('Mijn locatie')
     } catch {
       setLocateError('Je locatie is niet beschikbaar; klik je startpunt op de kaart.')
@@ -102,17 +234,16 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
 
   const clickN = mapClick?.n
   useEffect(() => {
-    if (!mapClick || !pick) return
+    if (!mapClick) return
     const point = { lat: mapClick.lat, lon: mapClick.lon, label: 'Gekozen op kaart' }
-    if (pick === 'start') {
+    if (!start && !startText.trim()) {
       setStart(point)
       setStartText(point.label)
     } else {
       setEnd(point)
       setEndText(point.label)
     }
-    setPick(null)
-    // Alleen een nieuwe klik (n) telt, niet een wijziging van `pick`.
+    // Alleen een nieuwe klik (n) telt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clickN])
 
@@ -168,7 +299,6 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
   const chooseEnd = useCallback((point: RoutePoint) => {
     setEnd(point)
     setEndText(point.label)
-    setPick(null)
     clearEnd()
   }, [clearEnd])
 
@@ -181,10 +311,26 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
   }
 
   const fields: ReactNode = (
-    <View style={{ gap: 12 }}>
-      <View style={{ gap: 6 }}>
-        <Label>Start</Label>
-        <Input value={startText} onChangeText={onStartText} placeholder="Adres of mijn locatie" />
+    <View style={{ gap: 4 }}>
+      <View>
+        <PrefixInput
+          prefix="Start"
+          value={startText}
+          onChangeText={onStartText}
+          placeholder="Adres of mijn locatie"
+          onSubmitEditing={onSubmit}
+          right={
+            <Pressable
+              onPress={() => void locate()}
+              disabled={locating}
+              accessibilityRole="button"
+              accessibilityLabel="Gebruik mijn locatie"
+              hitSlop={8}
+              style={{ padding: 6, borderRadius: Radius.full, backgroundColor: p.brandSoft, opacity: locating ? 0.5 : 1 }}>
+              <Icon name="locate" size={18} color={p.brandStrong} />
+            </Pressable>
+          }
+        />
         <SuggestionList
           items={startSuggestions}
           onPick={(label) => {
@@ -193,15 +339,10 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
             clearStart()
           }}
         />
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Btn label={locating ? '…' : 'Mijn locatie'} onPress={() => void locate()} disabled={locating} />
-          <Btn label="Op kaart" variant={pick === 'start' ? 'primary' : 'default'} onPress={() => setPick(pick === 'start' ? null : 'start')} />
-        </View>
       </View>
 
-      <View style={{ gap: 6 }}>
-        <Label>Bestemming</Label>
-        <Input value={endText} onChangeText={onEndText} placeholder="Adres, parking of halte" />
+      <View>
+        <PrefixInput prefix="Bestemming" value={endText} onChangeText={onEndText} placeholder="Adres, parking of halte" onSubmitEditing={onSubmit} />
         <SuggestionList
           items={endSuggestions}
           onPick={(label) => {
@@ -209,30 +350,16 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
             clearEnd()
           }}
         />
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Btn label="Op kaart" variant={pick === 'end' ? 'primary' : 'default'} onPress={() => setPick(pick === 'end' ? null : 'end')} />
-        </View>
-      </View>
-
-      <View style={{ gap: 6 }}>
-        <Label>Vertrek (vandaag)</Label>
-        <Input
-          value={departTime}
-          onChangeText={setDepartTime}
-          placeholder="UU:MM"
-          keyboardType="numbers-and-punctuation"
-          maxLength={5}
-          style={{ alignSelf: 'flex-start', minWidth: 110 }}
-        />
       </View>
     </View>
   )
 
-  const hint = pick
-    ? `Klik op de kaart om je ${pick === 'start' ? 'startpunt' : 'bestemming'} te kiezen.`
-    : null
+  const departField: ReactNode = <TimeSelect value={departTime} onChange={setDepartTime} />
+
+  const hint = null
 
   return {
+    departField,
     start,
     end,
     hasStart: start !== null || startText.trim() !== '',

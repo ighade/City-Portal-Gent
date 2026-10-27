@@ -1,8 +1,8 @@
 import { useLocalSearchParams } from 'expo-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Pressable, View } from 'react-native'
 
+import { BottomSheet } from '@/components/BottomSheet'
 import { useEzPark , LegBadge } from '@/components/EzParkPanel'
 import type { EzOverlay } from '@/components/EzParkPanel'
 import { Icon } from '@/components/Icon'
@@ -12,7 +12,7 @@ import type { MapEvent } from '@/components/ParkingMap'
 import { GarageRate, ManualRateInfo, StreetRate } from '@/components/RateInfo'
 import { useRouteInputs } from '@/components/RouteInputs'
 import type { RoutePoint } from '@/components/RouteInputs'
-import { Banner, Btn, Card, Fact, SwitchRow, Txt } from '@/components/ui'
+import { Banner, Card, Fact, SwitchRow, Txt } from '@/components/ui'
 import { Radius } from '@/constants/theme'
 import { useApp } from '@/context/AppContext'
 import { usePalette } from '@/context/ThemeContext'
@@ -38,7 +38,7 @@ const time = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.g
 function ModePicker({ value, onChange }: { value: Mode; onChange: (m: Mode) => void }) {
   const p = usePalette()
   return (
-    <View accessibilityRole="radiogroup" accessibilityLabel="Vervoermiddel" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12 }}>
+    <View accessibilityRole="radiogroup" accessibilityLabel="Vervoermiddel" style={{ flexDirection: 'row', gap: 6 }}>
       {MODES.map((m) => {
         const on = value === m.key
         return (
@@ -48,11 +48,13 @@ function ModePicker({ value, onChange }: { value: Mode; onChange: (m: Mode) => v
             accessibilityState={{ selected: on }}
             onPress={() => onChange(m.key)}
             style={{
+              flex: 1,
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 6,
+              justifyContent: 'center',
+              gap: 4,
               paddingVertical: 7,
-              paddingHorizontal: 12,
+              paddingHorizontal: 4,
               borderRadius: Radius.full,
               borderWidth: 1,
               borderColor: on ? p.brand : p.borderStrong,
@@ -69,10 +71,10 @@ function ModePicker({ value, onChange }: { value: Mode; onChange: (m: Mode) => v
 
 export function RouteScreen() {
   const p = usePalette()
-  const insets = useSafeAreaInsets()
-  const { height } = useWindowDimensions()
   const { parkings } = useApp()
   const params = useLocalSearchParams<{ destPlace?: string; destName?: string; n?: string }>()
+  const [containerH, setContainerH] = useState(0)
+  const [plannerBottom, setPlannerBottom] = useState(0)
   const [planning, setPlanning] = useState(false)
   const [showLez, setShowLez] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -80,6 +82,7 @@ export function RouteScreen() {
   const [transitRoute, setTransitRoute] = useState<TransitRouteResult | null>(null)
   const [mode, setMode] = useState<Mode>('foot')
   const [ezOn, setEzOn] = useState(false)
+  const [carOpen, setCarOpen] = useState(0)
   const [lezBlocked, setLezBlocked] = useState(false)
   const [ezOverlay, setEzOverlay] = useState<EzOverlay | null>(null)
   const [mapClick, setMapClick] = useState<{ lat: number; lon: number; n: number } | null>(null)
@@ -94,7 +97,8 @@ export function RouteScreen() {
   }, [carParkings, ezOverlay])
   const weekEvents = useWeekEvents()
   const friendsOnMap = useFriendsOnMap()
-  const inputs = useRouteInputs(carParkings, mapClick)
+  const submit = useRef<() => void>(() => undefined)
+  const inputs = useRouteInputs(carParkings, mapClick, () => submit.current())
   const { start, end } = inputs
 
   // Komt de bezoeker van een evenement, dan staat de bestemming al ingevuld.
@@ -144,6 +148,7 @@ export function RouteScreen() {
   )
 
   function changeMode(next: Mode) {
+    if (next === 'car' && mode !== 'car') setCarOpen((n) => n + 1)
     setMode(next)
     setRoute(null)
     setTransitRoute(null)
@@ -160,14 +165,14 @@ export function RouteScreen() {
   )
   const arriveAt = route ? new Date(departAt.getTime() + route.durationMinutes * 60000) : null
 
-  async function handlePlan(target?: RoutePoint) {
+  async function handlePlan(target?: RoutePoint, forMode: Mode = mode) {
     setPlanning(true)
     setError(null)
     setLezBlocked(false)
 
     try {
       const [from, dest] = await Promise.all([inputs.resolveStart(), target ?? inputs.resolveEnd()])
-      if (mode === 'transit') {
+      if (forMode === 'transit') {
         setRoute(null)
         setTransitRoute(null)
         setTransitRoute(await api.transit.route({ startLat: from.lat, startLon: from.lon, endLat: dest.lat, endLon: dest.lon }))
@@ -178,17 +183,45 @@ export function RouteScreen() {
         startLon: from.lon,
         endLat: dest.lat,
         endLon: dest.lon,
-        mode: API_MODE[mode],
-        checkLez: mode === 'car' && showLez,
+        mode: API_MODE[forMode],
+        checkLez: forMode === 'car' && showLez,
       })
       setRoute(result)
     } catch (err) {
-      setLezBlocked(mode === 'car' && err instanceof ApiError && err.code === 'lez')
+      setLezBlocked(forMode === 'car' && err instanceof ApiError && err.code === 'lez')
       setError(err instanceof Error ? err.message : 'De route kon niet worden berekend.')
     } finally {
       setPlanning(false)
     }
   }
+
+  // Kiezen van een vervoermiddel berekent meteen de route met dat vervoermiddel.
+  function selectMode(next: Mode) {
+    const useEz = next === 'car' && (next !== mode || ezOn)
+    changeMode(next)
+    if (!inputs.hasStart || !inputs.hasEnd) return
+    // Wisselen naar auto plant via het effect hieronder, zodat het met de nieuwe instellingen rekent.
+    if (next === 'car' && next !== mode) return
+    if (useEz) void ez.plan()
+    else void handlePlan(undefined, next)
+  }
+
+  // Wijzigen van LEZ of EZ Park in het auto-tabblad zoekt meteen opnieuw.
+  const firstRun = useRef(true)
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false
+      return
+    }
+    if (mode !== 'car' || !inputs.hasStart || !inputs.hasEnd) return
+    if (ezOn) void ez.plan()
+    else void handlePlan(undefined, 'car')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, ezOn, showLez])
+
+  useEffect(() => {
+    submit.current = () => selectMode(mode)
+  })
 
   function pickEvent(item: MapEvent) {
     const point = { lat: item.lat, lon: item.lon, label: item.event.name }
@@ -217,74 +250,57 @@ export function RouteScreen() {
     resolveStart: inputs.resolveStart,
     resolveEnd: inputs.resolveEnd,
     departInMinutes: inputs.departInMinutes,
-    fields: inputs.fields,
-    toggles,
     hint: inputs.hint,
     onOverlay: setEzOverlay,
     pick: ezPick,
   })
 
-  const mapHeight = Math.round(Math.max(260, height * 0.42))
-
   return (
-    <View style={{ flex: 1, backgroundColor: p.bg }}>
-      <ParkingMap
-        height={mapHeight}
-        parkings={ezOn ? mapParkings : []}
-        bluePins
-        showLez={showLez}
-        selected={null}
-        hoverInfo
-        events={weekEvents}
-        friends={friendsOnMap}
-        onEventPick={pickEvent}
-        onEzParkPick={(slug) => setEzPick({ slug, n: Date.now() })}
-        route={ezOn ? null : routeOverlay}
-        onMapClick={(lat, lon) => setMapClick({ lat, lon, n: Date.now() })}
-        ezpark={ezOn ? ezOverlay : (mode === 'transit' && transitOverlay) || markerOverlay}
-      />
+    <View style={{ flex: 1, backgroundColor: p.bg }} onLayout={(e) => setContainerH(e.nativeEvent.layout.height)}>
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+        <ParkingMap
+          height="100%"
+          parkings={ezOn ? mapParkings : []}
+          bluePins
+          showLez={showLez}
+          selected={null}
+          hoverInfo
+          events={weekEvents}
+          friends={friendsOnMap}
+          onEventPick={pickEvent}
+          eventSheetTop={plannerBottom + 8}
+          onEzParkPick={(slug) => setEzPick({ slug, n: Date.now() })}
+          route={ezOn ? null : routeOverlay}
+          onMapClick={(lat, lon) => setMapClick({ lat, lon, n: Date.now() })}
+          ezpark={ezOn ? ezOverlay : (mode === 'transit' && transitOverlay) || markerOverlay}
+        />
+      </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 32 + insets.bottom }}
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets>
-        <Card>
-          <Txt variant="h1" style={{ fontSize: 20 }}>Routeplanner</Txt>
-          <ModePicker value={mode} onChange={changeMode} />
-          {ezOn ? (
-            ez.controls
-          ) : (
-            <View style={{ gap: 14 }}>
-              {inputs.fields}
-              {toggles}
-              <Btn
-                variant="primary"
-                label={planning ? 'Route berekenen…' : 'Route berekenen'}
-                onPress={() => void handlePlan()}
-                disabled={planning || !inputs.hasStart || !inputs.hasEnd}
-              />
-              {inputs.hint && <Txt variant="note" style={{ marginTop: 0 }}>{inputs.hint}</Txt>}
-              {error && !lezBlocked && <Banner style={{ marginBottom: 0 }}>{error}</Banner>}
-              {lezBlocked && (
-                <Banner style={{ marginBottom: 0 }}>
-                  Deze route komt in de LEZ. Wil je EZ Park gebruiken: parkeer buiten de zone en ga verder te voet of met het OV?
-                  {'\n'}
-                  <Txt style={{ color: p.brand, fontWeight: '700' }} onPress={startEzPark}>Gebruik EZ Park</Txt>
-                </Banner>
-              )}
-            </View>
-          )}
-          {inputs.locateError && !start && <Banner style={{ marginTop: 16, marginBottom: 0 }}>{inputs.locateError}</Banner>}
-        </Card>
+      <View pointerEvents="box-none" style={{ paddingHorizontal: 12, paddingTop: 8 }} onLayout={(e) => setPlannerBottom(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
+        <Card style={{ marginBottom: 0, padding: 8 }}>{inputs.fields}</Card>
+      </View>
 
-        <Card>
-          <Txt variant="h2">Routeoverzicht</Txt>
+      <BottomSheet containerHeight={containerH} minHeight={132} initialHeight={230} topInset={plannerBottom + 12} expandKey={carOpen}>
+        <ModePicker value={mode} onChange={selectMode} />
+        {inputs.departField}
+        {toggles}
+        {inputs.locateError && !start && <Banner style={{ marginBottom: 0 }}>{inputs.locateError}</Banner>}
+        {error && !lezBlocked && <Banner style={{ marginBottom: 0 }}>{error}</Banner>}
+        {lezBlocked && (
+          <Banner style={{ marginBottom: 0 }}>
+            Deze route komt in de LEZ. Wil je EZ Park gebruiken: parkeer buiten de zone en ga verder te voet of met het OV?
+            {'\n'}
+            <Txt style={{ color: p.brand, fontWeight: '700' }} onPress={startEzPark}>Gebruik EZ Park</Txt>
+          </Banner>
+        )}
+        {ezOn && ez.controls}
+        <Txt variant="h2">Routeoverzicht</Txt>
+        <View>
           {ezOn ? (
             ez.overview
           ) : (
             <>
-              <View style={{ gap: 10, marginTop: 16 }}>
+              <View style={{ gap: 10 }}>
                 <Fact label="Start">{start?.label ?? '—'}</Fact>
                 <Fact label="Eind">{end?.label ?? '—'}</Fact>
                 <Fact label="Vervoer">{MODE_LABEL[mode]}</Fact>
@@ -331,8 +347,8 @@ export function RouteScreen() {
               {route?.destinationParking && <StreetRate info={route.destinationParking} arrival={arriveAt} />}
             </>
           )}
-        </Card>
-      </ScrollView>
+        </View>
+      </BottomSheet>
     </View>
   )
 }

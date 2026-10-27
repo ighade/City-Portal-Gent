@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router'
+import * as Location from 'expo-location'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Image, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import MapView, { Callout, Marker, Polygon, Polyline } from 'react-native-maps'
@@ -57,6 +58,8 @@ interface Props {
   events?: MapEvent[]
   friends?: Friend[]
   onEventPick?: (event: MapEvent) => void
+  /** Zet de evenementenkaarten bovenaan, deze afstand van de bovenkant, in plaats van onderaan. */
+  eventSheetTop?: number
   height?: number | string
 }
 
@@ -120,6 +123,7 @@ export function ParkingMap({
   onEzParkPick,
   events,
   onEventPick,
+  eventSheetTop,
   friends,
   height = '100%',
 }: Props) {
@@ -131,7 +135,32 @@ export function ParkingMap({
   const [region, setRegion] = useState<Region>(GENT_REGION)
   const [lez, setLez] = useState<MapPolygon[] | null>(null)
   const [sheet, setSheet] = useState<MapEvent[] | null>(null)
+  const markerPressAt = useRef(0)
+  const [userPos, setUserPos] = useState<{ lat: number; lon: number } | null>(null)
 
+  // Eigen locatie volgen (alleen met toestemming); buiten Gent tonen we niets.
+  useEffect(() => {
+    let sub: Location.LocationSubscription | null = null
+    let cancelled = false
+    void (async () => {
+      try {
+        const perm = await Location.requestForegroundPermissionsAsync()
+        if (!perm.granted || cancelled) return
+        sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, distanceInterval: 10 }, (pos) => {
+          const { latitude: lat, longitude: lon } = pos.coords
+          const inGent = lat >= GENT_BOUNDS[0][0] && lat <= GENT_BOUNDS[1][0] && lon >= GENT_BOUNDS[0][1] && lon <= GENT_BOUNDS[1][1]
+          setUserPos(inGent ? { lat, lon } : null)
+        })
+        if (cancelled) sub.remove()
+      } catch {
+        // zonder locatie blijft de kaart gewoon werken
+      }
+    })()
+    return () => {
+      cancelled = true
+      sub?.remove()
+    }
+  }, [])
   // De lage-emissiezone wordt één keer opgehaald en daarna alleen aan- of uitgezet.
   useEffect(() => {
     if (!showLez || lez) return
@@ -156,7 +185,7 @@ export function ParkingMap({
     }
   }, [])
 
-  const edge = { top: 60, right: 60, bottom: 60, left: 60 }
+  const edge = { top: 180, right: 60, bottom: 180, left: 60 }
 
   useEffect(() => {
     if (!route || !map.current) return
@@ -213,11 +242,22 @@ export function ParkingMap({
   // wat niet openbaar is, zodat de speld waar je wél terechtkunt bovenop ligt.
   const ordered = useMemo(() => [...parkings].sort((a, b) => Number(a.isPublic) - Number(b.isPublic)), [parkings])
 
-  const dot = (pt: { lat: number; lon: number }, color: string, label: string) => (
-    <Marker key={label} coordinate={{ latitude: pt.lat, longitude: pt.lon }} anchor={{ x: 0.5, y: 0.9 }} tracksViewChanges={false}>
-      <DotLabel label={label} color={color} />
-    </Marker>
-  )
+  // Valt de bestemming op een parking of evenement, dan is dat icoon al de aanduiding.
+  const onOtherIcon = (pt: { lat: number; lon: number }) => {
+    const near = (a: { lat: number; lon: number }) => Math.abs(a.lat - pt.lat) < 0.0003 && Math.abs(a.lon - pt.lon) < 0.0004
+    return parkings.some(near) || (events ?? []).some(near) || (ezpark?.parks ?? []).some(near)
+  }
+
+  // Valt de start op de eigen locatie, dan volstaat het blauwe locatiepunt.
+  const onUser = (pt: { lat: number; lon: number }) =>
+    !!userPos && Math.abs(userPos.lat - pt.lat) < 0.0003 && Math.abs(userPos.lon - pt.lon) < 0.0004
+
+  const dot = (pt: { lat: number; lon: number }, color: string, label: string) =>
+    (label !== 'Start' && onOtherIcon(pt)) || (label === 'Start' && onUser(pt)) ? null : (
+      <Marker key={label} coordinate={{ latitude: pt.lat, longitude: pt.lon }} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+        <DotLabel label={label} color={color} />
+      </Marker>
+    )
 
   return (
     <View style={[styles.box, { height: height as number, backgroundColor: p.surface3 }]} onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
@@ -229,9 +269,13 @@ export function ParkingMap({
         maxZoomLevel={18}
         userInterfaceStyle={p.scheme}
         showsCompass={false}
+        showsUserLocation={!!userPos}
+        showsMyLocationButton={false}
         onMapReady={onReady}
         onRegionChangeComplete={setRegion}
         onPress={(e) => {
+          // Sommige platforms sturen na een markerklik ook een kaartklik; die mag de kaart niet meteen sluiten.
+          if (Date.now() - markerPressAt.current < 400) return
           setSheet(null)
           onMapClick?.(e.nativeEvent.coordinate.latitude, e.nativeEvent.coordinate.longitude)
         }}>
@@ -243,7 +287,7 @@ export function ParkingMap({
         {route && (
           <Polyline
             coordinates={route.points.map((q) => ({ latitude: q.lat, longitude: q.lon }))}
-            strokeColor={route.mode === 'foot-walking' ? '#475569' : route.mode === 'cycling-regular' ? '#16a34a' : '#d94a4a'}
+            strokeColor={route.mode === 'foot-walking' ? '#2563eb' : route.mode === 'cycling-regular' ? '#16a34a' : '#d94a4a'}
             strokeWidth={route.mode === 'foot-walking' ? 4 : 5}
             lineDashPattern={route.mode === 'foot-walking' ? [2, 8] : undefined}
             lineCap="round"
@@ -283,7 +327,6 @@ export function ParkingMap({
               <PinMarker
                 key={`ez-${park.slug}`}
                 coordinate={{ latitude: park.lat, longitude: park.lon }}
-                title={park.name}
                 zIndex={1000}
                 anchor={{ x: 0.5, y: 0.5 }}
                 version={park.slug}
@@ -311,7 +354,7 @@ export function ParkingMap({
                 <Fragment key={`leg-${i}`}>
                   <Polyline
                     coordinates={coords}
-                    strokeColor={leg.mode === 'drive' ? '#d94a4a' : leg.mode === 'walk' ? '#475569' : transitColor}
+                    strokeColor={leg.mode === 'drive' ? '#d94a4a' : leg.mode === 'walk' ? '#2563eb' : transitColor}
                     strokeWidth={leg.mode === 'drive' ? 5 : leg.mode === 'walk' ? 4 : 6}
                     lineDashPattern={leg.mode === 'walk' ? [2, 8] : undefined}
                     lineCap="round"
@@ -327,15 +370,17 @@ export function ParkingMap({
           </>
         )}
 
-        {clusters.map((c) => (
+        {clusters.map((c, ci) => (
           <PinMarker
-            key={`ev-${c.items.map((i) => i.event.id).join('|')}`}
+            key={`ev-${ci}-${c.items.map((i) => i.event.id).join('|')}`}
             coordinate={{ latitude: c.lat, longitude: c.lon }}
             zIndex={500}
             anchor={{ x: 0.5, y: 0.5 }}
             version={c.items.length}
-            title={c.items.length > 1 ? `${c.items.length} evenementen` : c.items[0]!.event.name}
-            onPress={() => setSheet(c.items)}>
+            onPress={() => {
+              markerPressAt.current = Date.now()
+              setSheet(c.items)
+            }}>
             <EventPin count={c.items.length} />
           </PinMarker>
         ))}
@@ -344,15 +389,20 @@ export function ParkingMap({
       </MapView>
 
       {sheet && (
-        <View style={[styles.sheet, { backgroundColor: p.surface, borderColor: p.border }]}>
+        <View
+          style={[
+            styles.sheet,
+            { backgroundColor: p.surface, borderColor: p.border },
+            eventSheetTop != null && { top: eventSheetTop, bottom: undefined, maxHeight: Math.max(160, size.h - eventSheetTop - 150) },
+          ]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingTop: 8 }}>
             <Txt variant="smallMuted">{sheet.length === 1 ? '1 evenement' : `${sheet.length} evenementen`}</Txt>
             <Btn label="Sluiten" size="sm" variant="ghost" onPress={() => setSheet(null)} />
           </View>
-          <ScrollView contentContainerStyle={{ padding: 12, gap: 10 }}>
-            {sheet.map((item) => (
+          <ScrollView style={{ maxHeight: Math.max(160, size.h * 0.6 - 44) }} nestedScrollEnabled contentContainerStyle={{ padding: 12, gap: 10 }}>
+            {sheet.map((item, i) => (
               <MapEventCard
-                key={item.event.id}
+                key={`${item.event.id}-${i}`}
                 item={item}
                 onDetails={() => {
                   setSheet(null)
@@ -378,9 +428,9 @@ function MapEventCard({ item, onDetails, onRoute }: { item: MapEvent; onDetails:
   const [day, month] = start ? dayMonthParts(start) : ['', '']
   return (
     <View style={{ flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: p.border, borderRadius: Radius.md, overflow: 'hidden', backgroundColor: p.surface2 }}>
-      <Pressable onPress={onDetails} style={{ width: 84, backgroundColor: p.brandSoft, alignItems: 'center', justifyContent: 'center' }}>
+      <Pressable onPress={onDetails} style={{ width: 84, minHeight: 110, backgroundColor: p.brandSoft, alignItems: 'center', justifyContent: 'center' }}>
         {e.coverImageUrl ? (
-          <Image source={{ uri: e.coverImageUrl }} style={{ width: 84, height: '100%', minHeight: 84 }} />
+          <Image source={{ uri: e.coverImageUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         ) : (
           <Txt variant="h1" style={{ color: p.brandStrong }}>{e.name.slice(0, 1).toUpperCase()}</Txt>
         )}
@@ -414,6 +464,8 @@ const styles = StyleSheet.create({
     right: 8,
     bottom: 8,
     maxHeight: '60%',
+    zIndex: 10,
+    elevation: 10,
     borderRadius: Radius.md,
     borderWidth: 1,
   },
