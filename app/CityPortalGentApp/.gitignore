@@ -31,6 +31,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript
@@ -41,6 +42,3 @@ example
 # generated native folders
 /ios
 /android
-
-# Het project bewaart .env bewust (zie .env.example); de root-.gitignore negeert .env verder overal.
-!.env
