@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import type { StyleProp, TextInputProps, TextProps, TextStyle, ViewStyle } from 'react-native'
+import type { ScrollViewProps, StyleProp, TextInputProps, TextProps, TextStyle, ViewStyle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Radius } from '@/constants/theme'
@@ -285,7 +285,7 @@ export function PageHead({ title, subtitle, right }: { title: string; subtitle?:
 }
 
 /** Scrollbare pagina met de achtergrond en marges van het thema. */
-export function Screen({ children, bottomInset = 0, style }: { children: ReactNode; bottomInset?: number; style?: StyleProp<ViewStyle> }) {
+export function Screen({ children, bottomInset = 0, style, onScroll }: { children: ReactNode; bottomInset?: number; style?: StyleProp<ViewStyle>; onScroll?: ScrollViewProps['onScroll'] }) {
   const p = usePalette()
   const insets = useSafeAreaInsets()
   const contentStyle = useMemo(
@@ -296,6 +296,8 @@ export function Screen({ children, bottomInset = 0, style }: { children: ReactNo
     <ScrollView
       style={{ flex: 1, backgroundColor: p.bg }}
       contentContainerStyle={contentStyle}
+      onScroll={onScroll}
+      scrollEventThrottle={100}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets>
       {children}

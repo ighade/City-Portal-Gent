@@ -19,8 +19,8 @@ export function AppHeader() {
           <Text style={{ color: p.brandInk, fontWeight: '800', fontSize: 18 }}>P</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: p.ink, fontWeight: '700', fontSize: 15 }}>Parkeren in Gent</Text>
-          <Text style={{ color: p.muted, fontSize: 11.5 }} numberOfLines={1}>live bezetting uit de open data van de stad</Text>
+          <Text style={{ color: p.ink, fontWeight: '700', fontSize: 15 }}>City Portal Gent</Text>
+          <Text style={{ color: p.muted, fontSize: 11.5 }} numberOfLines={1}>search events en chose wich one to go.</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: stale ? p.warn : p.ok }} />

@@ -1,3 +1,4 @@
+
 import type { ReactNode } from 'react'
 import { View } from 'react-native'
 
@@ -9,7 +10,11 @@ import { nl } from '@/lib/format'
 import { openExternal } from '@/lib/links'
 
 function H2({ children }: { children: ReactNode }) {
-  return <Txt variant="h2" style={{ marginTop: 18, marginBottom: 6 }}>{children}</Txt>
+  return (
+    <Txt variant="h2" style={{ marginTop: 18, marginBottom: 6 }}>
+      {children}
+    </Txt>
+  )
 }
 
 function P({ children }: { children: ReactNode }) {
@@ -31,88 +36,184 @@ function Li({ children }: { children: ReactNode }) {
 
 function A({ href, children }: { href: string; children: ReactNode }) {
   const p = usePalette()
+
   return (
-    <Txt style={{ color: p.brand, textDecorationLine: 'underline' }} onPress={() => void openExternal(href)}>
+    <Txt
+      style={{ color: p.brand, textDecorationLine: 'underline' }}
+      onPress={() => void openExternal(href)}
+    >
       {children}
     </Txt>
   )
 }
 
 /**
- * Waar de cijfers vandaan komen en wat ze niet zijn. Een dashboard dat leunt op andermans
- * metingen hoort te zeggen welke metingen dat zijn, hoe oud ze mogen worden en waar ze ophouden.
+ * Toelichting bij de gegevensbronnen, de werking en de beperkingen
+ * van de informatie op dit dashboard.
  */
 export function OverScreen({ footer }: { footer?: ReactNode }) {
   const { meta, stats } = useApp()
 
   return (
     <Screen>
-      <PageHead title="Over Parkeren in Gent" subtitle="Wat er getoond wordt, waar het vandaan komt, en wat het niet is." />
+      <PageHead
+        title="Over Parkeren in Gent"
+        subtitle="Ontdek waar de gegevens vandaan komen en hoe ze worden gebruikt."
+      />
 
       <Card>
-        <H2>De bron</H2>
+        <H2>Parkeergegevens</H2>
         <P>
-          Alles op deze kaart komt van <A href="https://data.stad.gent">data.stad.gent</A>, het open dataportaal van Stad Gent. Vier lijsten:
-        </P>
-        <Li>
-          <B>Real time bezetting parkeergarages</B> — dertien parkings waarvan de stad om de vijf minuten meldt hoeveel plaatsen er vrij zijn.
-        </Li>
-        <Li>
-          <B>Locaties openbare parkings</B> — zesendertig plekken (zeventien parkings, negentien park-and-rides) met hun ligging en capaciteit, zonder bezetting.
-        </Li>
-        <Li>
-          <B>Real time bezetting fietsenstallingen</B>, in twee aparte datasets — de Graslei en het Stadskantoor, dat laatste met een openbare en een personeelsstalling.
-        </Li>
-        <Li>
-          <B>Lage emissie zone Gent</B> — de twee vlakken die samen de LEZ vormen. Die is met het vinkje boven de kaart aan en uit te zetten. Het is een grens, geen meting: ze wordt hooguit één keer per dag opgehaald.
-        </Li>
-        <P>
-          Bij die fietsenstallingen hoort een kanttekening: <B>de stad publiceert er geen coördinaten bij.</B> Zonder meer zouden ze nergens op de kaart staan. De plaatsen komen daarom uit een lijst die bij deze toepassing hoort, waarin bij elke coördinaat staat waar ze vandaan komt — het register van de stad zelf voor de Graslei, het Vlaamse adressenregister voor het Stadskantoor. Verschijnt er ooit wél een coördinaat in de open data, dan hoort die lijst te krimpen.
-        </P>
-        <P>
-          Alle vier worden hier elke {meta?.refreshMinutes ?? 5} minuten opgehaald en bewaard, zodat het verloop en het gemiddelde per weekdag en uur uitgerekend kunnen worden. Losse metingen blijven {meta?.retentionDays ?? 120} dagen staan.
-          {meta ? ` Er staan er nu ${nl(meta.measurementCount)}.` : ''}
+          De parkeergegevens zijn afkomstig van het open dataportaal van
+          Stad Gent, beschikbaar via{' '}
+          <A href="https://open.stad.gent">open.stad.gent</A>.
+          Deze gegevens vormen de basis voor de parkeerinformatie op de kaart.
         </P>
 
-        <H2>Wat het niet is</H2>
         <Li>
-          <B>Geen straatparkeren.</B> Hoeveel plaats er langs de weg is, meet niemand. Er bestaan datasets van parkeerautomaten en tariefzones, maar die zeggen waar je moet betalen, niet of er plaats is. Een geschat percentage zou hier een verzonnen getal zijn.
+          <B>Parkeerbezetting.</B> Waar realtimegegevens beschikbaar zijn,
+          wordt de actuele bezetting van parkings weergegeven.
         </Li>
         <Li>
-          <B>Geen fietsnietjes.</B> De stad kent ruim zevenduizend fietsbeugels op straat, met hun ligging. Van geen enkele wordt geteld of er een fiets in staat, dus zeggen ze niets over plaats. Alleen de drie gemeten stallingen staan hier.
+          <B>Locaties en capaciteit.</B> Parkings en park-and-rides worden
+          op de kaart geplaatst op basis van hun locatiegegevens en, waar
+          beschikbaar, hun capaciteit.
         </Li>
         <Li>
-          <B>Geen voorspelling.</B> &quot;Hoe druk is het hier normaal&quot; is een gemiddelde van wat er gemeten is, niet wat er straks zal zijn. Een evenement of een wegomlegging staat er niet in.
-        </Li>
-        <Li>
-          <B>Niet altijd volledig.</B> Valt de bron weg, dan blijft de laatste stand staan met de vermelding hoe oud die is. Een meting ouder dan een kwartier wordt als achterstallig gemarkeerd.
+          <B>Parkeerprijzen.</B> De parkeerprijzen worden opgehaald uit de
+          beschikbare gegevensbronnen. Prijzen die niet automatisch kunnen
+          worden opgehaald, kunnen handmatig worden toegevoegd of aangepast
+          via het beheerdersaccount.
         </Li>
 
-        <H2>Waar de cijfers elkaar tegenspreken</H2>
         <P>
-          De twee lijsten van de stad noemen dezelfde parking soms anders (&quot;Dok Noord&quot; tegenover &quot;Dok noord&quot;) en geven verschillende capaciteiten: voor het Sint-Pietersplein 708 in de catalogus en 700 in de meting. Hier telt de meting, want die telt de vakken die de sensoren zien. Waar een meting zichzelf tegenspreekt — meer vrije plaatsen dan plaatsen — staat het aantal vrije plaatsen er wel, maar geen percentage.
+          Niet elke parking beschikt over dezelfde hoeveelheid informatie.
+          De beschikbaarheid van realtimebezetting, capaciteit en
+          parkeerprijzen hangt af van de gegevens die voor die parking
+          beschikbaar zijn.
+        </P>
+
+        <H2>Routeplanning</H2>
+        <P>
+          Voor het berekenen van routes maakt deze toepassing gebruik van{' '}
+          <A href="https://openrouteservice.org/">
+            OpenRouteService
+          </A>.
+          Deze dienst wordt gebruikt om routes te bepalen tussen locaties.
+          De voorgestelde route kan verschillen naargelang de gekozen
+          vervoerswijze en de beschikbare routegegevens.
+        </P>
+
+        <H2>Openbaar vervoer</H2>
+        <P>
+          De gegevens voor het openbaar vervoer van De Lijn worden
+          ingelezen via het beschikbare GTFS-bestand:
+          {' '}
+          <A href="https://gtfs.flatturtle.cloud/delijn/_latest/delijn-gtfs">
+            De Lijn GTFS-feed
+          </A>.
         </P>
         <P>
-          &quot;The Loop&quot; staat in de realtime-lijst als één parking van 2490 plaatsen en in de catalogus als vier deelparkings van samen 2931. Dat is een optelsom, geen parking, dus staan ze hier allebei: de gemeten optelsom én de vier plekken met hun capaciteit.
+          GTFS is een standaardformaat voor openbaarvervoergegevens.
+          Het bevat onder meer informatie over lijnen, haltes en
+          dienstregelingen. De weergegeven informatie is afhankelijk
+          van de inhoud en actualiteit van de aangeleverde feed.
         </P>
+
+        <H2>Evenementen</H2>
+        <P>
+          Evenementen worden verzameld met behulp van SocialFetch.
+          Daarnaast kunnen evenementen ook handmatig worden toegevoegd
+          via het beheerdersaccount. Zo kunnen evenementen worden opgenomen
+          wanneer ze niet automatisch worden gevonden of wanneer
+          aanvullende informatie nodig is.
+        </P>
+        <P>
+          De volledigheid en actualiteit van de evenementenkalender
+          zijn afhankelijk van de beschikbare brongegevens en eventuele
+          handmatige aanvullingen.
+        </P>
+
+        <H2>Wat je moet weten</H2>
+        <Li>
+          <B>Niet alle gegevens zijn realtime.</B> Parkeerbezetting,
+          parkeerprijzen, routegegevens, openbaar vervoer en evenementen
+          kunnen elk een andere bron en actualisatiefrequentie hebben.
+        </Li>
+        <Li>
+          <B>Geen garantie op beschikbaarheid.</B> Een weergegeven aantal
+          vrije parkeerplaatsen kan veranderen voordat je aankomt.
+        </Li>
+        <Li>
+          <B>Prijzen kunnen ontbreken.</B> Wanneer een prijs niet
+          automatisch beschikbaar is, kan deze handmatig door een
+          beheerder worden ingevoerd. Controleer bij twijfel de officiële
+          informatie van de parking.
+        </Li>
+        <Li>
+          <B>Evenementen zijn niet noodzakelijk volledig.</B> SocialFetch
+          verzamelt beschikbare informatie, maar niet elk evenement wordt
+          automatisch gevonden. Handmatige invoer kan dit aanvullen.
+        </Li>
+        <Li>
+          <B>Externe bronnen kunnen wijzigen.</B> De kwaliteit van de
+          informatie is mede afhankelijk van de beschikbaarheid en
+          betrouwbaarheid van de gebruikte diensten.
+        </Li>
 
         <H2>De gegevens zelf</H2>
         <P>
-          Alles wat deze kaart toont, is ook rechtstreeks op te halen — als <A href={`${API_URL}/api/parkings`}>JSON</A> of als <A href={`${API_URL}/api/geojson`}>GeoJSON</A>, dat laatste te openen in QGIS, uMap of een ander dashboard. Het is open data; dan hoort ze ook weer open naar buiten te gaan.
+          De parkeerinformatie die deze toepassing via haar API aanbiedt,
+          kan ook rechtstreeks worden opgevraagd als{' '}
+          <A href={`${API_URL}/api/parkings`}>JSON</A> of als{' '}
+          <A href={`${API_URL}/api/geojson`}>GeoJSON</A>.
+          GeoJSON kan onder meer worden gebruikt in GIS-software zoals
+          QGIS of in andere kaarttoepassingen.
+        </P>
+        <P>
+          De informatie op deze website is samengesteld uit verschillende
+          gegevensbronnen. Voor de oorspronkelijke gegevens blijven de
+          voorwaarden en gebruiksrechten van de respectieve aanbieders
+          van toepassing.
         </P>
 
-        <H2>Herkomst</H2>
+        <H2>Over dit project</H2>
         <P>
-          Dit dashboard begon als de graduaatsproef van Asilhan Tavukcu (HoGent, maart 2025) en is daarna herbouwd op de infrastructuur van deze server.
+          Deze toepassing werd ontwikkeld als graduaatsproef door
+          <B> Maarten Ighade</B>. Het project brengt informatie over
+          parkeren, parkeerprijzen, routeplanning, openbaar vervoer en
+          evenementen samen op één plaats, met als doel bezoekers en
+          inwoners te helpen bij hun verplaatsingen in Gent.
         </P>
 
         {stats && (
           <Txt variant="smallMuted">
-            Nu: {stats.parkings} parkings, waarvan {stats.withLiveData} met een meting
+            Momenteel: {stats.parkings} parkings, waarvan{' '}
+            {stats.withLiveData} met realtimegegevens
             {meta?.lastSyncUtc
-              ? ` · laatste ophaalronde ${new Date(meta.lastSyncUtc).toLocaleString('nl-BE')}${meta.lastSyncOk ? '' : ' (mislukt)'}`
+              ? ` · Laatste synchronisatie: ${new Date(
+                  meta.lastSyncUtc,
+                ).toLocaleString('nl-BE')}${
+                  meta.lastSyncOk ? '' : ' (mislukt)'
+                }`
               : ''}
             .
+          </Txt>
+        )}
+
+        {meta && (
+          <Txt variant="smallMuted" style={{ marginTop: 6 }}>
+            De gegevens worden volgens de ingestelde synchronisatie
+            opgehaald. De frequentie kan verschillen per gegevensbron.
+            {` De parkeerdata wordt standaard elke ${
+              meta.refreshMinutes ?? 5
+            } minuten bijgewerkt.`}
+            {` Meetgegevens worden ${
+              meta.retentionDays ?? 120
+            } dagen bewaard.`}
+            {meta.measurementCount != null
+              ? ` Er zijn momenteel ${nl(meta.measurementCount)} metingen opgeslagen.`
+              : ''}
           </Txt>
         )}
       </Card>

@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { View } from 'react-native'
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 
 import { EventCard } from '@/components/EventCard'
 import { Btn, Empty, Input, Loading, PageHead, Screen } from '@/components/ui'
 import { api } from '@/lib/api'
 import type { GentEvent } from '@/lib/types'
+
+const PAGE_SIZE = 10
 
 type Filter = 'all' | 'week' | 'free'
 
@@ -16,6 +19,7 @@ export function EventsScreen() {
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [count, setCount] = useState(PAGE_SIZE)
 
   useEffect(() => {
     let cancelled = false
@@ -41,8 +45,19 @@ export function EventsScreen() {
     })
   }, [events, query, filter])
 
+  useEffect(() => { setCount(PAGE_SIZE) }, [query, filter])
+
+  const shown = visible.slice(0, count)
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 200) {
+      setCount((c) => (c < visible.length ? c + PAGE_SIZE : c))
+    }
+  }
+
   return (
-    <Screen>
+    <Screen onScroll={onScroll}>
       <PageHead
         title="Evenementen in Gent"
         subtitle="Wat er binnenkort te doen is. Kom je met de wagen? Check de bezetting van de parkings op de kaart."
@@ -63,7 +78,7 @@ export function EventsScreen() {
       ) : visible.length === 0 ? (
         <Empty>Geen evenementen gevonden.</Empty>
       ) : (
-        visible.map((e) => <EventCard key={e.id} event={e} />)
+        shown.map((e) => <EventCard key={e.id} event={e} />)
       )}
     </Screen>
   )

@@ -13,8 +13,8 @@ export function Shell() {
               P
             </span>
             <span>
-              Parkeren in Gent
-              <small>live bezetting uit de open data van de stad</small>
+              City Portal Gent
+              <small>search events en chose wich one to go.</small>
             </span>
           </NavLink>
           <nav className="nav">
