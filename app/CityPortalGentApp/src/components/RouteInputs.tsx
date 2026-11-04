@@ -191,7 +191,12 @@ function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) 
 }
 
 /** Gedeelde invoer voor de gewone route en EZ Park: start, bestemming en vertrektijd. */
-export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon: number; n: number } | null, onSubmit?: () => void) {
+export function useRouteInputs(
+  parkings: Parking[],
+  mapClick: { lat: number; lon: number; n: number } | null,
+  onSubmit?: () => void,
+  onEndSelected?: (target: RoutePoint | string) => void,
+) {
   const p = usePalette()
   const [start, setStart] = useState<RoutePoint | null>(null)
   const [startText, setStartText] = useState('')
@@ -242,6 +247,7 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
     } else {
       setEnd(point)
       setEndText(point.label)
+      onEndSelected?.(point)
     }
     // Alleen een nieuwe klik (n) telt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -266,10 +272,12 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
     suggestStart(value)
   }
 
-  function applyEndText(value: string) {
+  function applyEndText(value: string): RoutePoint | null {
     setEndText(value)
     const place = places.find((p) => sameLabel(p.name, value))
-    setEnd(place ? { lat: place.lat, lon: place.lon, label: place.name } : null)
+    const point = place ? { lat: place.lat, lon: place.lon, label: place.name } : null
+    setEnd(point)
+    return point
   }
 
   function onEndText(value: string) {
@@ -296,11 +304,12 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
     return hit
   }
 
-  const chooseEnd = useCallback((point: RoutePoint) => {
+  const chooseEnd = useCallback((point: RoutePoint, notify = true) => {
     setEnd(point)
     setEndText(point.label)
     clearEnd()
-  }, [clearEnd])
+    if (notify) onEndSelected?.(point)
+  }, [clearEnd, onEndSelected])
 
   function departInMinutes(): number {
     const m = /^(\d{1,2}):(\d{2})$/.exec(departTime.trim())
@@ -346,8 +355,9 @@ export function useRouteInputs(parkings: Parking[], mapClick: { lat: number; lon
         <SuggestionList
           items={endSuggestions}
           onPick={(label) => {
-            applyEndText(label)
+            const point = applyEndText(label)
             clearEnd()
+            onEndSelected?.(point ?? label)
           }}
         />
       </View>

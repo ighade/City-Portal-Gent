@@ -443,6 +443,23 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
 .admin-checks { display: flex; flex-wrap: wrap; gap: 16px; margin: 14px 0; }
 .admin-checks label { display: flex; align-items: center; gap: 6px; }
 .admin-login { width: min(100%, 440px); margin: 48px auto; }
+.admin-nav { display: flex; gap: 4px; margin-top: 10px; flex-wrap: wrap; }
+.admin-nav a { padding: 6px 12px; border-radius: var(--r-sm); color: var(--ink-2); font-weight: 500; }
+.admin-nav a:hover { background: var(--surface-3); text-decoration: none; }
+.admin-nav a.active { background: var(--brand-soft); color: var(--brand-strong); }
+.admin-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+.admin-warning { border-color: color-mix(in srgb, var(--crit) 40%, transparent); }
+.admin-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.admin-list > li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.admin-scroll { max-height: 280px; overflow-y: auto; }
+.admin-run { display: block !important; padding: 0 !important; }
+.admin-run-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center; width: 100%; padding: 6px 0; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.admin-run-detail { padding: 0 0 8px; }
+.admin-zones { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.admin-zone { border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px; display: grid; gap: 6px; }
+.admin-zone-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
+.admin-parking { display: block !important; }
+.admin-parking-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .admin-login h1 { margin-bottom: 6px; }
 .admin-login > p { margin-bottom: 18px; }
 .admin-login form { display: grid; gap: 14px; }

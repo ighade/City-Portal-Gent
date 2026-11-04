@@ -22,6 +22,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<FriendLink> FriendLinks => Set<FriendLink>();
     public DbSet<FriendInterest> FriendInterests => Set<FriendInterest>();
     public DbSet<FriendSession> FriendSessions => Set<FriendSession>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<CityParkingRate> CityParkingRates => Set<CityParkingRate>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -180,6 +182,22 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasKey(x => x.TokenHash);
             e.Property(x => x.TokenHash).HasMaxLength(64);
             e.HasIndex(x => x.UserId);
+        });
+
+        b.Entity<CityParkingRate>(e =>
+        {
+            e.HasKey(x => x.Key);
+            e.Property(x => x.Key).HasMaxLength(80);
+            e.Property(x => x.Name).HasMaxLength(120);
+        });
+
+        b.Entity<AuditLog>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Actor).HasMaxLength(200);
+            e.Property(x => x.Action).HasMaxLength(60);
+            e.Property(x => x.Target).HasMaxLength(300);
+            e.HasIndex(x => x.AtUtc);
         });
 
         b.Entity<TransitShapePointEntity>(e =>

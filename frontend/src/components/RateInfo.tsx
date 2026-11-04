@@ -151,12 +151,19 @@ export function StreetRate({ info, arrival }: { info: StreetParking; arrival: Da
   )
 }
 
+const periodText = (p: ParkingRate['periods'][number]) =>
+  `${p.isMaximum ? 'Max. ' : ''}${euro(p.hourlyEur)} / uur${p.dayMaxEur ? ` · ${euro(p.dayMaxEur)} / 24 u` : ''}${p.extra ? ` · ${p.extra}` : ''}`
+
+/** Het tarief van dit moment, zoals "Max. € 1,8 / uur · € 12,8 / 24 u". */
+export function activeRateText(rate: ParkingRate): string {
+  return periodText(rate.periods.find((p) => p.key === rate.activeKey) ?? rate.periods[0])
+}
+
 export function GarageRate({ rate }: { rate?: ParkingRate }) {
   if (!rate) return <div className="small muted" style={{ marginTop: 8 }}>Tarief: zie de website van de uitbater</div>
 
   const active = rate.periods.find((p) => p.key === rate.activeKey) ?? rate.periods[0]
-  const text = (p: ParkingRate['periods'][number]) =>
-    `${p.isMaximum ? 'Max. ' : ''}${euro(p.hourlyEur)} / uur${p.dayMaxEur ? ` · ${euro(p.dayMaxEur)} / 24 u` : ''}${p.extra ? ` · ${p.extra}` : ''}`
+  const text = periodText
 
   return (
     <details style={{ marginTop: 8 }}>

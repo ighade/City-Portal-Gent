@@ -188,6 +188,8 @@ export interface AdminParking {
   longitude: number
   isManual: boolean
   rate?: ManualParkingRate | null
+  /** Het vaste stadstarief uit de tabel van Stad Gent, los van een handmatig tarief. */
+  cityRate?: ParkingRate | null
 }
 
 export interface StreetTariffAdmin {
@@ -409,4 +411,25 @@ export interface FriendsOverview {
   events: FriendEvent[]
   incoming: FriendPending[]
   outgoing: FriendPending[]
+}
+
+export interface AdminUser {
+  id: string
+  username: string
+  email: string
+  createdAtUtc: string
+  isSuspended: boolean
+}
+
+export interface AuditEntry {
+  atUtc: string
+  actor: string
+  action: string
+  target: string
+}
+
+export interface StaleParking {
+  slug: string
+  name: string
+  lastMeasuredUtc: string
 }

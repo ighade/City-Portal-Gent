@@ -56,6 +56,7 @@ public sealed class EzParkPlanner(
     RoutePlanner routes,
     TransitService transit,
     LowEmissionZone lez,
+    CityRates cityRates,
     ILogger<EzParkPlanner> log)
 {
     public const int ParkMinutes = 5;
@@ -181,7 +182,7 @@ public sealed class EzParkPlanner(
             p.Status is { IsPlausible: true } ? p.Status.AvailableSpaces : null, p.Status?.TotalCapacity ?? p.Capacity,
             drive.DurationMinutes, drive.DistanceKm, ParkMinutes,
             variants.ToArray(),
-            ParkingRates.For(p.Slug, parked),
+            cityRates.For(p.Slug, parked),
             p.ManualRate?.ToDto());
     }
 

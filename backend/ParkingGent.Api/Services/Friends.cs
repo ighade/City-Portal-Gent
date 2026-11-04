@@ -116,6 +116,7 @@ public sealed partial class Friends(AppDbContext db, LoginThrottle throttle)
             return (null, "Gebruikersnaam of wachtwoord klopt niet.");
         }
         throttle.Reset(key);
+        if (user.IsSuspended) return (null, "Dit account is geschorst.");
         return (user, null);
     }
 
@@ -142,6 +143,7 @@ public sealed partial class Friends(AppDbContext db, LoginThrottle throttle)
         return await db.FriendSessions
             .Where(s => s.TokenHash == hash && s.ExpiresAtUtc > now)
             .Join(db.FriendUsers, s => s.UserId, u => u.Id, (_, u) => u)
+            .Where(u => !u.IsSuspended)
             .FirstOrDefaultAsync(ct);
     }
 

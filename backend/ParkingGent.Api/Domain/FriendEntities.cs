@@ -18,6 +18,8 @@ public class FriendUser
     /// <summary>Het laatste moment waarop de locatie doorgegeven werd; daaruit volgt "x minuten geleden".</summary>
     public DateTime? LocationAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; }
+    /// <summary>Door een beheerder geschorst: aanmelden en bestaande sessies zijn geblokkeerd.</summary>
+    public bool IsSuspended { get; set; }
 }
 
 /// <summary>Een vriendschapsverzoek; pas na het aanvaarden is het een vriendschap (in beide richtingen).</summary>

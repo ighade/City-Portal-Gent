@@ -27,6 +27,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public StubHandler Ors { get; } = new();
     public StubHandler Social { get; } = new();
     public StubHandler Transit { get; } = new();
+    public StubHandler CityPage { get; } = new();
 
     protected virtual string EnvironmentName => "Testing";
 
@@ -75,6 +76,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddHttpClient<GentOpenData>().ConfigurePrimaryHttpMessageHandler(() => new ForwardingHandler(Gent));
             services.AddHttpClient<RoutePlanner>().ConfigurePrimaryHttpMessageHandler(() => new ForwardingHandler(Ors));
             services.AddHttpClient<EventDescriptions>().ConfigurePrimaryHttpMessageHandler(() => new ForwardingHandler(Social));
+            services.AddHttpClient<CityRateSync>().ConfigurePrimaryHttpMessageHandler(() => new ForwardingHandler(CityPage));
             services.AddHttpClient<TransitService>().ConfigurePrimaryHttpMessageHandler(() => new ForwardingHandler(Transit));
         });
     }

@@ -98,7 +98,8 @@ export function RouteScreen() {
   const weekEvents = useWeekEvents()
   const friendsOnMap = useFriendsOnMap()
   const submit = useRef<() => void>(() => undefined)
-  const inputs = useRouteInputs(carParkings, mapClick, () => submit.current())
+  const endSelection = useRef<(target: RoutePoint | string) => void>(() => undefined)
+  const inputs = useRouteInputs(carParkings, mapClick, () => submit.current(), (target) => endSelection.current(target))
   const { start, end } = inputs
 
   // Komt de bezoeker van een evenement, dan staat de bestemming al ingevuld.
@@ -165,13 +166,17 @@ export function RouteScreen() {
   )
   const arriveAt = route ? new Date(departAt.getTime() + route.durationMinutes * 60000) : null
 
-  async function handlePlan(target?: RoutePoint, forMode: Mode = mode) {
+  async function handlePlan(target?: RoutePoint | string, forMode: Mode = mode) {
     setPlanning(true)
     setError(null)
     setLezBlocked(false)
 
     try {
-      const [from, dest] = await Promise.all([inputs.resolveStart(), target ?? inputs.resolveEnd()])
+      const [from, dest] = await Promise.all([
+        inputs.resolveStart(),
+        typeof target === 'string' ? api.geocode(target) : target ?? inputs.resolveEnd(),
+      ])
+      if (typeof target === 'string') inputs.chooseEnd(dest, false)
       if (forMode === 'transit') {
         setRoute(null)
         setTransitRoute(null)
@@ -221,12 +226,14 @@ export function RouteScreen() {
 
   useEffect(() => {
     submit.current = () => selectMode(mode)
+    endSelection.current = (target) => {
+      if (!ezOn && inputs.hasStart) void handlePlan(target)
+    }
   })
 
   function pickEvent(item: MapEvent) {
     const point = { lat: item.lat, lon: item.lon, label: item.event.name }
     inputs.chooseEnd(point)
-    if (!ezOn && inputs.hasStart) void handlePlan(point)
   }
 
   function startEzPark() {

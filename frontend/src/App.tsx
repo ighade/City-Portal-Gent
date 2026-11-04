@@ -1,7 +1,11 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Shell } from './components/Shell'
 import { useApp } from './context/AppContext'
-import { Beheer } from './pages/Beheer'
+import { AdminLayout } from './pages/AdminLayout'
+import { AdminDashboard } from './pages/AdminDashboard'
+import { AdminPrices } from './pages/AdminPrices'
+import { AdminUsers } from './pages/AdminUsers'
+import { EventManagement } from './pages/AdminEvents'
 import { AdminLogin } from './pages/AdminLogin'
 import { Events } from './pages/Events'
 import { EventDetail } from './pages/EventDetail'
@@ -26,8 +30,13 @@ export default function App() {
             rechtstreekse link naar /beheer terug voordat de controle binnen is. */}
         <Route
           path="beheer"
-          element={!adminChecked ? <div className="empty">Even geduld…</div> : isAdmin ? <Beheer /> : <AdminLogin />}
-        />
+          element={!adminChecked ? <div className="empty">Even geduld…</div> : isAdmin ? <AdminLayout /> : <AdminLogin />}
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="tarieven" element={<AdminPrices />} />
+          <Route path="gebruikers" element={<AdminUsers />} />
+          <Route path="events" element={<EventManagement />} />
+        </Route>
         <Route path="*" element={<Navigate to="/events" replace />} />
       </Route>
     </Routes>

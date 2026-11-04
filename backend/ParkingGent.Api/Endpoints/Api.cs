@@ -75,6 +75,104 @@ public static class Api
         admin.MapGet("/events", AdminEvents);
         admin.MapPost("/events", AddManualEvent);
         admin.MapDelete("/events/{id}", DeleteManualEvent);
+        admin.MapGet("/users", AdminUsers);
+        admin.MapPost("/users/{id:guid}/suspend", SuspendUser);
+        admin.MapPost("/users/{id:guid}/unsuspend", UnsuspendUser);
+        admin.MapDelete("/users/{id:guid}", DeleteUser);
+        admin.MapPost("/city-rates/sync", SyncCityRates);
+        admin.MapGet("/audit", AuditEntries);
+        admin.MapGet("/stale", StaleParkings);
+    }
+
+    private static void Audit(AppDbContext db, HttpContext ctx, string action, string target)
+        => db.AuditLogs.Add(new AuditLog
+        {
+            AtUtc = DateTime.UtcNow,
+            Actor = ((Caller)ctx.Items["caller"]!).Email,
+            Action = action,
+            Target = target.Length > 300 ? target[..300] : target,
+        });
+
+    private static async Task<IResult> AdminUsers(AppDbContext db, string? q, CancellationToken ct)
+    {
+        var query = db.FriendUsers.AsNoTracking();
+        var term = q?.Trim().ToLower();
+        if (!string.IsNullOrEmpty(term))
+            query = query.Where(u => u.Username.ToLower().Contains(term) || u.Email.ToLower().Contains(term));
+        var rows = await query
+            .OrderBy(u => u.Username)
+            .Take(200)
+            .Select(u => new AdminUserDto(u.Id, u.Username, u.Email, u.CreatedAtUtc, u.IsSuspended))
+            .ToListAsync(ct);
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> SuspendUser(Guid id, HttpContext ctx, AppDbContext db, CancellationToken ct)
+    {
+        var user = await db.FriendUsers.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null) return Results.NotFound();
+        user.IsSuspended = true;
+        db.FriendSessions.RemoveRange(await db.FriendSessions.Where(s => s.UserId == id).ToListAsync(ct));
+        Audit(db, ctx, "gebruiker-geschorst", user.Username);
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> UnsuspendUser(Guid id, HttpContext ctx, AppDbContext db, CancellationToken ct)
+    {
+        var user = await db.FriendUsers.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null) return Results.NotFound();
+        user.IsSuspended = false;
+        Audit(db, ctx, "gebruiker-heractiveerd", user.Username);
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> DeleteUser(Guid id, HttpContext ctx, AppDbContext db, CancellationToken ct)
+    {
+        var user = await db.FriendUsers.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null) return Results.NotFound();
+        db.FriendSessions.RemoveRange(await db.FriendSessions.Where(s => s.UserId == id).ToListAsync(ct));
+        db.FriendLinks.RemoveRange(await db.FriendLinks.Where(l => l.RequesterId == id || l.AddresseeId == id).ToListAsync(ct));
+        db.FriendInterests.RemoveRange(await db.FriendInterests.Where(i => i.UserId == id).ToListAsync(ct));
+        db.FriendUsers.Remove(user);
+        Audit(db, ctx, "gebruiker-verwijderd", user.Username);
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> SyncCityRates(HttpContext ctx, CityRateSync sync, AppDbContext db, CancellationToken ct)
+    {
+        var result = await sync.RunAsync(ct);
+        if (!result.Ok) return Results.Json(new { error = result.Message }, statusCode: StatusCodes.Status502BadGateway);
+        Audit(db, ctx, "stadstarieven-gesynchroniseerd", $"{result.Changed} gewijzigd van {result.Parsed}");
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> AuditEntries(AppDbContext db, int? take, CancellationToken ct)
+        => Results.Ok(await db.AuditLogs.AsNoTracking()
+            .OrderByDescending(a => a.AtUtc)
+            .Take(Math.Clamp(take ?? 50, 1, 500))
+            .Select(a => new AuditEntryDto(a.AtUtc, a.Actor, a.Action, a.Target))
+            .ToListAsync(ct));
+
+    /// <summary>Parkings met metingen waarvan de laatste ouder is dan het gevraagde aantal minuten.</summary>
+    private static async Task<IResult> StaleParkings(AppDbContext db, int? minutes, CancellationToken ct)
+    {
+        var limit = TimeSpan.FromMinutes(Math.Clamp(minutes ?? 30, 5, 10080));
+        var cutoff = DateTime.UtcNow - limit;
+        var rows = await db.Parkings.AsNoTracking()
+            .Select(p => new
+            {
+                p.Slug,
+                p.Name,
+                Last = db.Measurements.Where(m => m.ParkingId == p.Id).Max(m => (DateTime?)m.MeasuredAtUtc),
+            })
+            .Where(x => x.Last != null && x.Last < cutoff)
+            .OrderBy(x => x.Last)
+            .ToListAsync(ct);
+        return Results.Ok(rows.Select(x => new StaleParkingDto(x.Slug, x.Name, x.Last!.Value)));
     }
 
     // ---------- openbaar ----------
@@ -246,7 +344,7 @@ public static class Api
             }
         };
 
-    private static async Task<IResult> RoutePlan(RoutePlanner planner, StreetParkingZones streetZones, AppDbContext db, RoutePlanRequest request, CancellationToken ct)
+    private static async Task<IResult> RoutePlan(RoutePlanner planner, StreetParkingZones streetZones, CityRates cityRates, AppDbContext db, RoutePlanRequest request, CancellationToken ct)
     {
         if (request.StartLat is < -90 or > 90 || request.StartLon is < -180 or > 180)
             return Results.BadRequest(new { error = "Ongeldige startcoördinaten." });
@@ -266,11 +364,11 @@ public static class Api
 
         return route is null
             ? Results.BadRequest(new { error = "Routeplanning kon niet uitgevoerd worden." })
-            : Results.Ok(await WithDestinationParking(route, streetZones, db, request, ct));
+            : Results.Ok(await WithDestinationParking(route, streetZones, cityRates, db, request, ct));
     }
 
     private static async Task<RoutePlanResult> WithDestinationParking(
-        RoutePlanResult route, StreetParkingZones streetZones, AppDbContext db, RoutePlanRequest request, CancellationToken ct)
+        RoutePlanResult route, StreetParkingZones streetZones, CityRates cityRates, AppDbContext db, RoutePlanRequest request, CancellationToken ct)
     {
         if (!string.Equals(route.Mode, "car", StringComparison.OrdinalIgnoreCase)) return route;
 
@@ -285,7 +383,7 @@ public static class Api
                 && Math.Abs(p.Latitude - request.EndLat) < box && Math.Abs(p.Longitude - request.EndLon) < box)
             .ToListAsync(ct))
             .OrderBy(p => Math.Abs(p.Latitude - request.EndLat) + Math.Abs(p.Longitude - request.EndLon))
-            .Select(p => (p.Name, p.ManualRate, Rate: ParkingRates.For(p.Slug, arrival)))
+            .Select(p => (p.Name, p.ManualRate, Rate: cityRates.For(p.Slug, arrival)))
         .FirstOrDefault(x => x.Rate is not null || x.ManualRate is not null);
 
         return route with
@@ -461,7 +559,7 @@ public static class Api
             .ToListAsync(ct));
 
     private static async Task<IResult> UpdateStreetTariffs(
-        StreetTariffAdminDto[] request, AppDbContext db, StreetParkingZones zones, CancellationToken ct)
+        StreetTariffAdminDto[] request, HttpContext ctx, AppDbContext db, StreetParkingZones zones, CancellationToken ct)
     {
         var rows = await db.StreetParkingTariffs.ToListAsync(ct);
         if (request.Length != rows.Count
@@ -478,26 +576,31 @@ public static class Api
 
         foreach (var row in rows)
             row.AmountEur = updates[(row.Zone, row.Period, row.Hours)].AmountEur;
+        Audit(db, ctx, "zoneprijzen-gewijzigd", "straatzones");
         await db.SaveChangesAsync(ct);
         await zones.ReplaceTariffsAsync(rows, ct);
         return Results.NoContent();
     }
 
-    private static async Task<IResult> AdminParkings(AppDbContext db, CancellationToken ct)
+    private static async Task<IResult> AdminParkings(AppDbContext db, CityRates cityRates, CancellationToken ct)
     {
+        var now = StreetParkingZones.LocalTime(DateTime.UtcNow);
         var rows = await db.Parkings
             .Include(p => p.ManualRate)
             .AsNoTracking()
-            .Where(p => p.Kind != ParkingKind.Bicycle)
             .OrderBy(p => p.Name)
             .ToListAsync(ct);
-        return Results.Ok(rows.Select(p => new AdminParkingDto(
-            p.Slug, p.Name, p.Address, p.Latitude, p.Longitude, p.IsManual,
-            p.ManualRate?.ToDto())));
+        return Results.Ok(rows.Select(p =>
+        {
+            var city = cityRates.Find(p.Slug);
+            return new AdminParkingDto(
+                p.Slug, p.Name, p.Address, p.Latitude, p.Longitude, p.IsManual,
+                p.ManualRate?.ToDto(), cityRates.For(p.Slug, now), city?.UpdatedAtUtc, city?.CheckedAtUtc);
+        }));
     }
 
     private static async Task<IResult> AddManualParking(
-        ManualParkingRequest request, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
+        ManualParkingRequest request, HttpContext ctx, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
     {
         var invalid = ValidateManualParking(request.Name, request.Address, request.Latitude, request.Longitude, request.Rate);
         if (invalid is not null) return Results.BadRequest(new { error = invalid });
@@ -526,49 +629,53 @@ public static class Api
             ManualRate = ToEntity(request.Rate),
         };
         db.Parkings.Add(parking);
+        Audit(db, ctx, "parking-toegevoegd", parking.Slug);
         await db.SaveChangesAsync(ct);
         await cache.EvictByTagAsync("parking-details", ct);
         return Results.Created($"/api/parkings/{slug}", new AdminParkingDto(
             parking.Slug, parking.Name, parking.Address, parking.Latitude, parking.Longitude, parking.IsManual,
-            parking.ManualRate.ToDto()));
+            parking.ManualRate.ToDto(), null, null, null));
     }
 
     private static async Task<IResult> UpdateParkingRate(
-        string slug, ManualParkingRateRequest request, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
+        string slug, ManualParkingRateRequest request, HttpContext ctx, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
     {
         var invalid = ValidateManualRate(request);
         if (invalid is not null) return Results.BadRequest(new { error = invalid });
 
         var parking = await db.Parkings.Include(p => p.ManualRate).FirstOrDefaultAsync(p => p.Slug == slug, ct);
-        if (parking is null || parking.Kind == ParkingKind.Bicycle)
+        if (parking is null)
             return Results.NotFound(new { error = "Deze parking is niet gevonden." });
 
         if (parking.ManualRate is null)
             parking.ManualRate = ToEntity(request);
         else
             CopyRate(request, parking.ManualRate);
+        Audit(db, ctx, "tarief-gewijzigd", slug);
         await db.SaveChangesAsync(ct);
         await cache.EvictByTagAsync("parking-details", ct);
         return Results.Ok(parking.ManualRate.ToDto());
     }
 
     private static async Task<IResult> DeleteParkingRate(
-        string slug, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
+        string slug, HttpContext ctx, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
     {
         var parking = await db.Parkings.Include(p => p.ManualRate).FirstOrDefaultAsync(p => p.Slug == slug, ct);
         if (parking?.ManualRate is null) return Results.NotFound();
         db.ManualParkingRates.Remove(parking.ManualRate);
+        Audit(db, ctx, "tarief-verwijderd", slug);
         await db.SaveChangesAsync(ct);
         await cache.EvictByTagAsync("parking-details", ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> DeleteManualParking(
-        string slug, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
+        string slug, HttpContext ctx, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
     {
         var parking = await db.Parkings.FirstOrDefaultAsync(p => p.Slug == slug, ct);
         if (parking is null || !parking.IsManual) return Results.NotFound();
         db.Parkings.Remove(parking);
+        Audit(db, ctx, "parking-verwijderd", slug);
         await db.SaveChangesAsync(ct);
         await cache.EvictByTagAsync("parking-details", ct);
         return Results.NoContent();
@@ -596,7 +703,7 @@ public static class Api
             .ToListAsync(ct));
 
     private static async Task<IResult> AddManualEvent(
-        ManualEventRequest request, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
+        ManualEventRequest request, HttpContext ctx, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
     {
         var invalid = ValidateManualEvent(request);
         if (invalid is not null) return Results.BadRequest(new { error = invalid });
@@ -642,6 +749,7 @@ public static class Api
             ImportedAtUtc = now,
         };
         db.Events.Add(entity);
+        Audit(db, ctx, "event-toegevoegd", entity.Name);
         await db.SaveChangesAsync(ct);
         await cache.EvictByTagAsync("events", ct);
         return Results.Created($"/api/events/{entity.Id}",
@@ -649,7 +757,7 @@ public static class Api
     }
 
     private static async Task<IResult> DeleteManualEvent(
-        string id, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
+        string id, HttpContext ctx, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
     {
         var entity = id.StartsWith(ManualEventPrefix, StringComparison.Ordinal)
             ? await db.Events.FirstOrDefaultAsync(e => e.Id == id, ct)
@@ -659,6 +767,7 @@ public static class Api
 
         db.RemoveRange(await db.Set<FriendInterest>().Where(i => i.EventId == id).ToListAsync(ct));
         db.Events.Remove(entity);
+        Audit(db, ctx, "event-verwijderd", entity.Name);
         await db.SaveChangesAsync(ct);
 
         var placeId = entity.PlaceId;
@@ -766,7 +875,7 @@ public static class Api
     public sealed record StreetTariffAdminDto(string Zone, string Period, int Hours, decimal AmountEur);
     public sealed record AdminParkingDto(
         string Slug, string Name, string? Address, double Latitude, double Longitude, bool IsManual,
-        ManualParkingRateDto? Rate);
+        ManualParkingRateDto? Rate, ParkingRate? CityRate, DateTime? CityRateUpdatedAtUtc, DateTime? CityRateCheckedAtUtc);
     public sealed record ManualParkingRequest(
         string Name, string Address, double Latitude, double Longitude, ManualParkingRateRequest Rate);
     public sealed record ManualParkingRateRequest(
@@ -782,6 +891,9 @@ public static class Api
         decimal? DailyMaximumEur,
         decimal WeekendHourlyEur);
     public sealed record AdminEventDto(string Id, string Name, DateTime? StartsAtUtc, string? Place);
+    public sealed record AdminUserDto(Guid Id, string Username, string Email, DateTime CreatedAtUtc, bool IsSuspended);
+    public sealed record AuditEntryDto(DateTime AtUtc, string Actor, string Action, string Target);
+    public sealed record StaleParkingDto(string Slug, string Name, DateTime LastMeasuredUtc);
     public sealed record ManualEventRequest(
         string Name,
         string? Url,

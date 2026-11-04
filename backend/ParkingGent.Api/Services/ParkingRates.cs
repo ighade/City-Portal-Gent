@@ -23,6 +23,15 @@ public static class ParkingRates
         "Tijdens grote evenementen kunnen de tarieven afwijken.",
     ];
 
+    /// <summary>De vier tijdvensters van de tariefpagina, in kolomvolgorde.</summary>
+    public static readonly (string Key, string Label)[] Slots =
+    [
+        ("weekday", "Maandag – vrijdag, 7–19 u"),
+        ("saturday", "Zaterdag, 7–19 u"),
+        ("sunday", "Zondag, 7–19 u"),
+        ("night", "Nacht, 19–7 u"),
+    ];
+
     private static RatePeriod[] Make(
         (decimal Hourly, bool Max, decimal? Day) weekday,
         (decimal Hourly, bool Max, decimal? Day) saturday,
@@ -30,14 +39,15 @@ public static class ParkingRates
         (decimal Hourly, bool Max, decimal? Day) night,
         string? nightExtra) =>
     [
-        new("weekday", "Maandag – vrijdag, 7–19 u", weekday.Hourly, weekday.Max, weekday.Day, null),
-        new("saturday", "Zaterdag, 7–19 u", saturday.Hourly, saturday.Max, saturday.Day, null),
-        new("sunday", "Zondag, 7–19 u", sunday.Hourly, sunday.Max, sunday.Day, null),
-        new("night", "Nacht, 19–7 u", night.Hourly, night.Max, night.Day, nightExtra),
+        new(Slots[0].Key, Slots[0].Label, weekday.Hourly, weekday.Max, weekday.Day, null),
+        new(Slots[1].Key, Slots[1].Label, saturday.Hourly, saturday.Max, saturday.Day, null),
+        new(Slots[2].Key, Slots[2].Label, sunday.Hourly, sunday.Max, sunday.Day, null),
+        new(Slots[3].Key, Slots[3].Label, night.Hourly, night.Max, night.Day, nightExtra),
     ];
 
     // Sleutel: een stuk van de slug van de parking.
-    private static readonly (string Key, RatePeriod[] Periods)[] Table =
+    /// <summary>De ingebouwde waarden; ze gelden zolang er niets uit de tariefpagina is opgeslagen.</summary>
+    public static readonly (string Key, RatePeriod[] Periods)[] Table =
     [
         ("ramen", Make((3, true, 31), (4, true, 31), (3, true, 31), (2, false, null), Extra5h9)),
         ("reep", Make((3, true, 31), (4, true, 31), (3, true, 31), (2, false, null), Extra5h9)),
@@ -53,9 +63,11 @@ public static class ParkingRates
         ("the-loop-d", Make((3.6m, true, 18), (3.6m, true, 18), (3.6m, true, 18), (3.6m, true, 18), null)),
     ];
 
-    public static ParkingRate? For(string slug, DateTime localTime)
+    public static ParkingRate? For(string slug, DateTime localTime) => For(slug, localTime, Table);
+
+    public static ParkingRate? For(string slug, DateTime localTime, IEnumerable<(string Key, RatePeriod[] Periods)> table)
     {
-        var hit = Table.FirstOrDefault(t => slug.Contains(t.Key, StringComparison.OrdinalIgnoreCase));
+        var hit = table.FirstOrDefault(t => slug.Contains(t.Key, StringComparison.OrdinalIgnoreCase));
         return hit.Periods is null ? null : new ParkingRate(ActiveKey(localTime), hit.Periods, Notes, SourceUrl);
     }
 

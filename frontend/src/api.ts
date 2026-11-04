@@ -1,4 +1,4 @@
-import type { AdminEvent, AdminParking, ManualEventInput, EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, ManualParkingRate, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, StreetTariffAdmin, SyncRun, TransitRouteRequest, TransitRouteResult, TransitStop, Trend } from './types'
+import type { AdminEvent, AdminParking, AdminUser, AuditEntry, StaleParking, ManualEventInput, EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, ManualParkingRate, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, StreetTariffAdmin, SyncRun, TransitRouteRequest, TransitRouteResult, TransitStop, Trend } from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {
@@ -175,5 +175,11 @@ export const api = {
     events: () => call<AdminEvent[]>('GET', '/api/admin/events'),
     createEvent: (event: ManualEventInput) => call<AdminEvent>('POST', '/api/admin/events', event),
     deleteEvent: (id: string) => call<void>('DELETE', `/api/admin/events/${encodeURIComponent(id)}`),
+    users: (q = '') => call<AdminUser[]>('GET', `/api/admin/users?q=${encodeURIComponent(q)}`),
+    suspendUser: (id: string) => call<void>('POST', `/api/admin/users/${id}/suspend`),
+    unsuspendUser: (id: string) => call<void>('POST', `/api/admin/users/${id}/unsuspend`),
+    deleteUser: (id: string) => call<void>('DELETE', `/api/admin/users/${id}`),
+    audit: (take = 30) => call<AuditEntry[]>('GET', `/api/admin/audit?take=${take}`),
+    stale: (minutes = 30) => call<StaleParking[]>('GET', `/api/admin/stale?minutes=${minutes}`),
   },
 }
