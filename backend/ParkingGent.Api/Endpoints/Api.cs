@@ -47,6 +47,8 @@ public static class Api
         api.MapPost("/transit/route", TransitRoute);
         api.MapPost("/route/plan", RoutePlan);
         api.MapPost("/route/ezpark", EzPark);
+        api.MapGet("/geo/suggest", GeoProxy("Suggestion", 10));
+        api.MapGet("/geo/locate", GeoProxy("Location", 5));
         api.MapPost("/admin/login", AdminLogin);
 
         var admin = api.MapGroup("/admin").AddEndpointFilter(async (ctx, next) =>
@@ -219,6 +221,30 @@ public static class Api
         return Results.Json(new { type = "FeatureCollection", features },
             new JsonSerializerOptions(JsonSerializerDefaults.Web), "application/geo+json");
     }
+
+    /// <summary>
+    /// Adreszoeker van Vlaanderen via de server: een toestel of emulator zonder (werkende) DNS naar het
+    /// internet kan dan nog steeds adressen zoeken, want het bereikt alleen deze API.
+    /// </summary>
+    private static Delegate GeoProxy(string kind, int count) =>
+        async (IHttpClientFactory factory, string? q, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(q) || q.Length > 200)
+                return Results.BadRequest(new { error = "Geef een zoekterm op." });
+            try
+            {
+                using var http = factory.CreateClient();
+                http.Timeout = TimeSpan.FromSeconds(8);
+                using var res = await http.GetAsync(
+                    $"https://geo.api.vlaanderen.be/geolocation/v4/{kind}?c={count}&q={Uri.EscapeDataString(q)}", ct);
+                if (!res.IsSuccessStatusCode) return Results.StatusCode(StatusCodes.Status502BadGateway);
+                return Results.Content(await res.Content.ReadAsStringAsync(ct), "application/json");
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                return Results.StatusCode(StatusCodes.Status502BadGateway);
+            }
+        };
 
     private static async Task<IResult> RoutePlan(RoutePlanner planner, StreetParkingZones streetZones, AppDbContext db, RoutePlanRequest request, CancellationToken ct)
     {

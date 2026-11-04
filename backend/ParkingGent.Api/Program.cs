@@ -141,11 +141,27 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
     o.KnownProxies.Clear();
 });
 
+// CORS voor de Expo-webversie; native apps hebben dit niet nodig. Origins komen uit
+// Cors:AllowedOrigins (komma-gescheiden), standaard de Expo-ontwikkelserver.
+var corsOrigins = (builder.Configuration["Cors:AllowedOrigins"]
+        ?? "http://localhost:8081,http://localhost:19006,http://192.168.2.160:8081")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+// In Development staat elke origin toe, zodat de app vanaf een telefoon (LAN-IP) werkt.
+builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
+{
+    if (builder.Environment.IsDevelopment())
+        p.SetIsOriginAllowed(_ => true);
+    else
+        p.WithOrigins(corsOrigins);
+    p.AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+}));
+
 builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = 256 * 1024);
 
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseCors();
 app.UseAuthentication();
 app.UseSerilogRequestLogging();
 app.UseRateLimiter();

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import type { GentEvent } from '../types'
@@ -6,6 +6,8 @@ import type { GentEvent } from '../types'
 const dateFmt = new Intl.DateTimeFormat('nl-BE', { timeZone: 'Europe/Brussels', day: 'numeric', month: 'short' })
 const weekdayFmt = new Intl.DateTimeFormat('nl-BE', { timeZone: 'Europe/Brussels', weekday: 'long' })
 const timeFmt = new Intl.DateTimeFormat('nl-BE', { timeZone: 'Europe/Brussels', hour: '2-digit', minute: '2-digit' })
+
+const PAGE_SIZE = 10
 
 type Filter = 'all' | 'week' | 'free'
 
@@ -50,6 +52,8 @@ export function Events() {
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [count, setCount] = useState(PAGE_SIZE)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -73,6 +77,21 @@ export function Events() {
       return true
     })
   }, [events, query, filter])
+
+  useEffect(() => { setCount(PAGE_SIZE) }, [query, filter])
+
+  const shown = visible.slice(0, count)
+  const hasMore = count < visible.length
+
+  useEffect(() => {
+    const node = sentinelRef.current
+    if (!node || !hasMore) return
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) setCount((c) => c + PAGE_SIZE)
+    }, { rootMargin: '200px' })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [hasMore, count])
 
   return (
     <>
@@ -98,9 +117,12 @@ export function Events() {
       ) : visible.length === 0 ? (
         <div className="empty">Geen evenementen gevonden.</div>
       ) : (
-        <div className="event-grid">
-          {visible.map((e) => <EventCard key={e.id} event={e} />)}
-        </div>
+        <>
+          <div className="event-grid">
+            {shown.map((e) => <EventCard key={e.id} event={e} />)}
+          </div>
+          {hasMore && <div ref={sentinelRef} style={{ height: 1 }} aria-hidden="true" />}
+        </>
       )}
     </>
   )
