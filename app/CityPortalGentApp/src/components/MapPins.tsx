@@ -10,6 +10,8 @@ import { usePalette } from '@/context/ThemeContext'
 import { levelColor } from '@/components/OccupancyMeter'
 import { agoLabel, initial, isOffline, locationAge } from '@/lib/friendsUi'
 import { textOn } from '@/lib/map'
+import { RENTAL_BIKE_ICONS } from '@/lib/rentalBikes'
+import type { RentalBikeProvider } from '@/lib/rentalBikes'
 import { busyness } from '@/lib/types'
 import type { Friend, Parking } from '@/lib/types'
 
@@ -44,6 +46,22 @@ export function BluePin({ size = 30 }: { size?: number }) {
   return (
     <View style={[styles.round, { width: size, height: size, borderRadius: size / 2, backgroundColor: BLUE, borderColor: '#fff' }]}>
       <Text style={{ color: '#fff', fontWeight: '700', fontSize: size * 0.53 }}>P</Text>
+    </View>
+  )
+}
+
+export function RentalBikePin({ provider, selected }: { provider: RentalBikeProvider; selected: boolean }) {
+  return (
+    <View style={{
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      overflow: 'hidden',
+      backgroundColor: '#fff',
+      borderWidth: selected ? 4 : 3,
+      borderColor: selected ? '#facc15' : '#fff',
+    }}>
+      <Image source={RENTAL_BIKE_ICONS[provider]} style={{ width: '100%', height: '100%' }} />
     </View>
   )
 }

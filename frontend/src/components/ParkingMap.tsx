@@ -10,6 +10,8 @@ import L, {
 } from '../leaflet'
 import { api } from '../api'
 import { drawFriends } from './FriendsMap'
+import { RENTAL_BIKE_ICONS } from '../rentalBikes'
+import type { RentalBike } from '../rentalBikes'
 import { busyness, busynessLabel, kindLabel } from '../types'
 import type { EzParkLeg, Friend, GentEvent, Parking } from '../types'
 
@@ -24,6 +26,8 @@ interface RouteOverlay {
   end: RoutePoint
   mode: 'car' | 'foot-walking' | 'cycling-regular'
   points: Array<{ lat: number; lon: number }>
+  /** Deelfiets: het stuk te voet van de start naar de fiets, gestippeld getekend. */
+  walkPoints?: Array<{ lat: number; lon: number }>
 }
 
 /** Een evenement met coördinaat, voor de kalenderspelden op de routekaart. */
@@ -57,6 +61,10 @@ interface Props {
   /** Vrienden met een gedeelde locatie, getekend met hun profielfoto. */
   friends?: Friend[]
   onEventPick?: (event: MapEvent) => void
+  /** Deelfietsen (Dott/Bolt) als logo-speld; de gekozen fiets krijgt een gele ring. */
+  rentalBikes?: RentalBike[]
+  selectedRentalBikeId?: string | null
+  onRentalBikeSelect?: (id: string) => void
 }
 
 interface EzParkOverlay {
@@ -82,7 +90,7 @@ export function textOn(hex?: string) {
   return lum > 0.6 ? '#111827' : '#fff'
 }
 
-export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick, events, onEventPick, friends }: Props) {
+export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick, events, onEventPick, friends, rentalBikes, selectedRentalBikeId, onRentalBikeSelect }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
@@ -92,6 +100,9 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
   clickHandler.current = onMapClick
   const eventLayer = useRef<L.LayerGroup | null>(null)
   const friendLayer = useRef<L.LayerGroup | null>(null)
+  const rentalLayer = useRef<L.LayerGroup | null>(null)
+  const rentalPick = useRef(onRentalBikeSelect)
+  rentalPick.current = onRentalBikeSelect
   const eventPick = useRef(onEventPick)
   eventPick.current = onEventPick
   const ezPick = useRef(onEzParkPick)
@@ -207,13 +218,19 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
         : { color: '#d94a4a', weight: 5, opacity: 0.9 },
     )
     polyline.addTo(group)
-
+    if (route.walkPoints && route.walkPoints.length > 0) {
+      L.polyline(
+        route.walkPoints.map((p) => [p.lat, p.lon] as [number, number]),
+        { color: '#475569', weight: 4, opacity: 0.9, dashArray: '2 8' },
+      ).addTo(group)
+    }
 
     routeLayer.current = group
     const bounds = L.latLngBounds([
       [route.start.lat, route.start.lon],
       [route.end.lat, route.end.lon],
       ...route.points.map((p) => [p.lat, p.lon] as [number, number]),
+      ...(route.walkPoints ?? []).map((p) => [p.lat, p.lon] as [number, number]),
     ])
     m.fitBounds(bounds.pad(0.18), { animate: true })
   }, [route])
@@ -405,6 +422,43 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
       friendLayer.current = null
     }
   }, [friends])
+
+  // Deelfietsen: logo per aanbieder, geselecteerde fiets met gele ring.
+  useEffect(() => {
+    const m = map.current
+    if (!m) return
+    rentalLayer.current?.remove()
+    rentalLayer.current = null
+    if (!rentalBikes || rentalBikes.length === 0) return
+    const group = L.layerGroup().addTo(m)
+    for (const bike of rentalBikes) {
+      const sel = bike.id === selectedRentalBikeId
+      const icon = L.divIcon({
+        className: '',
+        html: `<img class="rental-pin${sel ? ' rental-pin-sel' : ''}" src="${RENTAL_BIKE_ICONS[bike.provider]}" alt="${bike.provider}" />`,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+      })
+      L.marker([bike.lat, bike.lon], { icon, zIndexOffset: sel ? 1000 : 0, title: `${bike.provider}-deelfiets` })
+        .on('click', (e) => {
+          L.DomEvent.stopPropagation(e)
+          rentalPick.current?.(bike.id)
+        })
+        .addTo(group)
+    }
+    rentalLayer.current = group
+    return () => {
+      rentalLayer.current?.remove()
+      rentalLayer.current = null
+    }
+  }, [rentalBikes, selectedRentalBikeId])
+
+  useEffect(() => {
+    const bike = rentalBikes?.find((b) => b.id === selectedRentalBikeId)
+    if (bike) map.current?.panTo([bike.lat, bike.lon])
+    // Alleen bij een andere selectie inzoomen/pannen, niet bij elke nieuwe lijst.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRentalBikeId])
 
   // De spelden: bij elke vernieuwing opnieuw tekenen. Vijftig spelden is niets.
   useEffect(() => {

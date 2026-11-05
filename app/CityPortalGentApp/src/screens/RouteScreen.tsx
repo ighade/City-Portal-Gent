@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, View } from 'react-native'
 
 import { BottomSheet } from '@/components/BottomSheet'
@@ -9,6 +9,7 @@ import { Icon } from '@/components/Icon'
 import type { IconName } from '@/components/Icon'
 import { ParkingMap } from '@/components/ParkingMap'
 import type { MapEvent } from '@/components/ParkingMap'
+import { RentalBikesPanel } from '@/components/RentalBikesPanel'
 import { GarageRate, ManualRateInfo, StreetRate } from '@/components/RateInfo'
 import { useRouteInputs } from '@/components/RouteInputs'
 import type { RoutePoint } from '@/components/RouteInputs'
@@ -18,6 +19,9 @@ import { useApp } from '@/context/AppContext'
 import { usePalette } from '@/context/ThemeContext'
 import { api, ApiError } from '@/lib/api'
 import { locatePlace } from '@/lib/eventGeo'
+import { distanceMeters, fetchRentalBikes, openRentalBike, rentalCostLabel } from '@/lib/rentalBikes'
+import type { RentalBike } from '@/lib/rentalBikes'
+import { GENT_CENTER } from '@/lib/map'
 import { transitFareLabel } from '@/lib/fare'
 import type { EzParkLeg, Friend, GentEvent, RoutePlanResult, TransitRouteResult } from '@/lib/types'
 
@@ -81,6 +85,15 @@ export function RouteScreen() {
   const [route, setRoute] = useState<RoutePlanResult | null>(null)
   const [transitRoute, setTransitRoute] = useState<TransitRouteResult | null>(null)
   const [mode, setMode] = useState<Mode>('foot')
+  const [showRentalBikes, setShowRentalBikes] = useState(true)
+  const [rentalBikes, setRentalBikes] = useState<RentalBike[]>([])
+  const [rentalBikesLoading, setRentalBikesLoading] = useState(false)
+  const [rentalBikesError, setRentalBikesError] = useState<string | null>(null)
+  const [selectedRentalBikeId, setSelectedRentalBikeId] = useState<string | null>(null)
+  // Met een gekozen deelfiets: eerst te voet naar de fiets (walk), daarna met de fiets naar de bestemming (ride).
+  const [bikeTrip, setBikeTrip] = useState<{ walk: RoutePlanResult; ride: RoutePlanResult } | null>(null)
+  const [rentalBikeOpenError, setRentalBikeOpenError] = useState<string | null>(null)
+  const [userPosition, setUserPosition] = useState<{ lat: number; lon: number } | null>(null)
   const [ezOn, setEzOn] = useState(false)
   const [carOpen, setCarOpen] = useState(0)
   const [lezBlocked, setLezBlocked] = useState(false)
@@ -101,6 +114,41 @@ export function RouteScreen() {
   const endSelection = useRef<(target: RoutePoint | string) => void>(() => undefined)
   const inputs = useRouteInputs(carParkings, mapClick, () => submit.current(), (target) => endSelection.current(target))
   const { start, end } = inputs
+  const onUserPosition = useCallback((position: { lat: number; lon: number } | null) => setUserPosition(position), [])
+  const rentalBikeOrigin = useMemo(
+    () => userPosition ?? (start ? { lat: start.lat, lon: start.lon } : { lat: GENT_CENTER[0], lon: GENT_CENTER[1] }),
+    [userPosition, start?.lat, start?.lon],
+  )
+  const rentalBikeSortLabel = userPosition ? 'je locatie' : start ? 'je route-start' : 'Gent centrum'
+  const nearbyRentalBikes = useMemo(
+    () => rentalBikes
+      .map((bike) => ({ ...bike, distanceMeters: distanceMeters(rentalBikeOrigin, bike) }))
+      .sort((a, b) => a.distanceMeters - b.distanceMeters || a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id))
+      .slice(0, 10),
+    [rentalBikes, rentalBikeOrigin],
+  )
+
+  useEffect(() => {
+    if (mode !== 'bike' || !showRentalBikes) return
+    const controller = new AbortController()
+    let cancelled = false
+    void fetchRentalBikes(controller.signal)
+      .then((bikes) => {
+        if (!cancelled) setRentalBikes(bikes)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setRentalBikes([])
+        setRentalBikesError(err instanceof Error ? err.message : 'Deelfietsen konden niet worden geladen.')
+      })
+      .finally(() => {
+        if (!cancelled) setRentalBikesLoading(false)
+      })
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [mode, showRentalBikes])
 
   // Komt de bezoeker van een evenement, dan staat de bestemming al ingevuld.
   const chooseEnd = useRef(inputs.chooseEnd)
@@ -123,9 +171,10 @@ export function RouteScreen() {
       start: { lat: start.lat, lon: start.lon, label: start.label },
       end: { lat: end.lat, lon: end.lon, label: end.label },
       mode: route.mode,
-      points: route.coordinates.map(([lon, lat]) => ({ lat: lat!, lon: lon! })),
+      points: (bikeTrip ? bikeTrip.ride : route).coordinates.map(([lon, lat]) => ({ lat: lat!, lon: lon! })),
+      walkPoints: bikeTrip?.walk.coordinates.map(([lon, lat]) => ({ lat: lat!, lon: lon! })),
     }
-  }, [route, start, end])
+  }, [route, bikeTrip, start, end])
 
   const transitOverlay = useMemo<EzOverlay | null>(() => {
     if (!transitRoute || !start || !end) return null
@@ -150,8 +199,15 @@ export function RouteScreen() {
 
   function changeMode(next: Mode) {
     if (next === 'car' && mode !== 'car') setCarOpen((n) => n + 1)
+    if (next !== mode) {
+      setRentalBikesLoading(next === 'bike' && showRentalBikes)
+      setRentalBikesError(null)
+    }
     setMode(next)
+    setSelectedRentalBikeId(null)
+    setRentalBikeOpenError(null)
     setRoute(null)
+    setBikeTrip(null)
     setTransitRoute(null)
     setError(null)
     setLezBlocked(false)
@@ -179,8 +235,26 @@ export function RouteScreen() {
       if (typeof target === 'string') inputs.chooseEnd(dest, false)
       if (forMode === 'transit') {
         setRoute(null)
+        setBikeTrip(null)
         setTransitRoute(null)
         setTransitRoute(await api.transit.route({ startLat: from.lat, startLon: from.lon, endLat: dest.lat, endLon: dest.lon }))
+        return
+      }
+      const bike = forMode === 'bike' && showRentalBikes
+        ? rentalBikes.find((item) => item.id === selectedRentalBikeId)
+        : undefined
+      if (bike) {
+        const [walk, ride] = await Promise.all([
+          api.routePlan({ startLat: from.lat, startLon: from.lon, endLat: bike.lat, endLon: bike.lon, mode: 'foot-walking', checkLez: false }),
+          api.routePlan({ startLat: bike.lat, startLon: bike.lon, endLat: dest.lat, endLon: dest.lon, mode: 'cycling-regular', checkLez: false }),
+        ])
+        setBikeTrip({ walk, ride })
+        setRoute({
+          ...ride,
+          distanceKm: walk.distanceKm + ride.distanceKm,
+          durationMinutes: walk.durationMinutes + ride.durationMinutes,
+          routeSummary: `Te voet naar de ${bike.provider}-deelfiets (${walk.distanceKm.toFixed(1)} km, ${Math.round(walk.durationMinutes)} min), daarna met de fiets naar de bestemming (${ride.distanceKm.toFixed(1)} km, ${Math.round(ride.durationMinutes)} min).`,
+        })
         return
       }
       const result = await api.routePlan({
@@ -191,6 +265,7 @@ export function RouteScreen() {
         mode: API_MODE[forMode],
         checkLez: forMode === 'car' && showLez,
       })
+      setBikeTrip(null)
       setRoute(result)
     } catch (err) {
       setLezBlocked(forMode === 'car' && err instanceof ApiError && err.code === 'lez')
@@ -224,6 +299,22 @@ export function RouteScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, ezOn, showLez])
 
+  // Een deelfiets kiezen (of de keuze opheffen) herberekent de route: eerst naar de fiets, dan naar de bestemming.
+  useEffect(() => {
+    if (mode !== 'bike' || !start || !end) return
+    if (!selectedRentalBikeId && !bikeTrip) return
+    void handlePlan(undefined, 'bike')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRentalBikeId])
+
+  // Wordt het startpunt ingevuld terwijl de bestemming al bekend is, dan wordt meteen berekend.
+  useEffect(() => {
+    if (!start || !end) return
+    if (mode === 'car' && ezOn) void ez.plan()
+    else void handlePlan(undefined, mode)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start])
+
   useEffect(() => {
     submit.current = () => selectMode(mode)
     endSelection.current = (target) => {
@@ -248,6 +339,32 @@ export function RouteScreen() {
       <SwitchRow label="EZ Park" value={ezOn} onValueChange={(v) => (v ? startEzPark() : setEzOn(false))} />
     </View>
   )
+  const rentalBikeToggle = mode === 'bike' ? (
+    <SwitchRow
+      label="Toon Dott- en Bolt-deelfietsen"
+      value={showRentalBikes}
+      onValueChange={(value) => {
+        setShowRentalBikes(value)
+        setRentalBikesLoading(value)
+        setRentalBikesError(null)
+        if (!value) {
+          setSelectedRentalBikeId(null)
+          setRentalBikeOpenError(null)
+        }
+      }}
+    />
+  ) : null
+
+  async function openSelectedRentalBike() {
+    const bike = nearbyRentalBikes.find((item) => item.id === selectedRentalBikeId)
+    if (!bike) return
+    setRentalBikeOpenError(null)
+    try {
+      await openRentalBike(bike)
+    } catch (err) {
+      setRentalBikeOpenError(err instanceof Error ? err.message : 'De aanbieder kon niet worden geopend.')
+    }
+  }
 
   const ez = useEzPark({
     avoidLez: showLez,
@@ -275,9 +392,16 @@ export function RouteScreen() {
           events={weekEvents}
           friends={friendsOnMap}
           onEventPick={pickEvent}
+          onUserPosition={onUserPosition}
           eventSheetTop={plannerBottom + 8}
           onEzParkPick={(slug) => setEzPick({ slug, n: Date.now() })}
           route={ezOn ? null : routeOverlay}
+          rentalBikes={mode === 'bike' && showRentalBikes ? nearbyRentalBikes : undefined}
+          selectedRentalBikeId={selectedRentalBikeId}
+          onRentalBikeSelect={(id) => {
+            setSelectedRentalBikeId(id)
+            setRentalBikeOpenError(null)
+          }}
           onMapClick={(lat, lon) => setMapClick({ lat, lon, n: Date.now() })}
           ezpark={ezOn ? ezOverlay : (mode === 'transit' && transitOverlay) || markerOverlay}
         />
@@ -291,6 +415,23 @@ export function RouteScreen() {
         <ModePicker value={mode} onChange={selectMode} />
         {inputs.departField}
         {toggles}
+        {rentalBikeToggle}
+        {mode === 'bike' && showRentalBikes && (
+          <RentalBikesPanel
+            bikes={nearbyRentalBikes}
+            selectedBikeId={selectedRentalBikeId}
+            loading={rentalBikesLoading}
+            error={rentalBikesError}
+            openError={rentalBikeOpenError}
+            sortLabel={rentalBikeSortLabel}
+            rideMinutes={bikeTrip ? bikeTrip.ride.durationMinutes : route?.durationMinutes ?? null}
+            onSelect={(id) => {
+              setSelectedRentalBikeId(id)
+              setRentalBikeOpenError(null)
+            }}
+            onOpen={() => void openSelectedRentalBike()}
+          />
+        )}
         {inputs.locateError && !start && <Banner style={{ marginBottom: 0 }}>{inputs.locateError}</Banner>}
         {error && !lezBlocked && <Banner style={{ marginBottom: 0 }}>{error}</Banner>}
         {lezBlocked && (
@@ -322,6 +463,7 @@ export function RouteScreen() {
                   </Fact>
                 )}
                 <Fact label="Geschatte tijd">{transitRoute ? `${Math.round(transitRoute.durationMinutes)} min` : route ? `${Math.round(route.durationMinutes)} min` : '—'}</Fact>
+                {mode === 'bike' && showRentalBikes && route && <Fact label="Deelfiets (schatting)">{rentalCostLabel(bikeTrip ? bikeTrip.ride.durationMinutes : route.durationMinutes)}</Fact>}
               </View>
 
               {transitRoute && (

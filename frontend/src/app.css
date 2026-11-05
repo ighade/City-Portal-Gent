@@ -605,3 +605,11 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
 .werk-popup p { margin: 6px 0; }
 .werk-popup ul { margin: 6px 0; padding-left: 18px; }
 .werk-severe { font-size: 11px; color: var(--crit-ink); font-weight: 600; }
+
+.rental-pin { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: #fff; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); box-sizing: border-box; }
+.rental-pin-sel { border-color: #facc15; border-width: 4px; }
+.rental-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.rental-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 1px solid var(--border, #d1d5db); border-radius: 8px; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.rental-item.active { border-color: #facc15; box-shadow: 0 0 0 2px #facc1555; }
+.rental-item img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
+.rental-item small { display: block; opacity: .7; }

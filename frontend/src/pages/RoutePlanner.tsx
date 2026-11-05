@@ -9,6 +9,9 @@ import { transitFareLabel } from '../fare'
 import { locatePlace } from '../eventGeo'
 import type { MapEvent } from '../components/ParkingMap'
 import { Fact } from '../components/ParkingInfo'
+import { distanceMeters, fetchRentalBikes, openRentalBike, RENTAL_BIKE_ICONS, RENTAL_TARIFF_LABEL, rentalCostLabel } from '../rentalBikes'
+import type { RentalBike } from '../rentalBikes'
+import { GENT_BOUNDS, GENT_CENTER } from '../leaflet'
 import { useRouteInputs } from '../components/RouteInputs'
 import type { RoutePoint } from '../components/RouteInputs'
 import { useApp } from '../context/AppContext'
@@ -45,6 +48,9 @@ function ModePicker({ value, onChange }: { value: Mode; onChange: (m: Mode) => v
 export function RoutePlanner() {
   const { parkings } = useApp()
   const [planning, setPlanning] = useState(false)
+  const planRun = useRef(0)
+  // Met een gekozen deelfiets: eerst te voet naar de fiets (walk), daarna met de fiets naar de bestemming (ride).
+  const [bikeTrip, setBikeTrip] = useState<{ walk: RoutePlanResult; ride: RoutePlanResult } | null>(null)
   const [showLez, setShowLez] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [route, setRoute] = useState<RoutePlanResult | null>(null)
@@ -55,6 +61,12 @@ export function RoutePlanner() {
   const [ezOverlay, setEzOverlay] = useState<EzOverlay | null>(null)
   const [overviewEl, setOverviewEl] = useState<HTMLElement | null>(null)
   const [mapClick, setMapClick] = useState<{ lat: number; lon: number; n: number } | null>(null)
+  const [showRentalBikes, setShowRentalBikes] = useState(true)
+  const [rentalBikes, setRentalBikes] = useState<RentalBike[]>([])
+  const [rentalLoading, setRentalLoading] = useState(false)
+  const [rentalError, setRentalError] = useState<string | null>(null)
+  const [rentalSelected, setRentalSelected] = useState<string | null>(null)
+  const [userPos, setUserPos] = useState<{ lat: number; lon: number } | null>(null)
   const [ezPick, setEzPick] = useState<{ slug: string; n: number } | null>(null)
 
   const carParkings = useMemo(() => parkings.filter((p) => p.kind !== 'bicycle'), [parkings])
@@ -88,9 +100,10 @@ export function RoutePlanner() {
       start: { lat: start.lat, lon: start.lon, label: start.label },
       end: { lat: end.lat, lon: end.lon, label: end.label },
       mode: route.mode,
-      points: route.coordinates.map(([lon, lat]) => ({ lat, lon })),
+      points: (bikeTrip ? bikeTrip.ride : route).coordinates.map(([lon, lat]) => ({ lat, lon })),
+      walkPoints: bikeTrip?.walk.coordinates.map(([lon, lat]) => ({ lat, lon })),
     }
-  }, [route, start, end])
+  }, [route, bikeTrip, start, end])
 
   const transitOverlay = useMemo<EzOverlay | null>(() => {
     if (!transitRoute || !start || !end) return null
@@ -113,9 +126,52 @@ export function RoutePlanner() {
     [start, end],
   )
 
+  const rentalActive = mode === 'bike' && showRentalBikes
+
+  useEffect(() => {
+    if (!rentalActive) return
+    const controller = new AbortController()
+    setRentalLoading(true)
+    setRentalError(null)
+    fetchRentalBikes(controller.signal)
+      .then(setRentalBikes)
+      .catch((e: unknown) => {
+        if (!controller.signal.aborted) setRentalError(e instanceof Error ? e.message : 'Deelfietsen konden niet worden geladen.')
+      })
+      .finally(() => { if (!controller.signal.aborted) setRentalLoading(false) })
+    return () => controller.abort()
+  }, [rentalActive])
+
+  useEffect(() => {
+    if (!rentalActive || userPos || !navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lon } = pos.coords
+        const [[south, west], [north, east]] = GENT_BOUNDS
+        if (lat >= south && lat <= north && lon >= west && lon <= east) setUserPos({ lat, lon })
+      },
+      () => undefined,
+      { timeout: 8000 },
+    )
+  }, [rentalActive, userPos])
+
+  const rentalOrigin = userPos ?? (start ? { lat: start.lat, lon: start.lon } : { lat: GENT_CENTER[0], lon: GENT_CENTER[1] })
+  const rentalOriginLabel = userPos ? 'je locatie' : start ? 'je route-start' : 'Gent centrum'
+  const nearbyBikes = useMemo(
+    () => rentalBikes
+      .map((bike) => ({ bike, distance: distanceMeters(rentalOrigin, bike) }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 10),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rentalBikes, rentalOrigin.lat, rentalOrigin.lon],
+  )
+  const selectedBike = rentalBikes.find((b) => b.id === rentalSelected) ?? null
+
   function changeMode(next: Mode) {
     setMode(next)
+    setRentalSelected(null)
     setRoute(null)
+    setBikeTrip(null)
     setTransitRoute(null)
     setError(null)
     setLezBlocked(false)
@@ -127,9 +183,11 @@ export function RoutePlanner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [route, inputs.departTime],
   )
+  const rideMinutes = bikeTrip ? bikeTrip.ride.durationMinutes : route?.durationMinutes
   const arriveAt = route ? new Date(departAt.getTime() + route.durationMinutes * 60000) : null
 
   async function handlePlan(target?: RoutePoint) {
+    const run = ++planRun.current
     setPlanning(true)
     setError(null)
     setLezBlocked(false)
@@ -138,8 +196,26 @@ export function RoutePlanner() {
       const [from, dest] = await Promise.all([inputs.resolveStart(), target ?? inputs.resolveEnd()])
       if (mode === 'transit') {
         setRoute(null)
+        setBikeTrip(null)
         setTransitRoute(null)
-        setTransitRoute(await api.transit.route({ startLat: from.lat, startLon: from.lon, endLat: dest.lat, endLon: dest.lon }))
+        const transit = await api.transit.route({ startLat: from.lat, startLon: from.lon, endLat: dest.lat, endLon: dest.lon })
+        if (run === planRun.current) setTransitRoute(transit)
+        return
+      }
+      const bike = mode === 'bike' && rentalActive ? rentalBikes.find((b) => b.id === rentalSelected) : undefined
+      if (bike) {
+        const [walk, ride] = await Promise.all([
+          api.routePlan({ startLat: from.lat, startLon: from.lon, endLat: bike.lat, endLon: bike.lon, mode: 'foot-walking', checkLez: false }),
+          api.routePlan({ startLat: bike.lat, startLon: bike.lon, endLat: dest.lat, endLon: dest.lon, mode: 'cycling-regular', checkLez: false }),
+        ])
+        if (run !== planRun.current) return
+        setBikeTrip({ walk, ride })
+        setRoute({
+          ...ride,
+          distanceKm: walk.distanceKm + ride.distanceKm,
+          durationMinutes: walk.durationMinutes + ride.durationMinutes,
+          routeSummary: `Te voet naar de ${bike.provider}-deelfiets (${walk.distanceKm.toFixed(1)} km, ${Math.round(walk.durationMinutes)} min), daarna met de fiets naar de bestemming (${ride.distanceKm.toFixed(1)} km, ${Math.round(ride.durationMinutes)} min).`,
+        })
         return
       }
       const result = await api.routePlan({
@@ -150,19 +226,29 @@ export function RoutePlanner() {
         mode: API_MODE[mode],
         checkLez: mode === 'car' && showLez,
       })
-      setRoute(result)
+      if (run === planRun.current) {
+        setBikeTrip(null)
+        setRoute(result)
+      }
     } catch (err) {
+      if (run !== planRun.current) return
       setLezBlocked(mode === 'car' && err instanceof ApiError && err.code === 'lez')
       setError(err instanceof Error ? err.message : 'De route kon niet worden berekend.')
     } finally {
-      setPlanning(false)
+      if (run === planRun.current) setPlanning(false)
     }
   }
+
+  // Zodra start en bestemming bekend zijn, of het vervoermiddel/LEZ wijzigt, wordt de route meteen (opnieuw) berekend.
+  useEffect(() => {
+    if (ezOn || !start || !end) return
+    void handlePlan()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start, end, mode, showLez, ezOn, rentalSelected, rentalActive, rentalBikes])
 
   function pickEvent(item: MapEvent) {
     const point = { lat: item.lat, lon: item.lon, label: item.event.name }
     inputs.chooseEnd(point)
-    if (!ezOn && inputs.hasStart) void handlePlan(point)
   }
 
   function startEzPark() {
@@ -171,7 +257,13 @@ export function RoutePlanner() {
     setEzOn(true)
   }
 
-  const toggles = mode !== 'car' ? null : (<>
+  const toggles = mode === 'bike' ? (
+    <label className="toggle" title="Toon Dott- en Bolt-deelfietsen op de kaart">
+      <input type="checkbox" role="switch" checked={showRentalBikes} onChange={(e) => { setShowRentalBikes(e.target.checked); setRentalSelected(null) }} />
+      <span className="toggle-track" aria-hidden="true" />
+      Deelfietsen
+    </label>
+  ) : mode !== 'car' ? null : (<>
     <label className="toggle" title="Controleert in de backend of de route de LEZ raakt">
       <input type="checkbox" role="switch" checked={showLez} onChange={(e) => { setShowLez(e.target.checked); setError(null) }} />
       <span className="toggle-track" aria-hidden="true" />
@@ -200,6 +292,9 @@ export function RoutePlanner() {
             events={weekEvents}
             friends={friendsOnMap}
             onEventPick={pickEvent}
+            rentalBikes={rentalActive ? nearbyBikes.map((n) => n.bike) : undefined}
+            selectedRentalBikeId={rentalSelected}
+            onRentalBikeSelect={setRentalSelected}
             onEzParkPick={(slug) => setEzPick({ slug, n: Date.now() })}
             route={ezOn ? null : routeOverlay}
             onMapClick={(lat, lon) => setMapClick({ lat, lon, n: Date.now() })}
@@ -237,6 +332,31 @@ export function RoutePlanner() {
           </div>
 
           {inputs.hint && <p className="note">{inputs.hint}</p>}
+          {rentalActive && (
+            <div className="rental-list">
+              <strong>Deelfietsen dichtbij ({rentalOriginLabel})</strong>
+              <p className="note">Normaal tarief: {RENTAL_TARIFF_LABEL}.{rideMinutes !== undefined ? ` Geschatte kost voor deze rit${bikeTrip ? ' (alleen het fietsgedeelte)' : ''}: ${rentalCostLabel(rideMinutes)}.` : ''}</p>
+              {rentalLoading && <p className="note">Deelfietsen laden…</p>}
+              {rentalError && <div className="banner">{rentalError}</div>}
+              {!rentalLoading && !rentalError && nearbyBikes.length === 0 && <p className="note">Geen beschikbare deelfietsen gevonden.</p>}
+              {nearbyBikes.map(({ bike, distance }) => (
+                <button type="button" key={`${bike.provider}-${bike.id}`} className={`rental-item${bike.id === rentalSelected ? ' active' : ''}`} onClick={() => setRentalSelected(bike.id)}>
+                  <img src={RENTAL_BIKE_ICONS[bike.provider]} alt="" />
+                  <span>
+                    {bike.provider} · {distance < 1000 ? `${Math.round(distance)} m` : `${(distance / 1000).toFixed(1)} km`}
+                    <small>
+                      {[bike.rangeMeters !== null ? `bereik ${(bike.rangeMeters / 1000).toFixed(1)} km` : null, bike.batteryPercent !== null ? `batterij ${bike.batteryPercent}%` : null].filter(Boolean).join(' · ')}
+                    </small>
+                  </span>
+                </button>
+              ))}
+              {selectedBike && (
+                <button type="button" className="btn btn-primary" onClick={() => openRentalBike(selectedBike)}>
+                  Open in de {selectedBike.provider}-app of website
+                </button>
+              )}
+            </div>
+          )}
           {error && !lezBlocked && <div className="banner" style={{ marginTop: 16 }}>{error}</div>}
           {lezBlocked && (
             <div className="banner" style={{ marginTop: 16 }}>
@@ -262,6 +382,7 @@ export function RoutePlanner() {
               <Fact label="Afstand">{transitRoute ? `${transitRoute.distanceKm.toFixed(1)} km` : route ? `${route.distanceKm.toFixed(1)} km` : '—'}</Fact>
               {transitRoute && transitFareLabel(transitRoute.legs) && <Fact label="Ticketprijs">{transitFareLabel(transitRoute.legs)} <span className="small muted">(overstappen inbegrepen)</span></Fact>}
               <Fact label="Geschatte tijd">{transitRoute ? `${Math.round(transitRoute.durationMinutes)} min` : route ? `${Math.round(route.durationMinutes)} min` : '—'}</Fact>
+              {rentalActive && route && rideMinutes !== undefined && <Fact label="Deelfiets (schatting)">{rentalCostLabel(rideMinutes)} <span className="small muted">({RENTAL_TARIFF_LABEL})</span></Fact>}
             </div>
 
             {transitRoute && (

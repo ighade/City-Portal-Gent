@@ -5,7 +5,7 @@ import { Image, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-
 import MapView, { Callout, Marker, Polygon, Polyline } from 'react-native-maps'
 import type { Region } from 'react-native-maps'
 
-import { BluePin, DotLabel, EventPin, LineBadge, ParkingPin, PinMarker } from '@/components/MapPins'
+import { BluePin, DotLabel, EventPin, LineBadge, ParkingPin, PinMarker, RentalBikePin } from '@/components/MapPins'
 import { FriendMarkers } from '@/components/FriendsMap'
 import { Btn, Txt } from '@/components/ui'
 import type { EzOverlay } from '@/components/EzParkPanel'
@@ -15,6 +15,7 @@ import { api } from '@/lib/api'
 import { dayMonthParts, nl, timeBrussels, weekdayLong } from '@/lib/format'
 import { GENT_BOUNDS, GENT_REGION, geoJsonPolygons } from '@/lib/map'
 import type { MapPolygon } from '@/lib/map'
+import type { RentalBike } from '@/lib/rentalBikes'
 import { busyness, busynessLabel, kindLabel } from '@/lib/types'
 import type { Friend, GentEvent, Parking } from '@/lib/types'
 
@@ -29,6 +30,8 @@ interface RouteOverlay {
   end: RoutePoint
   mode: 'car' | 'foot-walking' | 'cycling-regular'
   points: { lat: number; lon: number }[]
+  /** Deelfiets: het stuk te voet van de start naar de fiets, gestippeld getekend. */
+  walkPoints?: { lat: number; lon: number }[]
 }
 
 /** Een evenement met coördinaat, voor de kalenderspelden op de routekaart. */
@@ -58,6 +61,10 @@ interface Props {
   events?: MapEvent[]
   friends?: Friend[]
   onEventPick?: (event: MapEvent) => void
+  rentalBikes?: RentalBike[]
+  selectedRentalBikeId?: string | null
+  onRentalBikeSelect?: (id: string) => void
+  onUserPosition?: (position: { lat: number; lon: number } | null) => void
   /** Zet de evenementenkaarten bovenaan, deze afstand van de bovenkant, in plaats van onderaan. */
   eventSheetTop?: number
   height?: number | string
@@ -125,6 +132,10 @@ export function ParkingMap({
   onEventPick,
   eventSheetTop,
   friends,
+  rentalBikes,
+  selectedRentalBikeId,
+  onRentalBikeSelect,
+  onUserPosition,
   height = '100%',
 }: Props) {
   const p = usePalette()
@@ -149,7 +160,9 @@ export function ParkingMap({
         sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, distanceInterval: 10 }, (pos) => {
           const { latitude: lat, longitude: lon } = pos.coords
           const inGent = lat >= GENT_BOUNDS[0][0] && lat <= GENT_BOUNDS[1][0] && lon >= GENT_BOUNDS[0][1] && lon <= GENT_BOUNDS[1][1]
-          setUserPos(inGent ? { lat, lon } : null)
+          const position = inGent ? { lat, lon } : null
+          setUserPos(position)
+          onUserPosition?.(position)
         })
         if (cancelled) sub.remove()
       } catch {
@@ -160,7 +173,7 @@ export function ParkingMap({
       cancelled = true
       sub?.remove()
     }
-  }, [])
+  }, [onUserPosition])
   // De lage-emissiezone wordt één keer opgehaald en daarna alleen aan- of uitgezet.
   useEffect(() => {
     if (!showLez || lez) return
@@ -193,6 +206,7 @@ export function ParkingMap({
       { latitude: route.start.lat, longitude: route.start.lon },
       { latitude: route.end.lat, longitude: route.end.lon },
       ...route.points.map((q) => ({ latitude: q.lat, longitude: q.lon })),
+      ...(route.walkPoints ?? []).map((q) => ({ latitude: q.lat, longitude: q.lon })),
     ]
     map.current.fitToCoordinates(pts, { edgePadding: edge, animated: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -219,6 +233,15 @@ export function ParkingMap({
     mk.showCallout()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected])
+
+  useEffect(() => {
+    if (!selectedRentalBikeId) return
+    const bike = rentalBikes?.find((item) => item.id === selectedRentalBikeId)
+    if (!bike) return
+    map.current?.animateToRegion({ ...region, latitude: bike.lat, longitude: bike.lon }, 300)
+    // Keep the map centered on a bike only when a bike is selected, not after every map movement.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRentalBikeId])
 
   // Spelden die op het scherm dichter dan EVENT_CLUSTER_PX bij elkaar liggen worden één speld.
   const clusters = useMemo(() => {
@@ -294,8 +317,41 @@ export function ParkingMap({
           />
         )}
 
+        {route?.walkPoints && route.walkPoints.length > 0 && (
+          <Polyline
+            coordinates={route.walkPoints.map((q) => ({ latitude: q.lat, longitude: q.lon }))}
+            strokeColor="#2563eb"
+            strokeWidth={4}
+            lineDashPattern={[2, 8]}
+            lineCap="round"
+          />
+        )}
+
         {route && dot(route.start, '#2563eb', 'Start')}
         {route && dot(route.end, '#c2410c', 'Bestemming')}
+
+        {rentalBikes?.map((bike) => (
+          <PinMarker
+            key={`rental-${bike.provider}-${bike.id}`}
+            coordinate={{ latitude: bike.lat, longitude: bike.lon }}
+            title={`${bike.provider} deelfiets`}
+            description="Selecteer deze fiets in het routepaneel"
+            anchor={{ x: 0.5, y: 0.5 }}
+            zIndex={selectedRentalBikeId === bike.id ? 20 : 10}
+            version={`${bike.provider}-${selectedRentalBikeId === bike.id}`}
+            onPress={() => {
+              markerPressAt.current = Date.now()
+              onRentalBikeSelect?.(bike.id)
+            }}>
+            <RentalBikePin provider={bike.provider} selected={selectedRentalBikeId === bike.id} />
+            <Callout tooltip>
+              <View style={[styles.callout, { borderColor: p.border }]}>
+                <Txt variant="strong" style={{ color: '#111827' }}>{bike.provider} deelfiets</Txt>
+                <Txt variant="small" style={{ color: '#111827' }}>Selecteer in het routepaneel om te openen.</Txt>
+              </View>
+            </Callout>
+          </PinMarker>
+        ))}
 
         {ordered.map((pk) => (
           <PinMarker

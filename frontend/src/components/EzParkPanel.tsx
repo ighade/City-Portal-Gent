@@ -95,6 +95,12 @@ export function EzParkPanel({ avoidLez, start, end, canPlan, resolveStart, resol
     }
   }
 
+  // Zodra start en bestemming bekend zijn (of de LEZ-keuze wijzigt) wordt meteen gezocht.
+  useEffect(() => {
+    if (start && end) void plan()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start, end, avoidLez])
+
   return (
     <div>
       <div className="row" style={{ gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
