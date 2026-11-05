@@ -271,6 +271,25 @@ export interface TransitStop {
   lines: string[]
 }
 
+export interface TransitDeparture {
+  line: string
+  mode: string
+  color?: string
+  destination?: string
+  scheduledAt: string
+  expectedAt: string
+  delayMinutes: number
+  canceled: boolean
+}
+
+export interface TransitDeparturesResult {
+  stopId: string
+  stopName: string
+  realtimeAvailable: boolean
+  realtimeUpdatedAt?: string
+  departures: TransitDeparture[]
+}
+
 export interface TransitRouteRequest {
   startLat: number
   startLon: number

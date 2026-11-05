@@ -17,7 +17,7 @@ import { GENT_BOUNDS, GENT_REGION, geoJsonPolygons } from '@/lib/map'
 import type { MapPolygon } from '@/lib/map'
 import type { RentalBike } from '@/lib/rentalBikes'
 import { busyness, busynessLabel, kindLabel } from '@/lib/types'
-import type { Friend, GentEvent, Parking } from '@/lib/types'
+import type { Friend, GentEvent, Parking, TransitStop } from '@/lib/types'
 
 interface RoutePoint {
   lat: number
@@ -64,6 +64,10 @@ interface Props {
   rentalBikes?: RentalBike[]
   selectedRentalBikeId?: string | null
   onRentalBikeSelect?: (id: string) => void
+  /** OV-haltes; alleen die in beeld staan worden getekend (max. 120). */
+  transitStops?: TransitStop[]
+  selectedStopId?: string | null
+  onStopSelect?: (id: string) => void
   onUserPosition?: (position: { lat: number; lon: number } | null) => void
   /** Zet de evenementenkaarten bovenaan, deze afstand van de bovenkant, in plaats van onderaan. */
   eventSheetTop?: number
@@ -135,6 +139,9 @@ export function ParkingMap({
   rentalBikes,
   selectedRentalBikeId,
   onRentalBikeSelect,
+  transitStops,
+  selectedStopId,
+  onStopSelect,
   onUserPosition,
   height = '100%',
 }: Props) {
@@ -145,6 +152,18 @@ export function ParkingMap({
   const [size, setSize] = useState({ w: 0, h: 0 })
   const [region, setRegion] = useState<Region>(GENT_REGION)
   const [lez, setLez] = useState<MapPolygon[] | null>(null)
+  const visibleStops = useMemo(() => {
+    if (!transitStops || transitStops.length === 0) return []
+    const padLat = region.latitudeDelta * 0.6
+    const padLon = region.longitudeDelta * 0.6
+    const inView = transitStops.filter((s) => Math.abs(s.lat - region.latitude) <= padLat && Math.abs(s.lon - region.longitude) <= padLon)
+    if (inView.length <= 120) return inView
+    return inView
+      .map((s) => ({ s, d: (s.lat - region.latitude) ** 2 + (s.lon - region.longitude) ** 2 }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 120)
+      .map((x) => x.s)
+  }, [transitStops, region])
   const [sheet, setSheet] = useState<MapEvent[] | null>(null)
   const markerPressAt = useRef(0)
   const [userPos, setUserPos] = useState<{ lat: number; lon: number } | null>(null)
@@ -329,6 +348,22 @@ export function ParkingMap({
 
         {route && dot(route.start, '#2563eb', 'Start')}
         {route && dot(route.end, '#c2410c', 'Bestemming')}
+
+        {visibleStops.map((s) => (
+          <PinMarker
+            key={`stop-${s.id}`}
+            coordinate={{ latitude: s.lat, longitude: s.lon }}
+            title={s.name}
+            anchor={{ x: 0.5, y: 0.5 }}
+            zIndex={selectedStopId === s.id ? 30 : 5}
+            version={`${selectedStopId === s.id}`}
+            onPress={() => {
+              markerPressAt.current = Date.now()
+              onStopSelect?.(s.id)
+            }}>
+            <View style={{ width: selectedStopId === s.id ? 20 : 14, height: selectedStopId === s.id ? 20 : 14, borderRadius: 10, borderWidth: 3, borderColor: selectedStopId === s.id ? '#b45309' : '#1d4ed8', backgroundColor: selectedStopId === s.id ? '#fbbf24' : '#fff' }} />
+          </PinMarker>
+        ))}
 
         {rentalBikes?.map((bike) => (
           <PinMarker

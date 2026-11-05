@@ -10,6 +10,7 @@ import type { IconName } from '@/components/Icon'
 import { ParkingMap } from '@/components/ParkingMap'
 import type { MapEvent } from '@/components/ParkingMap'
 import { RentalBikesPanel } from '@/components/RentalBikesPanel'
+import { TransitDeparturesPanel } from '@/components/TransitDeparturesPanel'
 import { GarageRate, ManualRateInfo, StreetRate } from '@/components/RateInfo'
 import { useRouteInputs } from '@/components/RouteInputs'
 import type { RoutePoint } from '@/components/RouteInputs'
@@ -23,7 +24,7 @@ import { distanceMeters, fetchRentalBikes, openRentalBike, rentalCostLabel } fro
 import type { RentalBike } from '@/lib/rentalBikes'
 import { GENT_CENTER } from '@/lib/map'
 import { transitFareLabel } from '@/lib/fare'
-import type { EzParkLeg, Friend, GentEvent, RoutePlanResult, TransitRouteResult } from '@/lib/types'
+import type { EzParkLeg, Friend, GentEvent, RoutePlanResult, TransitRouteResult, TransitStop } from '@/lib/types'
 
 type Mode = 'foot' | 'bike' | 'car' | 'transit'
 
@@ -90,6 +91,8 @@ export function RouteScreen() {
   const [rentalBikesLoading, setRentalBikesLoading] = useState(false)
   const [rentalBikesError, setRentalBikesError] = useState<string | null>(null)
   const [selectedRentalBikeId, setSelectedRentalBikeId] = useState<string | null>(null)
+  const [transitStops, setTransitStops] = useState<TransitStop[]>([])
+  const [selectedStopId, setSelectedStopId] = useState<string | null>(null)
   // Met een gekozen deelfiets: eerst te voet naar de fiets (walk), daarna met de fiets naar de bestemming (ride).
   const [bikeTrip, setBikeTrip] = useState<{ walk: RoutePlanResult; ride: RoutePlanResult } | null>(null)
   const [rentalBikeOpenError, setRentalBikeOpenError] = useState<string | null>(null)
@@ -276,6 +279,16 @@ export function RouteScreen() {
   }
 
   // Kiezen van een vervoermiddel berekent meteen de route met dat vervoermiddel.
+  useEffect(() => {
+    if (mode !== 'transit') { setSelectedStopId(null); return }
+    if (transitStops.length > 0) return
+    let alive = true
+    api.transit.stops().then((s) => { if (alive) setTransitStops(s) }).catch(() => {})
+    return () => { alive = false }
+  }, [mode, transitStops.length])
+
+  const selectedStop = transitStops.find((s) => s.id === selectedStopId) ?? null
+
   function selectMode(next: Mode) {
     const useEz = next === 'car' && (next !== mode || ezOn)
     changeMode(next)
@@ -397,6 +410,9 @@ export function RouteScreen() {
           onEzParkPick={(slug) => setEzPick({ slug, n: Date.now() })}
           route={ezOn ? null : routeOverlay}
           rentalBikes={mode === 'bike' && showRentalBikes ? nearbyRentalBikes : undefined}
+          transitStops={mode === 'transit' ? transitStops : undefined}
+          selectedStopId={selectedStopId}
+          onStopSelect={setSelectedStopId}
           selectedRentalBikeId={selectedRentalBikeId}
           onRentalBikeSelect={(id) => {
             setSelectedRentalBikeId(id)
@@ -416,6 +432,8 @@ export function RouteScreen() {
         {inputs.departField}
         {toggles}
         {rentalBikeToggle}
+        {mode === 'transit' && !selectedStop && <Txt variant="note">Tik op een halte op de kaart om de volgende vertrekken en vertragingen te zien.</Txt>}
+        {mode === 'transit' && selectedStop && <TransitDeparturesPanel stopId={selectedStop.id} stopName={selectedStop.name} onClose={() => setSelectedStopId(null)} />}
         {mode === 'bike' && showRentalBikes && (
           <RentalBikesPanel
             bikes={nearbyRentalBikes}
@@ -474,7 +492,7 @@ export function RouteScreen() {
                       <View style={{ flex: 1 }}>
                         <Txt variant="strong">{leg.mode === 'walk' ? 'Wandelen' : `${leg.mode === 'tram' ? 'Tram' : 'Bus'} ${leg.line ?? ''}`}</Txt>
                         <Txt variant="smallMuted">{leg.from} → {leg.to}</Txt>
-                        <Txt variant="small">{time(new Date(leg.departureAt))}–{time(new Date(leg.arrivalAt))} · {leg.distanceKm.toFixed(1)} km</Txt>
+                        <Txt variant="small">{time(new Date(leg.departureAt))}–{time(new Date(leg.arrivalAt))} · {leg.distanceKm.toFixed(1)} km{leg.mode !== 'walk' && leg.delayMinutes >= 2 ? `  ·  +${leg.delayMinutes} min vertraging` : ''}</Txt>
                       </View>
                     </View>
                   ))}

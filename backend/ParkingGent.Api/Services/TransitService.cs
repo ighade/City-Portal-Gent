@@ -48,7 +48,8 @@ public sealed class TransitService(
     AppDbContext db,
     IOptions<TransitOptions> options,
     ILogger<TransitService> log,
-    RoutePlanner routePlanner)
+    RoutePlanner routePlanner,
+    TransitRealtimeFeed realtimeFeed)
 {
     private readonly SemaphoreSlim loadGate = new(1, 1);
     private readonly SemaphoreSlim realtimeGate = new(1, 1);
@@ -57,6 +58,8 @@ public sealed class TransitService(
     private readonly Dictionary<string, double[][]> shapes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> routeColors = new(StringComparer.Ordinal);
     private readonly Dictionary<(string TripId, string StopId), int> realtimeDelays = new();
+    private HashSet<string> canceledTrips = new(StringComparer.Ordinal);
+    private TransitRealtimeSnapshot? liveSnapshot;
     private DateTime staticUpdatedAtUtc;
     private DateTime realtimeUpdatedAtUtc;
     private bool staticLoaded;
@@ -143,8 +146,11 @@ public sealed class TransitService(
             if (!connections.TryGetValue(state.StopId, out var outgoing)) continue;
             foreach (var connection in outgoing)
             {
-                var delayFrom = realtimeDelays.GetValueOrDefault((connection.TripId, connection.FromId));
-                var delayTo = realtimeDelays.GetValueOrDefault((connection.TripId, connection.ToId));
+                if (canceledTrips.Contains(connection.TripId)) continue;
+                if (liveSnapshot?.Trips.TryGetValue(connection.TripId, out var liveTrip) == true
+                    && (liveTrip.SkippedStops.Contains(connection.FromId) || liveTrip.SkippedStops.Contains(connection.ToId))) continue;
+                var delayFrom = LiveDelay(connection.TripId, connection.FromId, connection.Departure);
+                var delayTo = LiveDelay(connection.TripId, connection.ToId, connection.Arrival);
                 var edgeDeparture = AtDate(connection.Departure).AddMinutes(delayFrom);
                 var edgeArrival = AtDate(connection.Arrival).AddMinutes(delayTo);
                 if (edgeDeparture < label.Arrival || edgeArrival <= label.Arrival) continue;
@@ -533,6 +539,20 @@ public sealed class TransitService(
 
     private async Task RefreshRealtimeAsync(CancellationToken ct)
     {
+        // Met een De Lijn-sleutel komt alles uit de officiële realtime-API (gedeeld en gecachet); anders de oude feed.
+        if (realtimeFeed.Enabled)
+        {
+            var snapshot = await realtimeFeed.GetAsync(ct);
+            realtimeDelays.Clear();
+            foreach (var (tripId, trip) in snapshot.Trips)
+                foreach (var (stopId, seconds) in trip.DelayByStopSeconds)
+                    realtimeDelays[(tripId, stopId)] = TransitRealtimeSnapshot.ToMinutes(seconds);
+            canceledTrips = snapshot.CanceledTrips;
+            liveSnapshot = snapshot;
+            realtimeUpdatedAtUtc = DateTime.UtcNow;
+            return;
+        }
+
         if (realtimeUpdatedAtUtc != default && DateTime.UtcNow - realtimeUpdatedAtUtc < TimeSpan.FromSeconds(options.Value.RealtimeRefreshSeconds)) return;
         await realtimeGate.WaitAsync(ct);
         try
@@ -699,6 +719,14 @@ public sealed class TransitService(
         _ => "bus",
     };
     private static bool TryTime(string? text, out TimeSpan value) => TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out value);
+    // Met de officiële feed telt ook de doorgetrokken vertraging op haltes zonder eigen update; zo vertrekt een bus die al te laat is, niet "op tijd" op de volgende halte.
+    private int LiveDelay(string tripId, string stopId, TimeSpan scheduled)
+    {
+        if (liveSnapshot is null) return realtimeDelays.GetValueOrDefault((tripId, stopId));
+        var at = new DateTimeOffset(AtDate(scheduled)).ToUnixTimeSeconds();
+        return liveSnapshot.DelayMinutes(tripId, stopId, at);
+    }
+
     private static DateTime AtDate(TimeSpan value) => DateTime.Today.Add(value);
     private static double DistanceKm(double lat1, double lon1, double lat2, double lon2) => DistanceMeters(lat1, lon1, lat2, lon2) / 1000d;
     private static double[][]? ShapeBetweenStops(double[][] shape, TransitStop from, TransitStop to)

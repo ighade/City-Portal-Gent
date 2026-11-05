@@ -21,6 +21,11 @@ builder.Services.Configure<GentOptions>(builder.Configuration.GetSection(GentOpt
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.SectionName));
 builder.Services.Configure<RoutePlannerOptions>(builder.Configuration.GetSection(RoutePlannerOptions.SectionName));
 builder.Services.Configure<TransitOptions>(builder.Configuration.GetSection(TransitOptions.SectionName));
+// De sleutel staat in .env onder de naam van de header zelf.
+builder.Services.PostConfigure<TransitOptions>(o =>
+{
+    if (string.IsNullOrWhiteSpace(o.SubscriptionKey)) o.SubscriptionKey = builder.Configuration["Ocp-Apim-Subscription-Key"];
+});
 builder.Services.Configure<SocialfetchOptions>(builder.Configuration.GetSection(SocialfetchOptions.SectionName));
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -81,6 +86,14 @@ builder.Services.AddHttpClient<TransitService>(c =>
     c.Timeout = TimeSpan.FromSeconds(45);
     c.DefaultRequestHeaders.UserAgent.ParseAdd("ParkingGent/2.0 (+https://parking.gent)");
 });
+
+builder.Services.AddHttpClient(TransitRealtimeFeed.ClientName, c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(30);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("ParkingGent/2.0 (+https://parking.gent)");
+});
+builder.Services.AddSingleton<TransitRealtimeFeed>();
+builder.Services.AddScoped<TransitDepartures>();
 
 builder.Services.AddHttpClient<EventDescriptions>(c => c.Timeout = TimeSpan.FromSeconds(20));
 

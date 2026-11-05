@@ -128,6 +128,10 @@ public sealed class TransitOptions
     public string StaticFilePath { get; set; } = "seed/delijn-gtfs";
     public string TripUpdatesUrl { get; set; } = "https://gtfs.flatturtle.cloud/delijn/_realtime/trip-update";
     public string AlertsUrl { get; set; } = "https://gtfs.flatturtle.cloud/delijn/_realtime/alert";
+    /// <summary>De officiële De Lijn GTFS-realtime (vertragingen en geschrapte ritten). Zonder sleutel valt alles terug op <see cref="TripUpdatesUrl"/>.</summary>
+    public string DeLijnRealtimeUrl { get; set; } = "https://api.delijn.be/gtfs/v3/realtime";
+    /// <summary>De Ocp-Apim-Subscription-Key van De Lijn; wordt als header meegestuurd, nooit in de URL.</summary>
+    public string? SubscriptionKey { get; set; }
     public int StaticRefreshHours { get; set; } = 12;
     public int RealtimeRefreshSeconds { get; set; } = 30;
     public double GentMinLatitude { get; set; } = 50.97;

@@ -609,7 +609,19 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
 .rental-pin { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: #fff; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); box-sizing: border-box; }
 .rental-pin-sel { border-color: #facc15; border-width: 4px; }
 .rental-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
-.rental-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 1px solid var(--border, #d1d5db); border-radius: 8px; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.rental-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
 .rental-item.active { border-color: #facc15; box-shadow: 0 0 0 2px #facc1555; }
 .rental-item img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
 .rental-item small { display: block; opacity: .7; }
+
+/* OV-vertrektijden: vertraging oranje, geschrapt rood met doorstreping. */
+.dep-panel { margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); color: var(--ink); }
+.dep-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--border); }
+.dep-row:first-of-type { border-top: 0; }
+.dep-dest { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dep-times { white-space: nowrap; }
+.dep-sched { color: var(--ink-2); margin-right: 4px; }
+.dep-badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; }
+.dep-badge-late { background: #d97706; }
+.dep-badge-cancel { background: #dc2626; }
+.dep-cancelled .dep-dest { text-decoration: line-through; color: #b91c1c; }

@@ -15,7 +15,8 @@ import { GENT_BOUNDS, GENT_CENTER } from '../leaflet'
 import { useRouteInputs } from '../components/RouteInputs'
 import type { RoutePoint } from '../components/RouteInputs'
 import { useApp } from '../context/AppContext'
-import type { EzParkLeg, Friend, GentEvent, RoutePlanResult, TransitRouteResult } from '../types'
+import type { EzParkLeg, Friend, GentEvent, RoutePlanResult, TransitRouteResult, TransitStop } from '../types'
+import { TransitDeparturesPanel } from '../components/TransitDepartures'
 
 type Mode = 'foot' | 'bike' | 'car' | 'transit'
 
@@ -56,6 +57,8 @@ export function RoutePlanner() {
   const [route, setRoute] = useState<RoutePlanResult | null>(null)
   const [transitRoute, setTransitRoute] = useState<TransitRouteResult | null>(null)
   const [mode, setMode] = useState<Mode>('foot')
+  const [transitStops, setTransitStops] = useState<TransitStop[]>([])
+  const [selectedStopId, setSelectedStopId] = useState<string | null>(null)
   const [ezOn, setEzOn] = useState(false)
   const [lezBlocked, setLezBlocked] = useState(false)
   const [ezOverlay, setEzOverlay] = useState<EzOverlay | null>(null)
@@ -127,6 +130,16 @@ export function RoutePlanner() {
   )
 
   const rentalActive = mode === 'bike' && showRentalBikes
+
+  useEffect(() => {
+    if (mode !== 'transit') { setSelectedStopId(null); return }
+    if (transitStops.length > 0) return
+    let alive = true
+    api.transit.stops().then((s) => { if (alive) setTransitStops(s) }).catch(() => {})
+    return () => { alive = false }
+  }, [mode, transitStops.length])
+
+  const selectedStop = transitStops.find((s) => s.id === selectedStopId) ?? null
 
   useEffect(() => {
     if (!rentalActive) return
@@ -294,6 +307,9 @@ export function RoutePlanner() {
             onEventPick={pickEvent}
             rentalBikes={rentalActive ? nearbyBikes.map((n) => n.bike) : undefined}
             selectedRentalBikeId={rentalSelected}
+            transitStops={mode === 'transit' ? transitStops : undefined}
+            selectedStopId={selectedStopId}
+            onStopSelect={setSelectedStopId}
             onRentalBikeSelect={setRentalSelected}
             onEzParkPick={(slug) => setEzPick({ slug, n: Date.now() })}
             route={ezOn ? null : routeOverlay}
@@ -332,6 +348,8 @@ export function RoutePlanner() {
           </div>
 
           {inputs.hint && <p className="note">{inputs.hint}</p>}
+          {mode === 'transit' && !selectedStop && <p className="note">Klik op een halte op de kaart om de volgende vertrekken en vertragingen te zien.</p>}
+          {mode === 'transit' && selectedStop && <TransitDeparturesPanel stopId={selectedStop.id} stopName={selectedStop.name} onClose={() => setSelectedStopId(null)} />}
           {rentalActive && (
             <div className="rental-list">
               <strong>Deelfietsen dichtbij ({rentalOriginLabel})</strong>
@@ -393,7 +411,7 @@ export function RoutePlanner() {
                     <div>
                       <strong>{leg.mode === 'walk' ? 'Wandelen' : `${leg.mode === 'tram' ? 'Tram' : 'Bus'} ${leg.line ?? ''}`}</strong>
                       <div className="small muted">{leg.from} → {leg.to}</div>
-                      <div className="small">{time(new Date(leg.departureAt))}–{time(new Date(leg.arrivalAt))} · {leg.distanceKm.toFixed(1)} km</div>
+                      <div className="small">{time(new Date(leg.departureAt))}–{time(new Date(leg.arrivalAt))} · {leg.distanceKm.toFixed(1)} km{leg.mode !== 'walk' && leg.delayMinutes >= 2 && <> <span className="dep-badge dep-badge-late">+{leg.delayMinutes} min vertraging</span></>}</div>
                     </div>
                   </div>
                 ))}

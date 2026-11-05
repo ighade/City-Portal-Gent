@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-import type { EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, TransitRouteRequest, TransitRouteResult, TransitStop, Trend } from './types'
+import type { EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, TransitRouteRequest, TransitDeparturesResult, TransitRouteResult, TransitStop, Trend } from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {
@@ -200,6 +200,7 @@ export const api = {
   ezPark: (payload: EzParkRequest) => call<EzParkResult>('POST', '/api/route/ezpark', payload),
   transit: {
     stops: () => call<TransitStop[]>('GET', '/api/transit/stops'),
+    departures: (stopId: string) => call<TransitDeparturesResult>('GET', `/api/transit/stops/${encodeURIComponent(stopId)}/departures?count=8`),
     route: (payload: TransitRouteRequest) => call<TransitRouteResult>('POST', '/api/transit/route', payload),
   },
   events: () => call<GentEvent[]>('GET', '/api/events'),

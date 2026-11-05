@@ -45,6 +45,7 @@ public static class Api
         api.MapGet("/events/{id}", EventDetail);
         api.MapGet("/transit/stops", TransitStops).CacheOutput("lang");
         api.MapPost("/transit/route", TransitRoute);
+        api.MapGet("/transit/stops/{stopId}/departures", TransitStopDepartures);
         api.MapPost("/route/plan", RoutePlan);
         api.MapPost("/route/ezpark", EzPark);
         api.MapGet("/geo/suggest", GeoProxy("Suggestion", 10));
@@ -425,6 +426,14 @@ public static class Api
         {
             return Results.Json(new { error = "De OV-dienstregeling is tijdelijk niet beschikbaar." }, statusCode: StatusCodes.Status503ServiceUnavailable);
         }
+    }
+
+    private static async Task<IResult> TransitStopDepartures(TransitDepartures departures, string stopId, int? count, CancellationToken ct)
+    {
+        var result = await departures.GetAsync(stopId, count ?? 8, ct);
+        return result is null
+            ? Results.NotFound(new { error = "Deze halte bestaat niet." })
+            : Results.Ok(result);
     }
 
     private static async Task<IResult> Events(AppDbContext db, CancellationToken ct)
