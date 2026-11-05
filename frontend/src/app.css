@@ -591,3 +591,17 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
 .friend-pin-off { border-color: #6b7280; background: #6b7280; }
 .friend-pin-off img { filter: grayscale(1); }
 .friend-pin-ago { position: absolute; left: 50%; bottom: -16px; transform: translateX(-50%); white-space: nowrap; padding: 1px 6px; border-radius: 999px; background: #374151; color: #fff; font-size: 10px; font-weight: 600; }
+
+/* ---- Werken ---------------------------------------------------------------- */
+.werken-map { height: 65vh; min-height: 420px; border-radius: var(--r-md, 12px); overflow: hidden; }
+.werken-bar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.werken-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; }
+.chip.on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-strong); }
+.chip small { color: var(--muted); }
+.werken-dot { width: 10px; height: 10px; border-radius: 50%; }
+.werken-note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+.werk-pin { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; color: #fff; font-size: 13px; font-weight: 700; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
+.werk-popup p { margin: 6px 0; }
+.werk-popup ul { margin: 6px 0; padding-left: 18px; }
+.werk-severe { font-size: 11px; color: var(--crit-ink); font-weight: 600; }

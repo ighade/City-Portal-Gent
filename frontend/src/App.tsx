@@ -13,6 +13,8 @@ import { Detail } from './pages/Detail'
 import { Over } from './pages/Over'
 import { RoutePlanner } from './pages/RoutePlanner'
 import { Vrienden } from './pages/Vrienden'
+import { Werken } from './pages/Werken'
+import { AdminWorks } from './pages/AdminWorks'
 
 export default function App() {
   const { isAdmin, adminChecked } = useApp()
@@ -23,6 +25,7 @@ export default function App() {
         <Route path="route" element={<RoutePlanner />} />
         <Route path="vrienden" element={<Vrienden />} />
         <Route path="events" element={<Events />} />
+        <Route path="werken" element={<Werken />} />
         <Route path="events/:id" element={<EventDetail />} />
         <Route path="parking/:slug" element={<Detail />} />
         <Route path="over" element={<Over />} />
@@ -36,6 +39,7 @@ export default function App() {
           <Route path="tarieven" element={<AdminPrices />} />
           <Route path="gebruikers" element={<AdminUsers />} />
           <Route path="events" element={<EventManagement />} />
+          <Route path="werken" element={<AdminWorks />} />
         </Route>
         <Route path="*" element={<Navigate to="/events" replace />} />
       </Route>

@@ -25,6 +25,7 @@ export function AdminLayout() {
             <NavLink to="/beheer/tarieven">Tarieven</NavLink>
             <NavLink to="/beheer/gebruikers">Gebruikers</NavLink>
             <NavLink to="/beheer/events">Events</NavLink>
+            <NavLink to="/beheer/werken">Werken</NavLink>
           </nav>
         </div>
         <button className="btn" onClick={() => void logout()}>Afmelden</button>

@@ -20,6 +20,7 @@ export function Shell() {
           <nav className="nav">
             <NavLink to="/route">Route</NavLink>
             <NavLink to="/events">Events</NavLink>
+            <NavLink to="/werken">Werken</NavLink>
             <NavLink to="/vrienden">Vrienden</NavLink>
             <NavLink to="/over">Over</NavLink>
             {isAdmin && <NavLink to="/beheer">Beheer</NavLink>}
