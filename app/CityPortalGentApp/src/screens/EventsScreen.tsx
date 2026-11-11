@@ -4,6 +4,7 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 
 import { EventCard } from '@/components/EventCard'
 import { Btn, Empty, Input, Loading, PageHead, Screen } from '@/components/ui'
+import { SkeletonEventCard } from '@/components/SkeletonLoader'
 import { api } from '@/lib/api'
 import type { GentEvent } from '@/lib/types'
 
@@ -11,7 +12,7 @@ const PAGE_SIZE = 10
 
 type Filter = 'all' | 'week' | 'free'
 
-const FILTERS: [Filter, string][] = [['all', 'Alles'], ['week', 'Komende 7 dagen'], ['free', 'Zonder ticketprijs']]
+const FILTERS: [Filter, string][] = [['all', 'All Events'], ['week', 'Next 7 Days'], ['free', 'Free Events']]
 
 export function EventsScreen() {
   const [events, setEvents] = useState<GentEvent[]>([])
@@ -25,7 +26,7 @@ export function EventsScreen() {
     let cancelled = false
     api.events()
       .then((rows) => { if (!cancelled) setEvents(rows) })
-      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'De evenementen konden niet worden opgehaald.') })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Events could not be loaded.') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [])
@@ -59,11 +60,11 @@ export function EventsScreen() {
   return (
     <Screen onScroll={onScroll}>
       <PageHead
-        title="Evenementen in Gent"
-        subtitle="Wat er binnenkort te doen is. Kom je met de wagen? Check de bezetting van de parkings op de kaart."
+        title="Events in Gent"
+        subtitle="Discover upcoming events. Coming by car? Check parking availability on the map."
       />
       <View style={{ gap: 10, marginBottom: 16 }}>
-        <Input placeholder="Zoek op naam of plaats" value={query} onChangeText={setQuery} returnKeyType="search" autoCapitalize="none" />
+        <Input placeholder="Search by name or location" value={query} onChangeText={setQuery} returnKeyType="search" autoCapitalize="none" />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {FILTERS.map(([key, label]) => (
             <Btn key={key} size="sm" label={label} variant={filter === key ? 'primary' : 'default'} onPress={() => setFilter(key)} />
@@ -72,13 +73,17 @@ export function EventsScreen() {
       </View>
 
       {loading ? (
-        <Loading />
+        <View style={{ gap: 14 }}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <SkeletonEventCard key={i} />
+          ))}
+        </View>
       ) : error ? (
         <Empty>{error}</Empty>
       ) : visible.length === 0 ? (
-        <Empty>Geen evenementen gevonden.</Empty>
+        <Empty>No events found.</Empty>
       ) : (
-        shown.map((e) => <EventCard key={e.id} event={e} />)
+        shown.map((e, index) => <EventCard key={e.id} event={e} animate={index < PAGE_SIZE} />)
       )}
     </Screen>
   )

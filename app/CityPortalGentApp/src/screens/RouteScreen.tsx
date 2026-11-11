@@ -14,7 +14,10 @@ import { TransitDeparturesPanel } from '@/components/TransitDeparturesPanel'
 import { GarageRate, ManualRateInfo, StreetRate } from '@/components/RateInfo'
 import { useRouteInputs } from '@/components/RouteInputs'
 import type { RoutePoint } from '@/components/RouteInputs'
-import { Banner, Card, Fact, SwitchRow, Txt } from '@/components/ui'
+import { Banner, Card, Fact, SwitchRow, Txt, PageHead } from '@/components/ui'
+import { SkeletonCard, SkeletonLoader } from '@/components/SkeletonLoader'
+import { StatBox, DataGrid, DetailItem, Section, Badge, ValueDisplay } from '@/components/DataDisplay'
+import { useSlideInAnimation } from '@/hooks/useAnimations'
 import { Radius } from '@/constants/theme'
 import { useApp } from '@/context/AppContext'
 import { usePalette } from '@/context/ThemeContext'
@@ -460,61 +463,129 @@ export function RouteScreen() {
           </Banner>
         )}
         {ezOn && ez.controls}
-        <Txt variant="h2">Routeoverzicht</Txt>
-        <View>
+        <Section title="Route Overview" animate={true}>
           {ezOn ? (
             ez.overview
           ) : (
             <>
-              <View style={{ gap: 10 }}>
-                <Fact label="Start">{start?.label ?? '—'}</Fact>
-                <Fact label="Eind">{end?.label ?? '—'}</Fact>
-                <Fact label="Vervoer">{MODE_LABEL[mode]}</Fact>
-                <Fact label="Vertrek">{transitRoute ? time(new Date(transitRoute.departureAt)) : route ? time(departAt) : '—'}</Fact>
-                <Fact label="Aankomst">{transitRoute ? time(new Date(transitRoute.arrivalAt)) : arriveAt ? time(arriveAt) : '—'}</Fact>
-                <Fact label="Afstand">{transitRoute ? `${transitRoute.distanceKm.toFixed(1)} km` : route ? `${route.distanceKm.toFixed(1)} km` : '—'}</Fact>
-                {transitRoute && transitFareLabel(transitRoute.legs) && (
-                  <Fact label="Ticketprijs">
-                    <Txt variant="strong" style={{ textAlign: 'right' }}>
-                      {transitFareLabel(transitRoute.legs)} <Txt variant="smallMuted">(overstappen inbegrepen)</Txt>
-                    </Txt>
-                  </Fact>
-                )}
-                <Fact label="Geschatte tijd">{transitRoute ? `${Math.round(transitRoute.durationMinutes)} min` : route ? `${Math.round(route.durationMinutes)} min` : '—'}</Fact>
-                {mode === 'bike' && showRentalBikes && route && <Fact label="Deelfiets (schatting)">{rentalCostLabel(bikeTrip ? bikeTrip.ride.durationMinutes : route.durationMinutes)}</Fact>}
-              </View>
-
-              {transitRoute && (
-                <View style={{ gap: 12, marginTop: 12 }}>
-                  {transitRoute.legs.map((leg, i) => (
-                    <View key={`${leg.from}-${leg.to}-${i}`} style={{ flexDirection: 'row', gap: 10 }}>
-                      <LegBadge mode={leg.mode} line={leg.line} color={leg.color} />
-                      <View style={{ flex: 1 }}>
-                        <Txt variant="strong">{leg.mode === 'walk' ? 'Wandelen' : `${leg.mode === 'tram' ? 'Tram' : 'Bus'} ${leg.line ?? ''}`}</Txt>
-                        <Txt variant="smallMuted">{leg.from} → {leg.to}</Txt>
-                        <Txt variant="small">{time(new Date(leg.departureAt))}–{time(new Date(leg.arrivalAt))} · {leg.distanceKm.toFixed(1)} km{leg.mode !== 'walk' && leg.delayMinutes >= 2 ? `  ·  +${leg.delayMinutes} min vertraging` : ''}</Txt>
-                      </View>
-                    </View>
+              {!route && !transitRoute && !planning ? (
+                <View style={{ gap: 12 }}>
+                  {[1, 2, 3].map((i) => (
+                    <SkeletonCard key={i} />
                   ))}
                 </View>
-              )}
-
-              {!route && !transitRoute && !planning && <Txt variant="note">Kies start en bestemming en druk op “Route berekenen”.</Txt>}
-              {route && <Txt variant="note">{route.routeSummary}</Txt>}
-              {transitRoute && <Txt variant="note">{transitRoute.summary}</Txt>}
-              {route?.lezWarning && <Txt variant="note">{route.lezWarning}</Txt>}
-              {route?.destinationGarage && (
-                <View style={{ marginTop: 16 }}>
-                  <Txt variant="h3">Tarief {route.destinationGarage.name}</Txt>
-                  {route.destinationGarage.manualRate
-                    ? <ManualRateInfo rate={route.destinationGarage.manualRate} />
-                    : <GarageRate rate={route.destinationGarage.rate ?? undefined} />}
+              ) : planning ? (
+                <View style={{ gap: 12 }}>
+                  {[1, 2].map((i) => (
+                    <SkeletonCard key={i} />
+                  ))}
                 </View>
+              ) : (
+                <>
+                  {/* Route header with key stats */}
+                  <DataGrid columns={2} gap={10}>
+                    <StatBox
+                      label="Distance"
+                      value={transitRoute ? transitRoute.distanceKm.toFixed(1) : route ? route.distanceKm.toFixed(1) : '—'}
+                      unit={transitRoute || route ? 'km' : undefined}
+                      highlight={false}
+                      animate={true}
+                    />
+                    <StatBox
+                      label="Duration"
+                      value={transitRoute ? Math.round(transitRoute.durationMinutes) : route ? Math.round(route.durationMinutes) : '—'}
+                      unit={transitRoute || route ? 'min' : undefined}
+                      highlight={true}
+                      animate={true}
+                    />
+                  </DataGrid>
+
+                  {/* Route details */}
+                  <Section title="Details" animate={true}>
+                    <DetailItem
+                      label="Start Point"
+                      value={start?.label ?? '—'}
+                      animate={true}
+                    />
+                    <DetailItem
+                      label="Destination"
+                      value={end?.label ?? '—'}
+                      animate={true}
+                    />
+                    <DetailItem
+                      label="Transport Mode"
+                      value={<Badge variant="info">{MODE_LABEL[mode]}</Badge>}
+                      animate={true}
+                    />
+                    <DetailItem
+                      label="Departure Time"
+                      value={transitRoute ? time(new Date(transitRoute.departureAt)) : route ? time(departAt) : '—'}
+                      animate={true}
+                    />
+                    <DetailItem
+                      label="Arrival Time"
+                      value={transitRoute ? time(new Date(transitRoute.arrivalAt)) : arriveAt ? time(arriveAt) : '—'}
+                      animate={true}
+                    />
+                  </Section>
+
+                  {/* Transit legs */}
+                  {transitRoute && (
+                    <Section title="Transit Legs" animate={true}>
+                      <View style={{ gap: 12 }}>
+                        {transitRoute.legs.map((leg, i) => (
+                          <View key={`${leg.from}-${leg.to}-${i}`} style={{ flexDirection: 'row', gap: 10 }}>
+                            <LegBadge mode={leg.mode} line={leg.line} color={leg.color} />
+                            <View style={{ flex: 1 }}>
+                              <Txt variant="strong">{leg.mode === 'walk' ? 'Walk' : `${leg.mode === 'tram' ? 'Tram' : 'Bus'} ${leg.line ?? ''}`}</Txt>
+                              <Txt variant="smallMuted">{leg.from} → {leg.to}</Txt>
+                              <Txt variant="small">{time(new Date(leg.departureAt))}–{time(new Date(leg.arrivalAt))} · {leg.distanceKm.toFixed(1)} km{leg.mode !== 'walk' && leg.delayMinutes >= 2 ? `  ·  +${leg.delayMinutes} min delay` : ''}</Txt>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    </Section>
+                  )}
+
+                  {/* Fare information */}
+                  {transitRoute && transitFareLabel(transitRoute.legs) && (
+                    <DetailItem
+                      label="Ticket Price"
+                      value={<Txt variant="strong">{transitFareLabel(transitRoute.legs)} <Txt variant="smallMuted">(transfers incl.)</Txt></Txt>}
+                      highlight={true}
+                      animate={true}
+                    />
+                  )}
+
+                  {/* Rental bike cost */}
+                  {mode === 'bike' && showRentalBikes && route && (
+                    <DetailItem
+                      label="Rental Bike Cost"
+                      value={rentalCostLabel(bikeTrip ? bikeTrip.ride.durationMinutes : route.durationMinutes)}
+                      animate={true}
+                    />
+                  )}
+
+                  {/* Route notes */}
+                  {!route && !transitRoute && !planning && <Txt variant="note">Select start and destination and press "Calculate Route".</Txt>}
+                  {route && <Txt variant="note">{route.routeSummary}</Txt>}
+                  {transitRoute && <Txt variant="note">{transitRoute.summary}</Txt>}
+                  {route?.lezWarning && <Txt variant="note">{route.lezWarning}</Txt>}
+
+                  {/* Destination parking rates */}
+                  {route?.destinationGarage && (
+                    <Section title={`Rate: ${route.destinationGarage.name}`} animate={true}>
+                      {route.destinationGarage.manualRate
+                        ? <ManualRateInfo rate={route.destinationGarage.manualRate} />
+                        : <GarageRate rate={route.destinationGarage.rate ?? undefined} />}
+                    </Section>
+                  )}
+                  {route?.destinationParking && <StreetRate info={route.destinationParking} arrival={arriveAt} />}
+                </>
               )}
-              {route?.destinationParking && <StreetRate info={route.destinationParking} arrival={arriveAt} />}
             </>
           )}
-        </View>
+        </Section>
       </BottomSheet>
     </View>
   )

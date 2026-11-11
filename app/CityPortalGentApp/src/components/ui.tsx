@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import {
   ActivityIndicator,
+  Animated,
   Image,
   Pressable,
   ScrollView,
@@ -17,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Radius } from '@/constants/theme'
 import { usePalette } from '@/context/ThemeContext'
 import { initial } from '@/lib/friendsUi'
+import { useSlideInAnimation, useFadeInAnimation } from '@/hooks/useAnimations'
 
 type Variant = 'body' | 'small' | 'muted' | 'smallMuted' | 'strong' | 'h1' | 'h2' | 'h3' | 'note'
 
@@ -37,10 +39,11 @@ export function Txt({ variant = 'body', style, ...rest }: TextProps & { variant?
   return <Text style={[base[variant], style]} {...rest} />
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Card({ children, style, animate = true }: { children: ReactNode; style?: StyleProp<ViewStyle>; animate?: boolean }) {
   const p = usePalette()
+  const animationStyle = useSlideInAnimation(animate)
   return (
-    <View
+    <Animated.View
       style={[
         {
           backgroundColor: p.surface,
@@ -49,11 +52,17 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
           borderRadius: Radius.lg,
           padding: 16,
           marginBottom: 14,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 2,
+          elevation: 2,
         },
+        animationStyle,
         style,
       ]}>
       {children}
-    </View>
+    </Animated.View>
   )
 }
 
@@ -78,27 +87,54 @@ interface BtnProps {
 export function Btn({ label, onPress, variant = 'default', size = 'md', disabled, style }: BtnProps) {
   const p = usePalette()
   const primary = variant === 'primary'
+  const scaleRef = useRef(new Animated.Value(1)).current
+
+  const handlePressIn = () => {
+    Animated.timing(scaleRef, {
+      toValue: 0.95,
+      duration: 100,
+      useNativeDriver: true,
+    }).start()
+  }
+
+  const handlePressOut = () => {
+    Animated.timing(scaleRef, {
+      toValue: 1,
+      duration: 100,
+      useNativeDriver: true,
+    }).start()
+  }
+
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
+    <Animated.View
+      style={[
         {
-          paddingVertical: size === 'sm' ? 5 : 9,
-          paddingHorizontal: size === 'sm' ? 10 : 14,
-          borderRadius: size === 'sm' ? Radius.xs : Radius.sm,
-          borderWidth: 1,
-          borderColor: primary ? p.brand : variant === 'ghost' ? 'transparent' : p.borderStrong,
-          backgroundColor: primary ? (pressed ? p.brandStrong : p.brand) : pressed ? p.surface3 : variant === 'ghost' ? 'transparent' : p.surface,
-          opacity: disabled ? 0.5 : 1,
-          alignItems: 'center',
-          justifyContent: 'center',
+          transform: [{ scale: scaleRef }],
         },
-        style,
       ]}>
-      <Text style={{ color: primary ? p.brandInk : p.ink, fontWeight: '500', fontSize: size === 'sm' ? 12.5 : 14 }}>{label}</Text>
-    </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={disabled}
+        style={({ pressed }) => [
+          {
+            paddingVertical: size === 'sm' ? 5 : 9,
+            paddingHorizontal: size === 'sm' ? 10 : 14,
+            borderRadius: size === 'sm' ? Radius.xs : Radius.sm,
+            borderWidth: 1,
+            borderColor: primary ? p.brand : variant === 'ghost' ? 'transparent' : p.borderStrong,
+            backgroundColor: primary ? (pressed ? p.brandStrong : p.brand) : pressed ? p.surface3 : variant === 'ghost' ? 'transparent' : p.surface,
+            opacity: disabled ? 0.5 : 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          style,
+        ]}>
+        <Text style={{ color: primary ? p.brandInk : p.ink, fontWeight: '500', fontSize: size === 'sm' ? 12.5 : 14 }}>{label}</Text>
+      </Pressable>
+    </Animated.View>
   )
 }
 
@@ -273,14 +309,15 @@ export function Avatar({ name, src, size = 36, off = false }: { name: string; sr
 
 /** Titel en ondertitel bovenaan een pagina. */
 export function PageHead({ title, subtitle, right }: { title: string; subtitle?: string; right?: ReactNode }) {
+  const animationStyle = useFadeInAnimation()
   return (
-    <View style={{ marginBottom: 16, gap: 6 }}>
+    <Animated.View style={[{ marginBottom: 20, gap: 8 }, animationStyle]}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-        <Txt variant="h1" style={{ flex: 1 }}>{title}</Txt>
+        <Txt variant="h1" style={{ flex: 1, letterSpacing: -0.5 }}>{title}</Txt>
         {right}
       </View>
-      {subtitle ? <Txt variant="muted">{subtitle}</Txt> : null}
-    </View>
+      {subtitle ? <Txt variant="muted" style={{ fontSize: 15, lineHeight: 22 }}>{subtitle}</Txt> : null}
+    </Animated.View>
   )
 }
 
@@ -289,7 +326,7 @@ export function Screen({ children, bottomInset = 0, style, onScroll }: { childre
   const p = usePalette()
   const insets = useSafeAreaInsets()
   const contentStyle = useMemo(
-    () => [{ padding: 16, paddingBottom: 32 + bottomInset + insets.bottom }, style],
+    () => [{ padding: 16, paddingBottom: 40 + bottomInset + insets.bottom }, style],
     [bottomInset, insets.bottom, style],
   )
   return (
