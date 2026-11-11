@@ -15,7 +15,7 @@ import { GENT_BOUNDS, GENT_CENTER } from '../leaflet'
 import { useRouteInputs } from '../components/RouteInputs'
 import type { RoutePoint } from '../components/RouteInputs'
 import { useApp } from '../context/AppContext'
-import type { EzParkLeg, Friend, GentEvent, RoutePlanResult, TransitRouteResult, TransitStop } from '../types'
+import type { EzParkLeg, Friend, GentEvent, Museum, RoutePlanResult, TransitRouteResult, TransitStop } from '../types'
 import { TransitDeparturesPanel } from '../components/TransitDepartures'
 
 type Mode = 'foot' | 'bike' | 'car' | 'transit'
@@ -53,6 +53,9 @@ export function RoutePlanner() {
   // Met een gekozen deelfiets: eerst te voet naar de fiets (walk), daarna met de fiets naar de bestemming (ride).
   const [bikeTrip, setBikeTrip] = useState<{ walk: RoutePlanResult; ride: RoutePlanResult } | null>(null)
   const [showLez, setShowLez] = useState(false)
+  const [showMuseums, setShowMuseums] = useState(true)
+  const [museums, setMuseums] = useState<Museum[]>([])
+  const [museumError, setMuseumError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [route, setRoute] = useState<RoutePlanResult | null>(null)
   const [transitRoute, setTransitRoute] = useState<TransitRouteResult | null>(null)
@@ -83,6 +86,14 @@ export function RoutePlanner() {
   const friendsOnMap = useFriendsOnMap()
   const inputs = useRouteInputs(carParkings, mapClick)
   const { start, end } = inputs
+
+  useEffect(() => {
+    let active = true
+    api.museums()
+      .then((items) => { if (active) setMuseums(items) })
+      .catch(() => { if (active) setMuseumError('Musea konden niet worden geladen.') })
+    return () => { active = false }
+  }, [])
 
   // Komt de bezoeker van een evenement, dan staat de bestemming al ingevuld.
   const incoming = (useLocation().state as { destination?: { place: string; name: string } } | null)?.destination
@@ -303,6 +314,7 @@ export function RoutePlanner() {
             selected={null}
             hoverInfo
             events={weekEvents}
+            museums={showMuseums ? museums : undefined}
             friends={friendsOnMap}
             onEventPick={pickEvent}
             rentalBikes={rentalActive ? nearbyBikes.map((n) => n.bike) : undefined}
@@ -321,6 +333,12 @@ export function RoutePlanner() {
       <div className="card route-form">
         <h1 className="route-title">Routeplanner</h1>
         <ModePicker value={mode} onChange={changeMode} />
+        <label className="toggle">
+          <input type="checkbox" role="switch" checked={showMuseums} onChange={(e) => setShowMuseums(e.target.checked)} />
+          <span className="toggle-track" aria-hidden="true" />
+          Musea
+        </label>
+        {museumError && <div className="banner">{museumError}</div>}
         {ezOn ? (
           <EzParkPanel
             avoidLez={showLez}

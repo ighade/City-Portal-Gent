@@ -15,6 +15,7 @@ import { RoutePlanner } from './pages/RoutePlanner'
 import { Vrienden } from './pages/Vrienden'
 import { Werken } from './pages/Werken'
 import { AdminWorks } from './pages/AdminWorks'
+import { MuseumManagement } from './pages/AdminMuseums'
 
 export default function App() {
   const { isAdmin, adminChecked } = useApp()
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="gebruikers" element={<AdminUsers />} />
           <Route path="events" element={<EventManagement />} />
           <Route path="werken" element={<AdminWorks />} />
+          <Route path="musea" element={<MuseumManagement />} />
         </Route>
         <Route path="*" element={<Navigate to="/events" replace />} />
       </Route>

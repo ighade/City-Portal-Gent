@@ -10,10 +10,11 @@ import L, {
 } from '../leaflet'
 import { api } from '../api'
 import { drawFriends } from './FriendsMap'
+import { drawMuseums } from './MuseumMap'
 import { RENTAL_BIKE_ICONS } from '../rentalBikes'
 import type { RentalBike } from '../rentalBikes'
 import { busyness, busynessLabel, kindLabel } from '../types'
-import type { EzParkLeg, Friend, GentEvent, Parking, TransitStop } from '../types'
+import type { EzParkLeg, Friend, GentEvent, Museum, Parking, TransitStop } from '../types'
 
 interface RoutePoint {
   lat: number
@@ -60,6 +61,7 @@ interface Props {
   events?: MapEvent[]
   /** Vrienden met een gedeelde locatie, getekend met hun profielfoto. */
   friends?: Friend[]
+  museums?: Museum[]
   onEventPick?: (event: MapEvent) => void
   /** Deelfietsen (Dott/Bolt) als logo-speld; de gekozen fiets krijgt een gele ring. */
   rentalBikes?: RentalBike[]
@@ -94,7 +96,7 @@ export function textOn(hex?: string) {
   return lum > 0.6 ? '#111827' : '#fff'
 }
 
-export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick, events, onEventPick, friends, rentalBikes, selectedRentalBikeId, onRentalBikeSelect, transitStops, selectedStopId, onStopSelect }: Props) {
+export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick, events, onEventPick, friends, museums, rentalBikes, selectedRentalBikeId, onRentalBikeSelect, transitStops, selectedStopId, onStopSelect }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
@@ -104,6 +106,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
   clickHandler.current = onMapClick
   const eventLayer = useRef<L.LayerGroup | null>(null)
   const friendLayer = useRef<L.LayerGroup | null>(null)
+  const museumLayer = useRef<L.LayerGroup | null>(null)
   const rentalLayer = useRef<L.LayerGroup | null>(null)
   const stopLayer = useRef<L.LayerGroup | null>(null)
   const stopPick = useRef(onStopSelect)
@@ -429,6 +432,19 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
       friendLayer.current = null
     }
   }, [friends])
+
+  useEffect(() => {
+    const m = map.current
+    if (!m || !museums?.length) return
+    const group = L.layerGroup().addTo(m)
+    museumLayer.current = group
+    const cleanup = drawMuseums(group, museums)
+    return () => {
+      cleanup()
+      group.remove()
+      museumLayer.current = null
+    }
+  }, [museums])
 
   // OV-haltes: ~2000 bolletjes op één canvas, zodat de kaart vlot blijft.
   useEffect(() => {

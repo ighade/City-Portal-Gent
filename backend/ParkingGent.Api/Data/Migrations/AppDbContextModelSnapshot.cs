@@ -22,6 +22,21 @@ namespace ParkingGent.Api.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ParkingGent.Api.Domain.Museum", b =>
+                {
+                    b.Property<string>("Id").HasMaxLength(80).HasColumnType("character varying(80)");
+                    b.Property<string>("Name").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
+                    b.Property<double>("Lat").HasColumnType("double precision");
+                    b.Property<double>("Lon").HasColumnType("double precision");
+                    b.Property<string>("Hours").IsRequired().HasMaxLength(2000).HasColumnType("character varying(2000)");
+                    b.Property<string>("Website").IsRequired().HasMaxLength(500).HasColumnType("character varying(500)");
+                    b.Property<string>("WikidataId").HasMaxLength(20).HasColumnType("character varying(20)");
+                    b.Property<string>("FeaturedObjectId").HasMaxLength(20).HasColumnType("character varying(20)");
+                    b.Property<string>("CollectionSummary").HasMaxLength(2000).HasColumnType("character varying(2000)");
+                    b.HasKey("Id");
+                    b.ToTable("Museums");
+                });
+
             modelBuilder.Entity("ParkingGent.Api.Domain.Measurement", b =>
                 {
                     b.Property<long>("Id")

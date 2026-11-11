@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.OutputCaching;
@@ -43,6 +44,14 @@ public static class Api
         api.MapGet("/events", Events).CacheOutput("events");
         // Zonder uitvoercache: de eerste aanvraag haalt de beschrijving op (1 credit) en bewaart ze.
         api.MapGet("/events/{id}", EventDetail);
+        api.MapGet("/museums", async (AppDbContext db, CancellationToken ct) =>
+            await db.Museums.AsNoTracking().OrderBy(m => m.Name).ToListAsync(ct)).CacheOutput("museums");
+        api.MapGet("/museums/{id}", async (string id, AppDbContext db, CancellationToken ct) =>
+        {
+            var museum = await db.Museums.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id, ct);
+            return museum is null ? Results.NotFound() : Results.Ok(museum);
+        }).CacheOutput("museums");
+        api.MapGet("/museums/{id}/collection", MuseumCollection).CacheOutput("museums");
         api.MapGet("/transit/stops", TransitStops).CacheOutput("lang");
         api.MapPost("/transit/route", TransitRoute);
         api.MapGet("/transit/stops/{stopId}/departures", TransitStopDepartures);
@@ -76,6 +85,11 @@ public static class Api
         admin.MapGet("/events", AdminEvents);
         admin.MapPost("/events", AddManualEvent);
         admin.MapDelete("/events/{id}", DeleteManualEvent);
+        admin.MapGet("/museums", async (AppDbContext db, CancellationToken ct) =>
+            await db.Museums.AsNoTracking().OrderBy(m => m.Name).ToListAsync(ct));
+        admin.MapPost("/museums", CreateMuseum);
+        admin.MapPut("/museums/{id}", UpdateMuseum);
+        admin.MapDelete("/museums/{id}", DeleteMuseum);
         admin.MapGet("/users", AdminUsers);
         admin.MapPost("/users/{id:guid}/suspend", SuspendUser);
         admin.MapPost("/users/{id:guid}/unsuspend", UnsuspendUser);
@@ -83,6 +97,100 @@ public static class Api
         admin.MapPost("/city-rates/sync", SyncCityRates);
         admin.MapGet("/audit", AuditEntries);
         admin.MapGet("/stale", StaleParkings);
+    }
+
+    private static async Task<IResult> MuseumCollection(string id, AppDbContext db, MuseumService service, ILoggerFactory loggerFactory, CancellationToken ct)
+    {
+        var museum = await db.Museums.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id, ct);
+        if (museum is null) return Results.NotFound();
+        try
+        {
+            var collection = await service.GetCollectionAsync(museum, ct);
+            return collection is null ? Results.NoContent() : Results.Ok(collection);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            loggerFactory.CreateLogger<MuseumService>().LogWarning(ex, "Collectie voor {Museum} kon niet worden opgehaald.", id);
+            return Results.Problem("De collectie kon niet worden opgehaald.", statusCode: StatusCodes.Status502BadGateway);
+        }
+    }
+
+    private static string? ValidateMuseum(Museum m)
+    {
+        if (m.Id is null || !Regex.IsMatch(m.Id, @"\A[a-z0-9]+(?:-[a-z0-9]+)*\z") || m.Id.Length > 80)
+            return "Gebruik een unieke sleutel met kleine letters, cijfers en koppeltekens.";
+        if (string.IsNullOrWhiteSpace(m.Name) || m.Name.Length > 200 ||
+            string.IsNullOrWhiteSpace(m.Hours) || m.Hours.Length > 2000)
+            return "Naam en openingsinformatie zijn verplicht (maximaal 200 en 2000 tekens).";
+        if (!double.IsFinite(m.Lat) || !double.IsFinite(m.Lon) || m.Lat is < -90 or > 90 || m.Lon is < -180 or > 180)
+            return "Ongeldige coördinaten.";
+        if (m.Website is null || m.Website.Length > 500 ||
+            !Uri.TryCreate(m.Website, UriKind.Absolute, out var url) || url.Scheme != Uri.UriSchemeHttps)
+            return "Geef een geldige HTTPS-museumwebsite op.";
+        if ((m.WikidataId is not null && !Regex.IsMatch(m.WikidataId, @"\AQ[1-9][0-9]{0,18}\z")) ||
+            (m.FeaturedObjectId is not null && !Regex.IsMatch(m.FeaturedObjectId, @"\AQ[1-9][0-9]{0,18}\z")) ||
+            (m.FeaturedObjectId is not null && m.WikidataId is null))
+            return "Wikidata-ID's moeten beginnen met Q gevolgd door cijfers; een collectieobject vereist ook een museum-ID.";
+        if (m.CollectionSummary?.Length > 2000) return "De collectiebeschrijving mag maximaal 2000 tekens bevatten.";
+        return null;
+    }
+
+    private static void NormalizeMuseum(Museum m)
+    {
+        m.Id = m.Id?.Trim() ?? "";
+        m.Name = m.Name?.Trim() ?? "";
+        m.Hours = m.Hours?.Trim() ?? "";
+        m.Website = m.Website?.Trim() ?? "";
+        m.WikidataId = string.IsNullOrWhiteSpace(m.WikidataId) ? null : m.WikidataId.Trim();
+        m.FeaturedObjectId = string.IsNullOrWhiteSpace(m.FeaturedObjectId) ? null : m.FeaturedObjectId.Trim();
+        m.CollectionSummary = string.IsNullOrWhiteSpace(m.CollectionSummary) ? null : m.CollectionSummary.Trim();
+    }
+
+    private static async Task<IResult> CreateMuseum(Museum museum, HttpContext ctx, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
+    {
+        NormalizeMuseum(museum);
+        var error = ValidateMuseum(museum);
+        if (error is not null) return Results.BadRequest(new { error });
+        if (await db.Museums.AnyAsync(m => m.Id == museum.Id, ct))
+            return Results.Conflict(new { error = "Deze museumsleutel bestaat al." });
+        db.Museums.Add(museum);
+        Audit(db, ctx, "museum-toegevoegd", museum.Id);
+        await db.SaveChangesAsync(ct);
+        await cache.EvictByTagAsync("museums", ct);
+        return Results.Created($"/api/museums/{museum.Id}", museum);
+    }
+
+    private static async Task<IResult> UpdateMuseum(string id, Museum input, HttpContext ctx, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
+    {
+        NormalizeMuseum(input);
+        if (id != input.Id) return Results.BadRequest(new { error = "De museumsleutel kan niet worden gewijzigd." });
+        var error = ValidateMuseum(input);
+        if (error is not null) return Results.BadRequest(new { error });
+        var museum = await db.Museums.FindAsync([id], ct);
+        if (museum is null) return Results.NotFound();
+        museum.Name = input.Name;
+        museum.Lat = input.Lat;
+        museum.Lon = input.Lon;
+        museum.Hours = input.Hours;
+        museum.Website = input.Website;
+        museum.WikidataId = input.WikidataId;
+        museum.FeaturedObjectId = input.FeaturedObjectId;
+        museum.CollectionSummary = input.CollectionSummary;
+        Audit(db, ctx, "museum-gewijzigd", id);
+        await db.SaveChangesAsync(ct);
+        await cache.EvictByTagAsync("museums", ct);
+        return Results.Ok(museum);
+    }
+
+    private static async Task<IResult> DeleteMuseum(string id, HttpContext ctx, AppDbContext db, IOutputCacheStore cache, CancellationToken ct)
+    {
+        var museum = await db.Museums.FindAsync([id], ct);
+        if (museum is null) return Results.NotFound();
+        db.Museums.Remove(museum);
+        Audit(db, ctx, "museum-verwijderd", id);
+        await db.SaveChangesAsync(ct);
+        await cache.EvictByTagAsync("museums", ct);
+        return Results.NoContent();
     }
 
     private static void Audit(AppDbContext db, HttpContext ctx, string action, string target)

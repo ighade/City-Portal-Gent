@@ -6,6 +6,20 @@ Begonnen als de graduaatsproef van **Asilhan Tavukcu** (HoGent, maart 2025) en i
 
 De webapp opent met Gentse evenementen; de routeplanner behoudt onder meer de OV-routeoptie.
 
+Op de routekaart staat een schakelbare laag met zes musea. Hover, tik of focus op een
+museumspeld voor openingsinformatie en, indien beschikbaar, een collectievoorbeeld. De
+openingsuren zijn indicatief: controleer altijd de gelinkte museumwebsite voor uitzonderingen.
+`GET /api/museums` geeft de locaties (coördinaten uit Wikidata); `GET
+/api/museums/{id}/collection` haalt een gecontroleerd collectieobject met afbeelding en
+beschrijving op via de Wikidata Query Service en Wikimedia Commons. De Commons-link vermeldt
+maker en licentie. Een antwoord van 204 betekent dat geen gecontroleerd voorbeeld beschikbaar
+is; bij een storing geeft de API een fout, geen verzonnen collectie. De collectievoorbeelden
+zijn momenteel beschikbaar voor MSK, S.M.A.K. en STAM en worden 30 minuten gecachet.
+De gegevens staan in de databank en kunnen onder **Beheer → Musea** toegevoegd, gewijzigd en
+verwijderd worden. Een migratie vult de zes oorspronkelijke musea eenmalig in; wijzigingen
+worden niet bij een volgende start overschreven. Voor een collectievoorbeeld zijn de
+Wikidata-ID van het museum en die van een object nodig.
+
 De backend houdt één regel aan: **lezen mag iedereen, schrijven vraagt een identiteit.**
 
 Omdat de dienst op het open internet staat, is de begrenzing strakker dan elders: 60 verzoeken

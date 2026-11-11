@@ -96,6 +96,13 @@ builder.Services.AddSingleton<TransitRealtimeFeed>();
 builder.Services.AddScoped<TransitDepartures>();
 
 builder.Services.AddHttpClient<EventDescriptions>(c => c.Timeout = TimeSpan.FromSeconds(20));
+builder.Services.AddHttpClient<MuseumService>(c =>
+{
+    c.BaseAddress = new Uri("https://query.wikidata.org/sparql");
+    c.Timeout = TimeSpan.FromSeconds(20);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("ParkingGent/2.0 (+https://parking.gent)");
+    c.DefaultRequestHeaders.Accept.ParseAdd("application/sparql-results+json");
+});
 
 builder.Services.AddSingleton<BicycleLocations>();
 builder.Services.AddSingleton<LowEmissionZone>();
@@ -146,6 +153,7 @@ builder.Services.AddOutputCache(o =>
     o.AddPolicy("parkings", p => p.Expire(TimeSpan.FromSeconds(30)).SetVaryByQuery("hours", "days").Tag("parking-details"));
     o.AddPolicy("lang", p => p.Expire(TimeSpan.FromMinutes(30)).SetVaryByQuery("days"));
     o.AddPolicy("events", p => p.Expire(TimeSpan.FromMinutes(30)).SetVaryByQuery("days").Tag("events"));
+    o.AddPolicy("museums", p => p.Expire(TimeSpan.FromMinutes(30)).Tag("museums"));
 });
 
 builder.Services.AddHealthChecks()

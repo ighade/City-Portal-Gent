@@ -452,3 +452,22 @@ export interface StaleParking {
   name: string
   lastMeasuredUtc: string
 }
+export interface Museum {
+  id: string
+  name: string
+  lat: number
+  lon: number
+  hours: string
+  website: string
+  collectionSummary?: string
+  wikidataId?: string
+  featuredObjectId?: string
+}
+
+export interface MuseumCollection {
+  title: string
+  description?: string
+  imageUrl: string
+  objectUrl: string
+  imageSourceUrl: string
+}

@@ -1,4 +1,5 @@
 import type { AdminEvent, AdminParking, AdminUser, AuditEntry, StaleParking, ManualEventInput, EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, ManualParkingRate, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, StreetTariffAdmin, SyncRun, TransitRouteRequest, TransitRouteResult, TransitDeparturesResult, TransitStop, Trend } from './types'
+import type { Museum, MuseumCollection } from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {
@@ -122,6 +123,8 @@ export const api = {
   },
   events: () => call<GentEvent[]>('GET', '/api/events'),
   event: (id: string) => call<GentEventDetail>('GET', `/api/events/${encodeURIComponent(id)}`),
+  museums: () => call<Museum[]>('GET', '/api/museums'),
+  museumCollection: (id: string) => call<MuseumCollection | undefined>('GET', `/api/museums/${encodeURIComponent(id)}/collection`),
   meta: () => call<Meta>('GET', '/api/meta'),
 
   /** De vriendenservice: alles hier vraagt een aanmelding (cookie), behalve register en login. */
@@ -176,6 +179,10 @@ export const api = {
     events: () => call<AdminEvent[]>('GET', '/api/admin/events'),
     createEvent: (event: ManualEventInput) => call<AdminEvent>('POST', '/api/admin/events', event),
     deleteEvent: (id: string) => call<void>('DELETE', `/api/admin/events/${encodeURIComponent(id)}`),
+    museums: () => call<Museum[]>('GET', '/api/admin/museums'),
+    createMuseum: (museum: Museum) => call<Museum>('POST', '/api/admin/museums', museum),
+    updateMuseum: (museum: Museum) => call<Museum>('PUT', `/api/admin/museums/${encodeURIComponent(museum.id)}`, museum),
+    deleteMuseum: (id: string) => call<void>('DELETE', `/api/admin/museums/${encodeURIComponent(id)}`),
     users: (q = '') => call<AdminUser[]>('GET', `/api/admin/users?q=${encodeURIComponent(q)}`),
     suspendUser: (id: string) => call<void>('POST', `/api/admin/users/${id}/suspend`),
     unsuspendUser: (id: string) => call<void>('POST', `/api/admin/users/${id}/unsuspend`),

@@ -24,9 +24,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<FriendSession> FriendSessions => Set<FriendSession>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<CityParkingRate> CityParkingRates => Set<CityParkingRate>();
+    public DbSet<Museum> Museums => Set<Museum>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<Museum>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasMaxLength(80);
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Hours).HasMaxLength(2000);
+            e.Property(x => x.Website).HasMaxLength(500);
+            e.Property(x => x.WikidataId).HasMaxLength(20);
+            e.Property(x => x.FeaturedObjectId).HasMaxLength(20);
+            e.Property(x => x.CollectionSummary).HasMaxLength(2000);
+        });
         b.Entity<Parking>(e =>
         {
             e.HasIndex(p => p.Slug).IsUnique();

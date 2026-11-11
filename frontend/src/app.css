@@ -528,6 +528,10 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
 
 /* ---- Evenementen op de routekaart ---- */
 .event-pin { position: relative; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; background: var(--brand); color: #fff; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+.museum-pin { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #7c3aed; color: white; border: 3px solid white; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+.museum-popup-content { width: 245px; max-width: 70vw; }
+.museum-popup-content img { display: block; width: 100%; max-height: 150px; object-fit: contain; margin: 8px 0; }
+.museum-popup-content p { margin: 6px 0; }
 .event-pin-count { position: absolute; top: -9px; right: -9px; min-width: 17px; height: 17px; padding: 0 3px; display: grid; place-items: center; border: 1px solid #fff; border-radius: 999px; background: var(--crit); color: #fff; font-size: 10px; font-weight: 700; line-height: 1; }
 .event-popup .leaflet-popup-content-wrapper { padding: 0; overflow: hidden; border-radius: var(--r-md, 12px); }
 .event-popup .leaflet-popup-content { margin: 0; width: auto !important; max-width: 82vw; }
