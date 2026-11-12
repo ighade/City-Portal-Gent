@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { fetchNearbyChargingStations, formatDistance } from '../chargingStations'
 import type { ChargingStation } from '../chargingStations'
 import './ChargingStationsPanel.css'
 
 interface Props {
   destination: { lat: number; lon: number } | null
+  selectedId: string | null
+  onSelect: (id: string | null) => void
+  onShownChange: (stations: ChargingStation[]) => void
   onRouteTo: (station: ChargingStation) => void
 }
 
-export function ChargingStationsPanel({ destination, onRouteTo }: Props) {
+export function ChargingStationsPanel({ destination, selectedId, onSelect, onShownChange, onRouteTo }: Props) {
   const [stations, setStations] = useState<ChargingStation[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -31,8 +34,16 @@ export function ChargingStationsPanel({ destination, onRouteTo }: Props) {
     return () => controller.abort()
   }, [lat, lon])
 
-  const available = stations.filter((s) => !busy.has(s.id))
-  const shown = available.slice(0, 5)
+  const shown = useMemo(() => stations.filter((s) => !busy.has(s.id)).slice(0, 5), [stations, busy])
+
+  useEffect(() => {
+    onShownChange(shown)
+    if (selectedId && !shown.some((s) => s.id === selectedId)) onSelect(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown])
+
+  // Bij het verlaten van het paneel verdwijnen de laadpalen ook van de kaart.
+  useEffect(() => () => { onShownChange([]); onSelect(null) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="charging-panel">
@@ -42,7 +53,7 @@ export function ChargingStationsPanel({ destination, onRouteTo }: Props) {
       {error && <div className="banner">{error}</div>}
       {!loading && !error && destination && shown.length === 0 && <p className="note">Geen laadpalen gevonden.</p>}
       {shown.map((s, i) => (
-        <div key={s.id} className={`charging-item${i === 0 ? ' nearest' : ''}`}>
+        <div key={s.id} className={`charging-item${i === 0 ? ' nearest' : ''}${s.id === selectedId ? ' selected' : ''}`} onClick={() => onSelect(s.id)}>
           <span>
             {s.street} · {formatDistance(s.distanceMeters)}
             <small>{[s.operator, s.type, s.kw ? `${s.kw} kW` : null, s.location].filter(Boolean).join(' · ')}</small>

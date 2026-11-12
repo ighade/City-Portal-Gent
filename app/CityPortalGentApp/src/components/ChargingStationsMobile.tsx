@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, View } from 'react-native'
 
 import { Txt } from '@/components/ui'
@@ -8,10 +8,13 @@ import type { ChargingStation } from '@/lib/chargingStations'
 
 interface Props {
   destination: { lat: number; lon: number } | null
+  selectedId: string | null
+  onSelect: (id: string | null) => void
+  onShownChange: (stations: ChargingStation[]) => void
   onRouteTo: (station: ChargingStation) => void
 }
 
-export function ChargingStationsMobile({ destination, onRouteTo }: Props) {
+export function ChargingStationsMobile({ destination, selectedId, onSelect, onShownChange, onRouteTo }: Props) {
   const p = usePalette()
   const [stations, setStations] = useState<ChargingStation[]>([])
   const [loading, setLoading] = useState(false)
@@ -23,6 +26,7 @@ export function ChargingStationsMobile({ destination, onRouteTo }: Props) {
   const lon = destination?.lon
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setBusy(new Set())
     if (lat === undefined || lon === undefined) {
       setStations([])
@@ -42,7 +46,16 @@ export function ChargingStationsMobile({ destination, onRouteTo }: Props) {
     return () => controller.abort()
   }, [lat, lon])
 
-  const shown = stations.filter((s) => !busy.has(s.id)).slice(0, 5)
+  const shown = useMemo(() => stations.filter((s) => !busy.has(s.id)).slice(0, 5), [stations, busy])
+
+  useEffect(() => {
+    onShownChange(shown)
+    if (selectedId && !shown.some((s) => s.id === selectedId)) onSelect(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown])
+
+  // Bij het verlaten van het paneel verdwijnen de laadpalen ook van de kaart.
+  useEffect(() => () => { onShownChange([]); onSelect(null) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <View style={{ gap: 8 }}>
@@ -50,19 +63,22 @@ export function ChargingStationsMobile({ destination, onRouteTo }: Props) {
       {loading && <Txt variant="note">Laadpalen laden…</Txt>}
       {error && <Txt style={{ color: p.crit }}>{error}</Txt>}
       {!loading && !error && destination && shown.length === 0 && <Txt variant="note">Geen laadpalen gevonden.</Txt>}
-      {shown.map((s, i) => (
-        <View
+      {shown.map((s, i) => {
+        const sel = s.id === selectedId
+        return (
+        <Pressable
           key={s.id}
+          onPress={() => onSelect(s.id)}
           style={{
             padding: 10,
             borderRadius: 8,
-            borderWidth: 1,
-            borderColor: i === 0 ? p.brand : p.border,
-            backgroundColor: i === 0 ? p.brandSoft : p.surface,
+            borderWidth: sel ? 2 : 1,
+            borderColor: sel ? '#facc15' : i === 0 ? p.brand : p.border,
+            backgroundColor: sel ? '#fef9c3' : i === 0 ? p.brandSoft : p.surface,
             gap: 6,
           }}>
-          <Txt style={{ fontWeight: '600' }}>{s.street} · {formatDistance(s.distanceMeters)}</Txt>
-          <Txt variant="small">{[s.operator, s.type, s.kw ? `${s.kw} kW` : null, s.location].filter(Boolean).join(' · ')}</Txt>
+          <Txt style={{ fontWeight: '600', color: sel ? '#111827' : undefined }}>{s.street} · {formatDistance(s.distanceMeters)}</Txt>
+          <Txt variant="small" style={{ color: sel ? '#111827' : undefined }}>{[s.operator, s.type, s.kw ? `${s.kw} kW` : null, s.location].filter(Boolean).join(' · ')}</Txt>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Pressable
               onPress={() => onRouteTo(s)}
@@ -71,12 +87,13 @@ export function ChargingStationsMobile({ destination, onRouteTo }: Props) {
             </Pressable>
             <Pressable
               onPress={() => setBusy(new Set(busy).add(s.id))}
-              style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: p.borderStrong }}>
+              style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: p.borderStrong, backgroundColor: p.surface }}>
               <Txt>Bezet</Txt>
             </Pressable>
           </View>
-        </View>
-      ))}
+        </Pressable>
+        )
+      })}
       {stations.length > 0 && <Txt variant="note">Live bezetting is niet beschikbaar. Markeer een paal als bezet om de volgende te zien.</Txt>}
     </View>
   )

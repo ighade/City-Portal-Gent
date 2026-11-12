@@ -5,7 +5,7 @@ import { Image, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-
 import MapView, { Callout, Marker, Polygon, Polyline } from 'react-native-maps'
 import type { Region } from 'react-native-maps'
 
-import { BluePin, DotLabel, EventPin, LineBadge, ParkingPin, PinMarker, RentalBikePin } from '@/components/MapPins'
+import { BluePin, ChargingPin, DotLabel, EventPin, LineBadge, ParkingPin, PinMarker, RentalBikePin } from '@/components/MapPins'
 import { FriendMarkers } from '@/components/FriendsMap'
 import { Btn, Txt } from '@/components/ui'
 import type { EzOverlay } from '@/components/EzParkPanel'
@@ -16,6 +16,7 @@ import { dayMonthParts, nl, timeBrussels, weekdayLong } from '@/lib/format'
 import { GENT_BOUNDS, GENT_REGION, geoJsonPolygons } from '@/lib/map'
 import type { MapPolygon } from '@/lib/map'
 import type { RentalBike } from '@/lib/rentalBikes'
+import type { ChargingStation } from '@/lib/chargingStations'
 import { busyness, busynessLabel, kindLabel } from '@/lib/types'
 import type { Friend, GentEvent, Parking, TransitStop } from '@/lib/types'
 
@@ -64,6 +65,9 @@ interface Props {
   rentalBikes?: RentalBike[]
   selectedRentalBikeId?: string | null
   onRentalBikeSelect?: (id: string) => void
+  chargingStations?: ChargingStation[]
+  selectedChargingId?: string | null
+  onChargingSelect?: (id: string) => void
   /** OV-haltes; alleen die in beeld staan worden getekend (max. 120). */
   transitStops?: TransitStop[]
   selectedStopId?: string | null
@@ -142,7 +146,9 @@ export function ParkingMap({
   rentalBikes,
   selectedRentalBikeId,
   onRentalBikeSelect,
-  transitStops,
+  chargingStations,
+  selectedChargingId,
+  onChargingSelect,  transitStops,
   selectedStopId,
   onStopSelect,
   onUserPosition,
@@ -265,6 +271,15 @@ export function ParkingMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRentalBikeId])
 
+  useEffect(() => {
+    if (!selectedChargingId) return
+    const s = chargingStations?.find((item) => item.id === selectedChargingId)
+    if (!s) return
+    map.current?.animateToRegion({ ...region, latitude: s.lat, longitude: s.lon }, 300)
+    // Alleen bij een andere selectie centreren, niet na elke kaartbeweging.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChargingId])
+
   // Spelden die op het scherm dichter dan EVENT_CLUSTER_PX bij elkaar liggen worden één speld.
   const clusters = useMemo(() => {
     if (!events || events.length === 0 || size.w === 0) return []
@@ -365,6 +380,22 @@ export function ParkingMap({
               onStopSelect?.(s.id)
             }}>
             <View style={{ width: selectedStopId === s.id ? 20 : 14, height: selectedStopId === s.id ? 20 : 14, borderRadius: 10, borderWidth: 3, borderColor: selectedStopId === s.id ? '#b45309' : '#1d4ed8', backgroundColor: selectedStopId === s.id ? '#fbbf24' : '#fff' }} />
+          </PinMarker>
+        ))}
+
+        {chargingStations?.map((s) => (
+          <PinMarker
+            key={`charging-${s.id}`}
+            coordinate={{ latitude: s.lat, longitude: s.lon }}
+            title={`Laadpaal ${s.street}`}
+            anchor={{ x: 0.5, y: 0.5 }}
+            zIndex={selectedChargingId === s.id ? 30 : 12}
+            version={`charging-${selectedChargingId === s.id}`}
+            onPress={() => {
+              markerPressAt.current = Date.now()
+              onChargingSelect?.(s.id)
+            }}>
+            <ChargingPin selected={selectedChargingId === s.id} />
           </PinMarker>
         ))}
 

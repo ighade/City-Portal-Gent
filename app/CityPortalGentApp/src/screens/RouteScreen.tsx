@@ -12,6 +12,7 @@ import { ParkingMap } from '@/components/ParkingMap'
 import type { MapEvent } from '@/components/ParkingMap'
 import { RentalBikesPanel } from '@/components/RentalBikesPanel'
 import { ChargingStationsMobile } from '@/components/ChargingStationsMobile'
+import type { ChargingStation } from '@/lib/chargingStations'
 import { TransitDeparturesPanel } from '@/components/TransitDeparturesPanel'
 import { GarageRate, ManualRateInfo, StreetRate } from '@/components/RateInfo'
 import { useRouteInputs } from '@/components/RouteInputs'
@@ -109,6 +110,8 @@ export function RouteScreen() {
   const [mapClick, setMapClick] = useState<{ lat: number; lon: number; n: number } | null>(null)
   const [ezPick, setEzPick] = useState<{ slug: string; n: number } | null>(null)
   const [showChargingStations, setShowChargingStations] = useState(false)
+  const [chargingStations, setChargingStations] = useState<ChargingStation[]>([])
+  const [chargingSelected, setChargingSelected] = useState<string | null>(null)
 
   const carParkings = useMemo(() => parkings.filter((x) => x.kind !== 'bicycle'), [parkings])
   // Parkings staan alleen op de kaart als EZ Park aan staat; de parkings uit het EZ Park-voorstel
@@ -421,6 +424,9 @@ export function RouteScreen() {
           selectedStopId={selectedStopId}
           onStopSelect={setSelectedStopId}
           selectedRentalBikeId={selectedRentalBikeId}
+          chargingStations={chargingStations}
+          selectedChargingId={chargingSelected}
+          onChargingSelect={setChargingSelected}
           onRentalBikeSelect={(id) => {
             setSelectedRentalBikeId(id)
             setRentalBikeOpenError(null)
@@ -580,6 +586,9 @@ export function RouteScreen() {
                     <Section title="Charging Stations" animate={true}>
                       <ChargingStationsMobile
                         destination={end ? { lat: end.lat, lon: end.lon } : null}
+                        selectedId={chargingSelected}
+                        onSelect={setChargingSelected}
+                        onShownChange={setChargingStations}
                         onRouteTo={(s) => inputs.chooseEnd({ lat: s.lat, lon: s.lon, label: `Laadpaal ${s.street}` })}
                       />
                     </Section>

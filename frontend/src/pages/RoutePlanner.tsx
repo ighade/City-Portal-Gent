@@ -19,6 +19,7 @@ import type { EzParkLeg, Friend, GentEvent, RoutePlanResult, TransitRouteResult,
 import { TransitDeparturesPanel } from '../components/TransitDepartures'
 import { TransitLegsOverview } from '../components/TransitLegsOverview'
 import { ChargingStationsPanel } from '../components/ChargingStationsPanel'
+import type { ChargingStation } from '../chargingStations'
 
 type Mode = 'foot' | 'bike' | 'car' | 'transit'
 
@@ -74,6 +75,8 @@ export function RoutePlanner() {
   const [userPos, setUserPos] = useState<{ lat: number; lon: number } | null>(null)
   const [ezPick, setEzPick] = useState<{ slug: string; n: number } | null>(null)
   const [showChargingStations, setShowChargingStations] = useState(false)
+  const [chargingStations, setChargingStations] = useState<ChargingStation[]>([])
+  const [chargingSelected, setChargingSelected] = useState<string | null>(null)
 
   const carParkings = useMemo(() => parkings.filter((p) => p.kind !== 'bicycle'), [parkings])
   // Parkings staan alleen op de kaart als EZ Park aan staat; de parkings uit het EZ Park-voorstel
@@ -320,6 +323,9 @@ export function RoutePlanner() {
             selectedStopId={selectedStopId}
             onStopSelect={setSelectedStopId}
             onRentalBikeSelect={setRentalSelected}
+            chargingStations={chargingStations}
+            selectedChargingId={chargingSelected}
+            onChargingSelect={setChargingSelected}
             onEzParkPick={(slug) => setEzPick({ slug, n: Date.now() })}
             route={ezOn ? null : routeOverlay}
             onMapClick={(lat, lon) => setMapClick({ lat, lon, n: Date.now() })}
@@ -432,6 +438,9 @@ export function RoutePlanner() {
               <div style={{ marginTop: 16 }}>
                 <ChargingStationsPanel
                   destination={end ? { lat: end.lat, lon: end.lon } : null}
+                  selectedId={chargingSelected}
+                  onSelect={setChargingSelected}
+                  onShownChange={setChargingStations}
                   onRouteTo={(s) => inputs.chooseEnd({ lat: s.lat, lon: s.lon, label: `Laadpaal ${s.street}` })}
                 />
               </div>

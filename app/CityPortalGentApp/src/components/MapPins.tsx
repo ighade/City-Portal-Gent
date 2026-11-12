@@ -66,6 +66,25 @@ export function RentalBikePin({ provider, selected }: { provider: RentalBikeProv
   )
 }
 
+/** Laadpaal-speld: bliksemicoon; de geselecteerde paal is groter, geel en heeft een groene rand. */
+export function ChargingPin({ selected }: { selected: boolean }) {
+  const size = selected ? 42 : 34
+  return (
+    <View style={{
+      width: size,
+      height: size,
+      borderRadius: size / 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: selected ? '#facc15' : '#16a34a',
+      borderWidth: 3,
+      borderColor: selected ? '#16a34a' : '#fff',
+    }}>
+      <Text style={{ fontSize: selected ? 22 : 18, color: selected ? '#111827' : '#fff', fontWeight: '800' }}>⚡</Text>
+    </View>
+  )
+}
+
 /** De drukte-speld van een parking: aantal vrij in een kleur, vierkant voor fietsen, open ring zonder meting. */
 export function ParkingPin({ parking: p }: { parking: Parking }) {
   const pal = usePalette()

@@ -12,6 +12,7 @@ import { api } from '../api'
 import { drawFriends } from './FriendsMap'
 import { RENTAL_BIKE_ICONS } from '../rentalBikes'
 import type { RentalBike } from '../rentalBikes'
+import type { ChargingStation } from '../chargingStations'
 import { busyness, busynessLabel, kindLabel } from '../types'
 import type { EzParkLeg, Friend, GentEvent, Parking, TransitStop } from '../types'
 
@@ -65,6 +66,9 @@ interface Props {
   rentalBikes?: RentalBike[]
   selectedRentalBikeId?: string | null
   onRentalBikeSelect?: (id: string) => void
+  chargingStations?: ChargingStation[]
+  selectedChargingId?: string | null
+  onChargingSelect?: (id: string) => void
   /** OV-haltes (canvas-bolletjes); de gekozen halte is gemarkeerd. */
   transitStops?: TransitStop[]
   selectedStopId?: string | null
@@ -97,7 +101,7 @@ export function textOn(hex?: string) {
 /** OV-haltes verschijnen pas vanaf dit zoomniveau. */
 const STOP_MIN_ZOOM = 15
 
-export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick, events, onEventPick, friends, rentalBikes, selectedRentalBikeId, onRentalBikeSelect, transitStops, selectedStopId, onStopSelect }: Props) {
+export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick, events, onEventPick, friends, rentalBikes, selectedRentalBikeId, onRentalBikeSelect, chargingStations, selectedChargingId, onChargingSelect, transitStops, selectedStopId, onStopSelect }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
@@ -113,6 +117,9 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
   stopPick.current = onStopSelect
   const rentalPick = useRef(onRentalBikeSelect)
   rentalPick.current = onRentalBikeSelect
+  const chargingLayer = useRef<L.LayerGroup | null>(null)
+  const chargingPick = useRef(onChargingSelect)
+  chargingPick.current = onChargingSelect
   const eventPick = useRef(onEventPick)
   eventPick.current = onEventPick
   const ezPick = useRef(onEzParkPick)
@@ -503,6 +510,43 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
     // Alleen bij een andere selectie inzoomen/pannen, niet bij elke nieuwe lijst.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRentalBikeId])
+
+  // Laadpalen: bliksemicoon, geselecteerde paal groter en met gele ring.
+  useEffect(() => {
+    const m = map.current
+    if (!m) return
+    chargingLayer.current?.remove()
+    chargingLayer.current = null
+    if (!chargingStations || chargingStations.length === 0) return
+    const group = L.layerGroup().addTo(m)
+    for (const s of chargingStations) {
+      const sel = s.id === selectedChargingId
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="charging-pin${sel ? ' charging-pin-sel' : ''}"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg></div>`,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+      })
+      L.marker([s.lat, s.lon], { icon, zIndexOffset: sel ? 1000 : 0, title: `Laadpaal ${s.street}` })
+        .on('click', (e) => {
+          L.DomEvent.stopPropagation(e)
+          chargingPick.current?.(s.id)
+        })
+        .addTo(group)
+    }
+    chargingLayer.current = group
+    return () => {
+      chargingLayer.current?.remove()
+      chargingLayer.current = null
+    }
+  }, [chargingStations, selectedChargingId])
+
+  useEffect(() => {
+    const s = chargingStations?.find((c) => c.id === selectedChargingId)
+    if (s) map.current?.panTo([s.lat, s.lon])
+    // Alleen bij een andere selectie pannen, niet bij elke nieuwe lijst.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChargingId])
 
   // De spelden: bij elke vernieuwing opnieuw tekenen. Vijftig spelden is niets.
   useEffect(() => {

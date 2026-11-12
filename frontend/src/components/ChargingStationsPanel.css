@@ -1,5 +1,6 @@
 .charging-panel { display: grid; gap: 8px; margin-top: 16px; }
-.charging-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--border, #e4e7ec); border-radius: 8px; }
+.charging-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--border, #e4e7ec); border-radius: 8px; cursor: pointer; }
 .charging-item.nearest { border-color: var(--brand, #4f46e5); }
+.charging-item.selected { background: #fef9c3; border-color: #facc15; box-shadow: 0 0 0 2px rgba(250,204,21,.5); }
 .charging-item small { display: block; opacity: 0.7; }
 .charging-actions { display: flex; gap: 8px; flex-shrink: 0; }
