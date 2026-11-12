@@ -1,101 +1,68 @@
-const CHARGING_API_URL = 'https://data.stad.gent/api/explore/v2.1/catalog/datasets/laadpalen-gent/records/?lang=nl&limit=500&offset=0'
+const BASE = 'https://data.stad.gent/api/explore/v2.1/catalog/datasets/laadpalen-gent/records'
 
 export interface ChargingStation {
   id: string
-  name: string
+  street: string
   lat: number
   lon: number
-  address?: string
-  status: 'free' | 'occupied' | 'error'
-  connectorTypes: string[]
-  operatingStatus: string
-  operator?: string
+  operator: string | null
+  type: string | null
+  kw: number | null
+  location: string | null
+  url: string | null
+  distanceMeters: number
 }
 
-export interface ChargingStationApiRecord {
-  fields: {
-    georef: {
-      lon: number
-      lat: number
-    }
-    adres?: string
-    naam?: string
-    operator?: string
-    oplaadpunten_beschikbaar?: number
-    oplaadpunten_totaal?: number
-    status?: string
-  }
+interface ApiRecord {
+  urid: string
+  straatnaam: string | null
+  huisnummer: string | null
+  cpo: string | null
+  type: string | null
+  kw: number | null
+  ligging: string | null
+  url: string | null
+  geo_point_2d: { lat: number; lon: number }
 }
 
-export async function fetchChargingStations(): Promise<ChargingStation[]> {
-  try {
-    const res = await fetch(CHARGING_API_URL)
-    if (!res.ok) throw new Error(`API error: ${res.status}`)
-
-    const data = (await res.json()) as { records?: ChargingStationApiRecord[] }
-    const records = data.records ?? []
-
-    return records
-      .filter((r) => r.fields?.georef?.lat && r.fields?.georef?.lon)
-      .map((r, idx) => {
-        const fields = r.fields
-        const availableChargers = fields.oplaadpunten_beschikbaar ?? 0
-        const isOccupied = availableChargers === 0
-
-        return {
-          id: `charging-${idx}`,
-          name: fields.naam || 'Onbekende laadpaal',
-          lat: fields.georef.lat,
-          lon: fields.georef.lon,
-          address: fields.adres,
-          status: isOccupied ? 'occupied' : 'free',
-          connectorTypes: [],
-          operatingStatus: fields.status || 'operational',
-          operator: fields.operator,
-        }
-      })
-  } catch (e) {
-    console.error('Failed to fetch charging stations:', e)
-    return []
-  }
+export function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const rad = (d: number) => (d * Math.PI) / 180
+  const h =
+    Math.sin(rad(bLat - aLat) / 2) ** 2 +
+    Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(rad(bLon - aLon) / 2) ** 2
+  return 2 * 6371000 * Math.asin(Math.sqrt(h))
 }
 
-export function filterAvailableChargingStations(stations: ChargingStation[]): ChargingStation[] {
-  return stations.filter((s) => s.status === 'free')
-}
-
-export function getNearestChargingStation(
-  stations: ChargingStation[],
-  userLat: number,
-  userLon: number,
-  maxDistance: number = 5000,
-): ChargingStation | null {
-  const nearby = stations.filter((s) => {
-    const distance = calculateDistance(userLat, userLon, s.lat, s.lon)
-    return distance <= maxDistance
+/** De laadpalen in dienst die het dichtst bij het punt liggen, dichtstbijzijnde eerst. */
+export async function fetchNearbyChargingStations(
+  lat: number,
+  lon: number,
+  limit = 10,
+  signal?: AbortSignal,
+): Promise<ChargingStation[]> {
+  const params = new URLSearchParams({
+    lang: 'nl',
+    limit: String(limit),
+    where: "status='In dienst'",
+    order_by: `distance(geo_point_2d, geom'POINT(${lon} ${lat})')`,
   })
-
-  if (nearby.length === 0) return null
-
-  return nearby.reduce((nearest, station) => {
-    const dist = calculateDistance(userLat, userLon, station.lat, station.lon)
-    const nearestDist = calculateDistance(userLat, userLon, nearest.lat, nearest.lon)
-    return dist < nearestDist ? station : nearest
-  })
-}
-
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000
-  const dLat = ((lat2 - lat1) * Math.PI) / 180
-  const dLon = ((lon2 - lon1) * Math.PI) / 180
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-  return R * c
+  const res = await fetch(`${BASE}?${params}`, { signal })
+  if (!res.ok) throw new Error('Laadpalen konden niet worden geladen.')
+  const body = (await res.json()) as { results?: ApiRecord[] }
+  return (body.results ?? []).map((r) => ({
+    id: r.urid,
+    street: [r.straatnaam, r.huisnummer].filter(Boolean).join(' ') || 'Laadpaal',
+    lat: r.geo_point_2d.lat,
+    lon: r.geo_point_2d.lon,
+    operator: r.cpo,
+    type: r.type,
+    kw: r.kw,
+    location: r.ligging,
+    url: r.url,
+    distanceMeters: haversineMeters(lat, lon, r.geo_point_2d.lat, r.geo_point_2d.lon),
+  }))
 }
 
 export function formatDistance(meters: number): string {
-  if (meters < 1000) return `${Math.round(meters)} m`
-  return `${(meters / 1000).toFixed(1)} km`
+  return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`
 }

@@ -431,8 +431,8 @@ export function RoutePlanner() {
             {showChargingStations && mode === 'car' && (
               <div style={{ marginTop: 16 }}>
                 <ChargingStationsPanel
-                  destination={end ? { lat: end.lat, lon: end.lon } : undefined}
-                  isVisible={showChargingStations}
+                  destination={end ? { lat: end.lat, lon: end.lon } : null}
+                  onRouteTo={(s) => inputs.chooseEnd({ lat: s.lat, lon: s.lon, label: `Laadpaal ${s.street}` })}
                 />
               </div>
             )}

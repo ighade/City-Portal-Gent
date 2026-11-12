@@ -30,7 +30,6 @@ import type { RentalBike } from '@/lib/rentalBikes'
 import { GENT_CENTER } from '@/lib/map'
 import { transitFareLabel } from '@/lib/fare'
 import type { EzParkLeg, Friend, GentEvent, RoutePlanResult, TransitRouteResult, TransitStop } from '@/lib/types'
-import type { ChargingStation } from '@/lib/chargingStations'
 
 type Mode = 'foot' | 'bike' | 'car' | 'transit'
 
@@ -580,7 +579,8 @@ export function RouteScreen() {
                   {showChargingStations && mode === 'car' && (
                     <Section title="Charging Stations" animate={true}>
                       <ChargingStationsMobile
-                        destination={end ? { lat: end.lat, lon: end.lon } : undefined}
+                        destination={end ? { lat: end.lat, lon: end.lon } : null}
+                        onRouteTo={(s) => inputs.chooseEnd({ lat: s.lat, lon: s.lon, label: `Laadpaal ${s.street}` })}
                       />
                     </Section>
                   )}
