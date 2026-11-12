@@ -15,6 +15,8 @@ import type { RentalBike } from '../rentalBikes'
 import type { ChargingStation } from '../chargingStations'
 import { busyness, busynessLabel, kindLabel } from '../types'
 import type { EzParkLeg, Friend, GentEvent, Parking, TransitStop } from '../types'
+import { KINDS, isOpenEnded } from '../roadworks'
+import type { Work } from '../roadworks'
 
 interface RoutePoint {
   lat: number
@@ -73,6 +75,8 @@ interface Props {
   transitStops?: TransitStop[]
   selectedStopId?: string | null
   onStopSelect?: (id: string) => void
+  /** Wegenwerken en inname van openbaar domein. */
+  works?: Work[]
 }
 
 interface EzParkOverlay {
@@ -101,12 +105,13 @@ export function textOn(hex?: string) {
 /** OV-haltes verschijnen pas vanaf dit zoomniveau. */
 const STOP_MIN_ZOOM = 15
 
-export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick, events, onEventPick, friends, rentalBikes, selectedRentalBikeId, onRentalBikeSelect, chargingStations, selectedChargingId, onChargingSelect, transitStops, selectedStopId, onStopSelect }: Props) {
+export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick, events, onEventPick, friends, rentalBikes, selectedRentalBikeId, onRentalBikeSelect, chargingStations, selectedChargingId, onChargingSelect, transitStops, selectedStopId, onStopSelect, works }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
   const routeLayer = useRef<L.LayerGroup | null>(null)
   const ezLayer = useRef<L.LayerGroup | null>(null)
+  const worksLayer = useRef<L.LayerGroup | null>(null)
   const clickHandler = useRef(onMapClick)
   clickHandler.current = onMapClick
   const eventLayer = useRef<L.LayerGroup | null>(null)
@@ -599,6 +604,69 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
     map.current.panTo(marker.getLatLng(), { animate: true })
     marker.openPopup()
   }, [selected, parkings])
+
+  // Wegenwerken: polygonen en iconen.
+  useEffect(() => {
+    const m = map.current
+    if (!m) return
+    worksLayer.current?.remove()
+    worksLayer.current = null
+    if (!works || works.length === 0) return
+
+    const group = L.layerGroup().addTo(m)
+    const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
+    const fmt = (d: Date | null) => (d ? d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—')
+    const ICONS: Partial<Record<string, string>> = { afgesloten: '⛔', parkeer: 'P', beperkt: '🚶' }
+
+    const polygonStyle = (w: Work): L.PathOptions => {
+      const color = KINDS[w.kind].color
+      switch (w.kind) {
+        case 'afgesloten':
+          return { color, weight: 3, dashArray: '6 4', fillColor: color, fillOpacity: 0.45 }
+        case 'parkeer':
+          return { color, weight: 2, fillColor: color, fillOpacity: 0.4 }
+        case 'beperkt':
+          return { color, weight: 2, dashArray: '2 4', fillColor: color, fillOpacity: 0.3 }
+        case 'werf':
+          return { color: '#2b2640', weight: 2, fillColor: color, fillOpacity: 0.7 }
+        default:
+          return { color, weight: 1, fillColor: color, fillOpacity: 0.25 }
+      }
+    }
+
+    const popupHtml = (w: Work): string => {
+      const k = KINDS[w.kind]
+      const when = isOpenEnded(w.end) ? `Sinds ${fmt(w.start)} · geen einddatum` : `${fmt(w.start)} → ${fmt(w.end)}`
+      return `<div class="werk-popup">
+        <strong style="color:${k.color}">${esc(k.label)}</strong>${w.severe ? ' <span class="werk-severe">ernstige hinder</span>' : ''}
+        ${w.description ? `<p>${esc(w.description.slice(0, 220))}</p>` : ''}
+        ${w.consequences.length ? `<ul>${w.consequences.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
+        <small>${esc(when)}<br>${esc(w.owner)}</small>
+      </div>`
+    }
+
+    const sorted = [...works].sort((a, b) => KINDS[b.kind].order - KINDS[a.kind].order)
+    for (const w of sorted) {
+      L.geoJSON((w as any).geometry, { style: () => polygonStyle(w) }).bindPopup(popupHtml(w), { maxWidth: 280 }).addTo(group)
+      const icon = ICONS[w.kind]
+      if (icon) {
+        L.marker((w as any).center, {
+          title: KINDS[w.kind].label,
+          zIndexOffset: 500,
+          icon: L.divIcon({
+            className: '',
+            html: `<span class="werk-pin" style="background:${KINDS[w.kind].color}">${icon}</span>`,
+            iconSize: [26, 26],
+            iconAnchor: [13, 13],
+            popupAnchor: [0, -12],
+          }),
+        })
+          .bindPopup(popupHtml(w), { maxWidth: 280 })
+          .addTo(group)
+      }
+    }
+    worksLayer.current = group
+  }, [works])
 
   return <div ref={host} className="map" role="application" aria-label="Kaart van de parkings in Gent" />
 }

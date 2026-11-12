@@ -20,6 +20,8 @@ import { TransitDeparturesPanel } from '../components/TransitDepartures'
 import { TransitLegsOverview } from '../components/TransitLegsOverview'
 import { ChargingStationsPanel } from '../components/ChargingStationsPanel'
 import type { ChargingStation } from '../chargingStations'
+import { fetchWorks, KIND_ORDER, KINDS, timing } from '../roadworks'
+import type { Timing, Work, WorkKind } from '../roadworks'
 
 type Mode = 'foot' | 'bike' | 'car' | 'transit'
 
@@ -77,6 +79,11 @@ export function RoutePlanner() {
   const [showChargingStations, setShowChargingStations] = useState(false)
   const [chargingStations, setChargingStations] = useState<ChargingStation[]>([])
   const [chargingSelected, setChargingSelected] = useState<string | null>(null)
+  const [showWorks, setShowWorks] = useState(false)
+  const [works, setWorks] = useState<Work[] | null>(null)
+  const [worksError, setWorksError] = useState<string | null>(null)
+  const [worksKinds, setWorksKinds] = useState<Set<WorkKind>>(() => new Set(KIND_ORDER))
+  const [worksTimes, setWorksTimes] = useState<Set<Timing>>(() => new Set<Timing>(['actief']))
 
   const carParkings = useMemo(() => parkings.filter((p) => p.kind !== 'bicycle'), [parkings])
   // Parkings staan alleen op de kaart als EZ Park aan staat; de parkings uit het EZ Park-voorstel
@@ -102,6 +109,26 @@ export function RoutePlanner() {
     })
     return () => { cancelled = true }
   }, [incoming?.place, incoming?.name])
+
+  useEffect(() => {
+    if (!showWorks) return
+    const ctrl = new AbortController()
+    fetchWorks(ctrl.signal).then(setWorks).catch((e: unknown) => {
+      if (!ctrl.signal.aborted) setWorksError(e instanceof Error ? e.message : 'Laden mislukt')
+    })
+    return () => ctrl.abort()
+  }, [showWorks])
+
+  const worksCount = useMemo(() => {
+    const c: Record<WorkKind, number> = { afgesloten: 0, parkeer: 0, beperkt: 0, rijstrook: 0, werf: 0 }
+    for (const w of works ?? []) if (worksTimes.has(timing(w))) c[w.kind]++
+    return c
+  }, [works, worksTimes])
+
+  const visibleWorks = useMemo(
+    () => (works ?? []).filter((w) => worksKinds.has(w.kind) && worksTimes.has(timing(w))),
+    [works, worksKinds, worksTimes],
+  )
 
   const routeOverlay = useMemo(() => {
     if (!route || !start || !end) return null
@@ -276,6 +303,12 @@ export function RoutePlanner() {
     setEzOn(true)
   }
 
+  const toggle = <T,>(set: Set<T>, v: T, apply: (s: Set<T>) => void) => {
+    const next = new Set(set)
+    if (!next.delete(v)) next.add(v)
+    apply(next)
+  }
+
   const toggles = mode === 'bike' ? (
     <label className="toggle" title="Toon Dott- en Bolt-deelfietsen op de kaart">
       <input type="checkbox" role="switch" checked={showRentalBikes} onChange={(e) => { setShowRentalBikes(e.target.checked); setRentalSelected(null) }} />
@@ -330,6 +363,7 @@ export function RoutePlanner() {
             route={ezOn ? null : routeOverlay}
             onMapClick={(lat, lon) => setMapClick({ lat, lon, n: Date.now() })}
             ezpark={ezOn ? ezOverlay : (mode === 'transit' && transitOverlay) || markerOverlay}
+            works={showWorks ? visibleWorks : undefined}
           />
       </div>
 
@@ -398,6 +432,38 @@ export function RoutePlanner() {
             </div>
           )}
         </>)}
+        <label className="toggle" title="Toon wegenwerken en inname van openbaar domein">
+          <input type="checkbox" role="switch" checked={showWorks} onChange={(e) => setShowWorks(e.target.checked)} />
+          <span className="toggle-track" aria-hidden="true" />
+          Wegenwerken
+        </label>
+        {showWorks && (
+          <div className="werken-bar">
+            <div className="werken-filters">
+              {[{ id: 'actief', label: 'Nu bezig' }, { id: 'gepland', label: 'Gepland' }, { id: 'afgelopen', label: 'Afgelopen' }].map((t) => (
+                <button key={t.id} type="button" className={`chip${worksTimes.has(t.id as Timing) ? ' on' : ''}`} onClick={() => toggle(worksTimes, t.id as Timing, setWorksTimes)}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="werken-filters">
+              {KIND_ORDER.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  title={KINDS[k].hint}
+                  className={`chip${worksKinds.has(k) ? ' on' : ''}`}
+                  onClick={() => toggle(worksKinds, k, setWorksKinds)}
+                >
+                  <span className="werken-dot" style={{ background: KINDS[k].color }} />
+                  {KINDS[k].label} <small>{worksCount[k]}</small>
+                </button>
+              ))}
+            </div>
+            {worksError && <div className="banner">{worksError}</div>}
+            {works && <p className="note">{visibleWorks.length} zones getoond. Bron: GIPOD via data.stad.gent.</p>}
+          </div>
+        )}
         {inputs.locateError && !start && <div className="banner" style={{ marginTop: 16 }}>{inputs.locateError}</div>}
       </div>
 

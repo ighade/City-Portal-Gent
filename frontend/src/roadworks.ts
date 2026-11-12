@@ -26,12 +26,12 @@ export interface RawWork {
  */
 export type WorkKind = 'afgesloten' | 'parkeer' | 'beperkt' | 'rijstrook' | 'werf'
 
-export const KINDS: Record<WorkKind, { label: string; color: string; hint: string }> = {
-  afgesloten: { label: 'Afgesloten', color: '#d03b3b', hint: 'Geen doorgang voor (een deel van) het verkeer' },
-  parkeer: { label: 'Parkeerverbod', color: '#e8590c', hint: 'Parkeren niet toegestaan' },
-  beperkt: { label: 'Beperkte doorgang', color: '#2a78d6', hint: 'Voetgangers of fietsers hebben minder ruimte' },
-  rijstrook: { label: 'Minder rijstroken', color: '#d9a400', hint: 'Rijstroken weggenomen of versmald' },
-  werf: { label: 'Werf', color: '#5c5470', hint: 'De werfzone zelf' },
+export const KINDS: Record<WorkKind, { label: string; color: string; hint: string; order: number }> = {
+  afgesloten: { label: 'Afgesloten', color: '#d03b3b', hint: 'Geen doorgang voor (een deel van) het verkeer', order: 5 },
+  parkeer: { label: 'Parkeerverbod', color: '#e8590c', hint: 'Parkeren niet toegestaan', order: 4 },
+  beperkt: { label: 'Beperkte doorgang', color: '#2a78d6', hint: 'Voetgangers of fietsers hebben minder ruimte', order: 3 },
+  rijstrook: { label: 'Minder rijstroken', color: '#d9a400', hint: 'Rijstroken weggenomen of versmald', order: 2 },
+  werf: { label: 'Werf', color: '#5c5470', hint: 'De werfzone zelf', order: 1 },
 }
 
 export const KIND_ORDER: WorkKind[] = ['afgesloten', 'parkeer', 'beperkt', 'rijstrook', 'werf']
