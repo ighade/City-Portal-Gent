@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Pressable, View } from 'react-native'
 
 import { Txt } from '@/components/ui'
-import { usePalette } from '@/context/ThemeContext'
+import { usePalette, useTheme } from '@/context/ThemeContext'
 import { fetchNearbyChargingStations, formatDistance } from '@/lib/chargingStations'
 import type { ChargingStation } from '@/lib/chargingStations'
 
@@ -16,6 +16,7 @@ interface Props {
 
 export function ChargingStationsMobile({ destination, selectedId, onSelect, onShownChange, onRouteTo }: Props) {
   const p = usePalette()
+  const dark = useTheme().theme === 'dark'
   const [stations, setStations] = useState<ChargingStation[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -73,13 +74,13 @@ export function ChargingStationsMobile({ destination, selectedId, onSelect, onSh
             padding: 10,
             borderRadius: 8,
             borderWidth: sel ? 2 : 1,
-            borderColor: sel ? '#facc15' : i === 0 ? p.brand : p.border,
-            backgroundColor: sel ? '#fef9c3' : i === 0 ? p.brandSoft : p.surface,
+            borderColor: sel ? (dark ? '#38bdf8' : '#0ea5e9') : i === 0 ? p.brand : p.border,
+            backgroundColor: sel ? (dark ? '#0c4a6e' : '#e0f2fe') : i === 0 ? p.brandSoft : p.surface,
             gap: 6,
           }}>
-          <Txt style={{ fontWeight: '600', color: sel ? '#111827' : undefined }}>{s.street} · {formatDistance(s.distanceMeters)}</Txt>
-          <Txt variant="small" style={{ color: sel ? '#111827' : undefined }}>{[s.operator, s.type, s.kw ? `${s.kw} kW` : null, s.location].filter(Boolean).join(' · ')}</Txt>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Txt style={{ fontWeight: '600', color: sel ? (dark ? '#f0f9ff' : '#111827') : undefined }}>{s.street} · {formatDistance(s.distanceMeters)}</Txt>
+          <Txt variant="small" style={{ color: sel ? (dark ? '#f0f9ff' : '#111827') : undefined }}>{[s.operator, s.type, s.kw ? `${s.kw} kW` : null, s.location].filter(Boolean).join(' · ')}</Txt>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Pressable
               onPress={() => onRouteTo(s)}
               style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, backgroundColor: p.brand }}>
