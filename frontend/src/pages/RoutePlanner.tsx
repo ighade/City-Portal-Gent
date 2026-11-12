@@ -432,38 +432,6 @@ export function RoutePlanner() {
             </div>
           )}
         </>)}
-        <label className="toggle" title="Toon wegenwerken en inname van openbaar domein">
-          <input type="checkbox" role="switch" checked={showWorks} onChange={(e) => setShowWorks(e.target.checked)} />
-          <span className="toggle-track" aria-hidden="true" />
-          Wegenwerken
-        </label>
-        {showWorks && (
-          <div className="werken-bar">
-            <div className="werken-filters">
-              {[{ id: 'actief', label: 'Nu bezig' }, { id: 'gepland', label: 'Gepland' }, { id: 'afgelopen', label: 'Afgelopen' }].map((t) => (
-                <button key={t.id} type="button" className={`chip${worksTimes.has(t.id as Timing) ? ' on' : ''}`} onClick={() => toggle(worksTimes, t.id as Timing, setWorksTimes)}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <div className="werken-filters">
-              {KIND_ORDER.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  title={KINDS[k].hint}
-                  className={`chip${worksKinds.has(k) ? ' on' : ''}`}
-                  onClick={() => toggle(worksKinds, k, setWorksKinds)}
-                >
-                  <span className="werken-dot" style={{ background: KINDS[k].color }} />
-                  {KINDS[k].label} <small>{worksCount[k]}</small>
-                </button>
-              ))}
-            </div>
-            {worksError && <div className="banner">{worksError}</div>}
-            {works && <p className="note">{visibleWorks.length} zones getoond. Bron: GIPOD via data.stad.gent.</p>}
-          </div>
-        )}
         {inputs.locateError && !start && <div className="banner" style={{ marginTop: 16 }}>{inputs.locateError}</div>}
       </div>
 
@@ -512,6 +480,41 @@ export function RoutePlanner() {
               </div>
             )}
           </>)}
+      </div>
+
+      <div style={{ padding: '12px', position: 'fixed', bottom: 0, left: 0, right: 0, backgroundColor: 'var(--bg)', borderTop: '1px solid var(--border)', zIndex: 1000 }}>
+        <label className="toggle" title="Toon wegenwerken en inname van openbaar domein" style={{ marginBottom: showWorks ? '12px' : 0 }}>
+          <input type="checkbox" role="switch" checked={showWorks} onChange={(e) => setShowWorks(e.target.checked)} />
+          <span className="toggle-track" aria-hidden="true" />
+          Wegenwerken
+        </label>
+        {showWorks && (
+          <div className="werken-bar">
+            <div className="werken-filters">
+              {[{ id: 'actief', label: 'Nu bezig' }, { id: 'gepland', label: 'Gepland' }, { id: 'afgelopen', label: 'Afgelopen' }].map((t) => (
+                <button key={t.id} type="button" className={`chip${worksTimes.has(t.id as Timing) ? ' on' : ''}`} onClick={() => toggle(worksTimes, t.id as Timing, setWorksTimes)}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="werken-filters">
+              {KIND_ORDER.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  title={KINDS[k].hint}
+                  className={`chip${worksKinds.has(k) ? ' on' : ''}`}
+                  onClick={() => toggle(worksKinds, k, setWorksKinds)}
+                >
+                  <span className="werken-dot" style={{ background: KINDS[k].color }} />
+                  {KINDS[k].label} <small>{worksCount[k]}</small>
+                </button>
+              ))}
+            </div>
+            {worksError && <div className="banner" style={{ marginTop: 8 }}>{worksError}</div>}
+            {works && <p className="note">{visibleWorks.length} zones getoond. Bron: GIPOD via data.stad.gent.</p>}
+          </div>
+        )}
       </div>
     </div>
   )
