@@ -18,6 +18,7 @@ import { useApp } from '../context/AppContext'
 import type { EzParkLeg, Friend, GentEvent, RoutePlanResult, TransitRouteResult, TransitStop } from '../types'
 import { TransitDeparturesPanel } from '../components/TransitDepartures'
 import { TransitLegsOverview } from '../components/TransitLegsOverview'
+import { ChargingStationsPanel } from '../components/ChargingStationsPanel'
 
 type Mode = 'foot' | 'bike' | 'car' | 'transit'
 
@@ -72,6 +73,7 @@ export function RoutePlanner() {
   const [rentalSelected, setRentalSelected] = useState<string | null>(null)
   const [userPos, setUserPos] = useState<{ lat: number; lon: number } | null>(null)
   const [ezPick, setEzPick] = useState<{ slug: string; n: number } | null>(null)
+  const [showChargingStations, setShowChargingStations] = useState(false)
 
   const carParkings = useMemo(() => parkings.filter((p) => p.kind !== 'bicycle'), [parkings])
   // Parkings staan alleen op de kaart als EZ Park aan staat; de parkings uit het EZ Park-voorstel
@@ -284,7 +286,13 @@ export function RoutePlanner() {
       Lage-emissiezone
     </label>
 
-    <label className="toggle" title="Rij naar een open parking en ga te voet of met het OV verder">
+    <label className="toggle" title="Toon laadpalen voor elektrische auto's">
+      <input type="checkbox" role="switch" checked={showChargingStations} onChange={(e) => setShowChargingStations(e.target.checked)} />
+      <span className="toggle-track" aria-hidden="true" />
+      Laadpalen (EV)
+    </label>
+
+    <label className="toggle" title="Rij naar een open parking en ga verder te voet of met het OV">
       <input type="checkbox" role="switch" checked={ezOn} onChange={(e) => (e.target.checked ? startEzPark() : setEzOn(false))} />
       <span className="toggle-track" aria-hidden="true" />
       EZ Park
@@ -420,6 +428,14 @@ export function RoutePlanner() {
               </div>
             )}
             {route?.destinationParking && <StreetRate info={route.destinationParking} arrival={arriveAt} />}
+            {showChargingStations && mode === 'car' && (
+              <div style={{ marginTop: 16 }}>
+                <ChargingStationsPanel
+                  destination={end ? { lat: end.lat, lon: end.lon } : undefined}
+                  isVisible={showChargingStations}
+                />
+              </div>
+            )}
           </>)}
       </div>
     </div>

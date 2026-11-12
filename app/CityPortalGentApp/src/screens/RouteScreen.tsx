@@ -11,6 +11,7 @@ import type { IconName } from '@/components/Icon'
 import { ParkingMap } from '@/components/ParkingMap'
 import type { MapEvent } from '@/components/ParkingMap'
 import { RentalBikesPanel } from '@/components/RentalBikesPanel'
+import { ChargingStationsMobile } from '@/components/ChargingStationsMobile'
 import { TransitDeparturesPanel } from '@/components/TransitDeparturesPanel'
 import { GarageRate, ManualRateInfo, StreetRate } from '@/components/RateInfo'
 import { useRouteInputs } from '@/components/RouteInputs'
@@ -29,6 +30,7 @@ import type { RentalBike } from '@/lib/rentalBikes'
 import { GENT_CENTER } from '@/lib/map'
 import { transitFareLabel } from '@/lib/fare'
 import type { EzParkLeg, Friend, GentEvent, RoutePlanResult, TransitRouteResult, TransitStop } from '@/lib/types'
+import type { ChargingStation } from '@/lib/chargingStations'
 
 type Mode = 'foot' | 'bike' | 'car' | 'transit'
 
@@ -107,6 +109,7 @@ export function RouteScreen() {
   const [ezOverlay, setEzOverlay] = useState<EzOverlay | null>(null)
   const [mapClick, setMapClick] = useState<{ lat: number; lon: number; n: number } | null>(null)
   const [ezPick, setEzPick] = useState<{ slug: string; n: number } | null>(null)
+  const [showChargingStations, setShowChargingStations] = useState(false)
 
   const carParkings = useMemo(() => parkings.filter((x) => x.kind !== 'bicycle'), [parkings])
   // Parkings staan alleen op de kaart als EZ Park aan staat; de parkings uit het EZ Park-voorstel
@@ -353,6 +356,7 @@ export function RouteScreen() {
   const toggles = mode !== 'car' ? null : (
     <View style={{ gap: 12 }}>
       <SwitchRow label="Lage-emissiezone" value={showLez} onValueChange={(v) => { setShowLez(v); setError(null) }} />
+      <SwitchRow label="Laadpalen (EV)" value={showChargingStations} onValueChange={setShowChargingStations} />
       <SwitchRow label="EZ Park" value={ezOn} onValueChange={(v) => (v ? startEzPark() : setEzOn(false))} />
     </View>
   )
@@ -571,6 +575,15 @@ export function RouteScreen() {
                     </Section>
                   )}
                   {route?.destinationParking && <StreetRate info={route.destinationParking} arrival={arriveAt} />}
+
+                  {/* Charging stations for electric vehicles */}
+                  {showChargingStations && mode === 'car' && (
+                    <Section title="Charging Stations" animate={true}>
+                      <ChargingStationsMobile
+                        destination={end ? { lat: end.lat, lon: end.lon } : undefined}
+                      />
+                    </Section>
+                  )}
                 </>
               )}
             </>
