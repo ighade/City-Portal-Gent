@@ -8,8 +8,8 @@ RUN dotnet publish ParkingGent.Api/ParkingGent.Api.csproj -c Release -o /app/pub
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
-# Niet als root (uid 1654). Deze dienst schrijft niets op schijf — alles gaat naar postgres —
-# maar de regel geldt hier net zo goed als bij de buren.
+RUN mkdir -p /app/transit-data && chown app:app /app/transit-data
+# De API en de GTFS-import draaien allebei zonder rootrechten.
 USER app
 ENV ASPNETCORE_URLS=http://+:5000
 ENV ASPNETCORE_ENVIRONMENT=Production

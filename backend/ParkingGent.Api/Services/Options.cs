@@ -139,3 +139,13 @@ public sealed class TransitOptions
     public double GentMinLongitude { get; set; } = 3.55;
     public double GentMaxLongitude { get; set; } = 3.90;
 }
+
+public sealed class TransitImportOptions
+{
+    public const string SectionName = "TransitImport";
+    public bool Enabled { get; set; } = true;
+    public string FeedUrl { get; set; } = "https://gtfs.flatturtle.cloud/delijn/_latest/delijn-gtfs.zip";
+    public string WorkDirectory { get; set; } = Path.Combine(Path.GetTempPath(), "parkinggent-transit");
+    public string Cron { get; set; } = "0 18 * * *";
+    public string TimeZone { get; set; } = "Europe/Brussels";
+}

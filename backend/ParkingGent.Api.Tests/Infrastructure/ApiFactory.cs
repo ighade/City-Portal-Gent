@@ -66,6 +66,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             ["Socialfetch:ApiKey"] = "test-key",
             ["Transit:TripUpdatesUrl"] = "http://transit.test/trip-update",
             ["Transit:AlertsUrl"] = "http://transit.test/alert",
+            ["TransitImport:Enabled"] = "false",
         };
         Configure(settings);
         foreach (var (key, value) in settings) builder.UseSetting(key, value);

@@ -265,8 +265,7 @@ public sealed class TransitService(
         try
         {
             if (staticLoaded && DateTime.UtcNow - staticUpdatedAtUtc < TimeSpan.FromHours(options.Value.StaticRefreshHours)) return;
-            if (!staticLoaded && await LoadStaticFromDatabaseAsync(ct)
-                && DateTime.UtcNow - staticUpdatedAtUtc < TimeSpan.FromHours(options.Value.StaticRefreshHours)) return;
+            if (await LoadStaticFromDatabaseAsync(ct)) return;
             throw new TransitUnavailableException(
                 "De OV-dienstregeling is nog niet geïmporteerd.",
                 new InvalidOperationException("Run --import-transit once before starting the API."));
@@ -282,7 +281,17 @@ public sealed class TransitService(
         var localPath = Path.IsPathRooted(options.Value.StaticFilePath)
             ? options.Value.StaticFilePath
             : Path.Combine(AppContext.BaseDirectory, options.Value.StaticFilePath);
+        await ImportSeedAsync(localPath, ct);
+    }
+
+    public async Task ImportSeedAsync(string localPath, CancellationToken ct)
+    {
         if (!Directory.Exists(localPath)) throw new DirectoryNotFoundException(localPath);
+        foreach (var name in new[] { "stops.txt", "routes.txt", "trips.txt", "stop_times.txt" })
+            if (!File.Exists(Path.Combine(localPath, name)))
+                throw new InvalidDataException($"GTFS-bestand ontbreekt: {name}.");
+        if (!File.Exists(Path.Combine(localPath, "calendar.txt")) && !File.Exists(Path.Combine(localPath, "calendar_dates.txt")))
+            throw new InvalidDataException("GTFS-bestand calendar.txt of calendar_dates.txt ontbreekt.");
         log.LogInformation("GTFS seed wordt geladen uit {Path}.", localPath);
         Func<string, CancellationToken, IAsyncEnumerable<Dictionary<string, string>>> readRows =
             (name, token) => ReadRowsAsync(localPath, name, token);
@@ -386,17 +395,26 @@ public sealed class TransitService(
         foreach (var outgoing in newConnections.Values)
             outgoing.Sort((a, b) => a.Departure.CompareTo(b.Departure));
 
+        if (newStops.Count == 0 || newConnections.Count == 0)
+            throw new InvalidDataException("GTFS-feed bevat geen Gentse haltes of verbindingen; de bestaande dienstregeling blijft behouden.");
+
+        var linesByStop = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var connection in newConnections.Values.SelectMany(x => x))
+        {
+            if (string.IsNullOrWhiteSpace(connection.Line)) continue;
+            foreach (var id in new[] { connection.FromId, connection.ToId })
+            {
+                if (!linesByStop.TryGetValue(id, out var lines))
+                    linesByStop[id] = lines = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                lines.Add(connection.Line);
+            }
+        }
         stops.Clear();
         foreach (var (id, stop) in newStops)
         {
-            var lines = newConnections.Values
-                .SelectMany(x => x)
-                .Where(c => c.FromId == id || c.ToId == id)
-                .Select(c => c.Line)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            var lines = linesByStop.TryGetValue(id, out var found)
+                ? found.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray()
+                : [];
             stops[id] = stop with { Lines = lines };
         }
 
@@ -467,7 +485,7 @@ public sealed class TransitService(
         }
         foreach (var outgoing in connections.Values) outgoing.Sort((a, b) => a.Departure.CompareTo(b.Departure));
         connectionCount = connections.Values.Sum(x => x.Count);
-        staticUpdatedAtUtc = storedStops.Max(x => x.UpdatedAtUtc);
+        staticUpdatedAtUtc = DateTime.UtcNow;
         staticLoaded = true;
         log.LogInformation("GTFS uit database geladen: {Stops} haltes en {Connections} verbindingen.", stops.Count, connectionCount);
         return true;

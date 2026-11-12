@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Hangfire;
+using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
@@ -52,6 +54,25 @@ builder.Services.AddDbContext<AppDbContext>(o => o
     // De transit-tabellen gebruiken een handmatig gecontroleerde migratie omdat de SDK-tool
     // niet beschikbaar is in de runtimecontainer; de migratie zelf blijft de bron van waarheid.
     .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
+
+var importSettings = builder.Configuration.GetSection(TransitImportOptions.SectionName).Get<TransitImportOptions>()
+    ?? new TransitImportOptions();
+var isTransitImport = args.Contains("--import-transit", StringComparer.Ordinal);
+builder.Services.Configure<TransitImportOptions>(builder.Configuration.GetSection(TransitImportOptions.SectionName));
+builder.Services.AddHttpClient(TransitImportJob.ClientName, c =>
+{
+    c.Timeout = TimeSpan.FromMinutes(15);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("ParkingGent/2.0");
+});
+builder.Services.AddTransient<TransitImportJob>();
+if (importSettings.Enabled && !isTransitImport)
+{
+    builder.Services.AddHangfire(configuration => configuration
+        .UseSimpleAssemblyNameTypeSerializer()
+        .UseRecommendedSerializerSettings()
+        .UsePostgreSqlStorage(options => options.UseNpgsqlConnection(connectionString)));
+    builder.Services.AddHangfireServer();
+}
 
 // De veerkrachtlaag van .NET rond data.stad.gent: opnieuw proberen met oplopende wachttijd, een
 // stroomonderbreker als de dienst plat ligt, en een tijdslimiet. Zonder dit zou één trage nacht
@@ -313,7 +334,7 @@ using (var scope = app.Services.CreateScope())
     await db.Database.MigrateAsync();
     await scope.ServiceProvider.GetRequiredService<CityRates>().LoadAsync(CancellationToken.None);
 
-    if (args.Contains("--import-transit", StringComparer.Ordinal))
+    if (isTransitImport)
     {
         await scope.ServiceProvider.GetRequiredService<TransitService>().ImportSeedAsync(CancellationToken.None);
         return;
@@ -336,6 +357,9 @@ using (var scope = app.Services.CreateScope())
         app.Logger.LogWarning(ex, "De eerste ophaalronde mislukte; de achtergrondtaak neemt het over.");
     }
 }
+
+if (importSettings.Enabled && !isTransitImport)
+    TransitImportSchedule.Register(app.Services, importSettings);
 
 // Leeft de container? Dit mag nooit op de stad wachten — docker leest het elke tien seconden.
 app.MapHealthChecks("/api/health");
