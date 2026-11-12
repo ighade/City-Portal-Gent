@@ -481,7 +481,8 @@ public static class Api
 
         try
         {
-            var route = await transit.PlanAsync(request.StartLat, request.StartLon, request.EndLat, request.EndLon, ct);
+            var departAt = DateTime.Now.AddMinutes(Math.Clamp(request.DepartInMinutes, 0, 720));
+            var route = await transit.PlanAsync(request.StartLat, request.StartLon, request.EndLat, request.EndLon, ct, departAt);
             return route is null
                 ? Results.NotFound(new { error = "Geen OV-route gevonden voor deze locaties." })
                 : Results.Ok(route);

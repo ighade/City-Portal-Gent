@@ -121,6 +121,9 @@ function ParkingCallout({ p, withLink }: { p: Parking; withLink: boolean }) {
   )
 }
 
+/** OV-haltes verschijnen pas als de kaart ver genoeg ingezoomd is (ongeveer zoomniveau 15). */
+const STOP_MAX_LAT_DELTA = 0.02
+
 export function ParkingMap({
   parkings,
   showLez,
@@ -153,7 +156,7 @@ export function ParkingMap({
   const [region, setRegion] = useState<Region>(GENT_REGION)
   const [lez, setLez] = useState<MapPolygon[] | null>(null)
   const visibleStops = useMemo(() => {
-    if (!transitStops || transitStops.length === 0) return []
+    if (!transitStops || transitStops.length === 0 || region.latitudeDelta > STOP_MAX_LAT_DELTA) return []
     const padLat = region.latitudeDelta * 0.6
     const padLon = region.longitudeDelta * 0.6
     const inView = transitStops.filter((s) => Math.abs(s.lat - region.latitude) <= padLat && Math.abs(s.lon - region.longitude) <= padLon)

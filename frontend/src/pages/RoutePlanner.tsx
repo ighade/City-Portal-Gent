@@ -4,7 +4,7 @@ import { api, ApiError } from '../api'
 import { EzParkPanel } from '../components/EzParkPanel'
 import { GarageRate, ManualRateInfo, StreetRate } from '../components/RateInfo'
 import type { EzOverlay } from '../components/EzParkPanel'
-import { ParkingMap, textOn } from '../components/ParkingMap'
+import { ParkingMap } from '../components/ParkingMap'
 import { transitFareLabel } from '../fare'
 import { locatePlace } from '../eventGeo'
 import type { MapEvent } from '../components/ParkingMap'
@@ -17,6 +17,7 @@ import type { RoutePoint } from '../components/RouteInputs'
 import { useApp } from '../context/AppContext'
 import type { EzParkLeg, Friend, GentEvent, RoutePlanResult, TransitRouteResult, TransitStop } from '../types'
 import { TransitDeparturesPanel } from '../components/TransitDepartures'
+import { TransitLegsOverview } from '../components/TransitLegsOverview'
 
 type Mode = 'foot' | 'bike' | 'car' | 'transit'
 
@@ -211,7 +212,7 @@ export function RoutePlanner() {
         setRoute(null)
         setBikeTrip(null)
         setTransitRoute(null)
-        const transit = await api.transit.route({ startLat: from.lat, startLon: from.lon, endLat: dest.lat, endLon: dest.lon })
+        const transit = await api.transit.route({ startLat: from.lat, startLon: from.lon, endLat: dest.lat, endLon: dest.lon, departInMinutes: inputs.departInMinutes() })
         if (run === planRun.current) setTransitRoute(transit)
         return
       }
@@ -391,32 +392,18 @@ export function RoutePlanner() {
           {ezOn ? (
             <div ref={setOverviewEl} />
           ) : (<>
-            <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
-              <Fact label="Start">{start?.label ?? '—'}</Fact>
-              <Fact label="Eind">{end?.label ?? '—'}</Fact>
-              <Fact label="Vervoer">{MODE_LABEL[mode]}</Fact>
-              <Fact label="Vertrek">{transitRoute ? time(new Date(transitRoute.departureAt)) : route ? time(departAt) : '—'}</Fact>
-              <Fact label="Aankomst">{transitRoute ? time(new Date(transitRoute.arrivalAt)) : arriveAt ? time(arriveAt) : '—'}</Fact>
+            {transitRoute && <TransitLegsOverview legs={transitRoute.legs} startLabel={start?.label} endLabel={end?.label} />}
+            <div style={{ display: 'grid', gap: 10, marginTop: transitRoute ? 14 : 16 }}>
+              {!transitRoute && <Fact label="Start">{start?.label ?? '—'}</Fact>}
+              {!transitRoute && <Fact label="Eind">{end?.label ?? '—'}</Fact>}
+              {!transitRoute && <Fact label="Vervoer">{MODE_LABEL[mode]}</Fact>}
+              {!transitRoute && <Fact label="Vertrek">{route ? time(departAt) : '—'}</Fact>}
+              {!transitRoute && <Fact label="Aankomst">{arriveAt ? time(arriveAt) : '—'}</Fact>}
               <Fact label="Afstand">{transitRoute ? `${transitRoute.distanceKm.toFixed(1)} km` : route ? `${route.distanceKm.toFixed(1)} km` : '—'}</Fact>
               {transitRoute && transitFareLabel(transitRoute.legs) && <Fact label="Ticketprijs">{transitFareLabel(transitRoute.legs)} <span className="small muted">(overstappen inbegrepen)</span></Fact>}
               <Fact label="Geschatte tijd">{transitRoute ? `${Math.round(transitRoute.durationMinutes)} min` : route ? `${Math.round(route.durationMinutes)} min` : '—'}</Fact>
               {rentalActive && route && rideMinutes !== undefined && <Fact label="Deelfiets (schatting)">{rentalCostLabel(rideMinutes)} <span className="small muted">({RENTAL_TARIFF_LABEL})</span></Fact>}
             </div>
-
-            {transitRoute && (
-              <div className="ov-legs" style={{ marginTop: 12 }}>
-                {transitRoute.legs.map((leg, i) => (
-                  <div className="ov-leg" key={`${leg.from}-${leg.to}-${i}`}>
-                    <span className={`ov-mode ov-mode-${leg.mode}`} style={leg.color ? { background: `#${leg.color}`, color: textOn(leg.color) } : undefined} aria-hidden="true">{leg.mode === 'walk' ? '↗' : leg.line ?? (leg.mode === 'tram' ? 'T' : 'B')}</span>
-                    <div>
-                      <strong>{leg.mode === 'walk' ? 'Wandelen' : `${leg.mode === 'tram' ? 'Tram' : 'Bus'} ${leg.line ?? ''}`}</strong>
-                      <div className="small muted">{leg.from} → {leg.to}</div>
-                      <div className="small">{time(new Date(leg.departureAt))}–{time(new Date(leg.arrivalAt))} · {leg.distanceKm.toFixed(1)} km{leg.mode !== 'walk' && leg.delayMinutes >= 2 && <> <span className="dep-badge dep-badge-late">+{leg.delayMinutes} min vertraging</span></>}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
 
             {!route && !transitRoute && !planning && (
               <p className="note">Kies start en bestemming en druk op “Route berekenen”.</p>

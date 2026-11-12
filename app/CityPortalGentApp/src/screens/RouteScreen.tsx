@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, View } from 'react-native'
 
 import { BottomSheet } from '@/components/BottomSheet'
-import { useEzPark , LegBadge } from '@/components/EzParkPanel'
+import { useEzPark } from '@/components/EzParkPanel'
+import { TransitLegsOverview } from '@/components/TransitLegsOverview'
 import type { EzOverlay } from '@/components/EzParkPanel'
 import { Icon } from '@/components/Icon'
 import type { IconName } from '@/components/Icon'
@@ -243,7 +244,7 @@ export function RouteScreen() {
         setRoute(null)
         setBikeTrip(null)
         setTransitRoute(null)
-        setTransitRoute(await api.transit.route({ startLat: from.lat, startLon: from.lon, endLat: dest.lat, endLon: dest.lon }))
+        setTransitRoute(await api.transit.route({ startLat: from.lat, startLon: from.lon, endLat: dest.lat, endLon: dest.lon, departInMinutes: inputs.departInMinutes() }))
         return
       }
       const bike = forMode === 'bike' && showRentalBikes
@@ -500,6 +501,13 @@ export function RouteScreen() {
                     />
                   </DataGrid>
 
+                  {/* Transit legs */}
+                  {transitRoute && (
+                    <Section title="Transit Legs" animate={true}>
+                      <TransitLegsOverview legs={transitRoute.legs} />
+                    </Section>
+                  )}
+
                   {/* Route details */}
                   <Section title="Details" animate={true}>
                     <DetailItem
@@ -528,24 +536,6 @@ export function RouteScreen() {
                       animate={true}
                     />
                   </Section>
-
-                  {/* Transit legs */}
-                  {transitRoute && (
-                    <Section title="Transit Legs" animate={true}>
-                      <View style={{ gap: 12 }}>
-                        {transitRoute.legs.map((leg, i) => (
-                          <View key={`${leg.from}-${leg.to}-${i}`} style={{ flexDirection: 'row', gap: 10 }}>
-                            <LegBadge mode={leg.mode} line={leg.line} color={leg.color} />
-                            <View style={{ flex: 1 }}>
-                              <Txt variant="strong">{leg.mode === 'walk' ? 'Walk' : `${leg.mode === 'tram' ? 'Tram' : 'Bus'} ${leg.line ?? ''}`}</Txt>
-                              <Txt variant="smallMuted">{leg.from} → {leg.to}</Txt>
-                              <Txt variant="small">{time(new Date(leg.departureAt))}–{time(new Date(leg.arrivalAt))} · {leg.distanceKm.toFixed(1)} km{leg.mode !== 'walk' && leg.delayMinutes >= 2 ? `  ·  +${leg.delayMinutes} min delay` : ''}</Txt>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    </Section>
-                  )}
 
                   {/* Fare information */}
                   {transitRoute && transitFareLabel(transitRoute.legs) && (

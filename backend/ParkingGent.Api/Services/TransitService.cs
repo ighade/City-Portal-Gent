@@ -8,7 +8,7 @@ using ParkingGent.Api.Domain;
 
 namespace ParkingGent.Api.Services;
 
-public sealed record TransitRouteRequest(double StartLat, double StartLon, double EndLat, double EndLon);
+public sealed record TransitRouteRequest(double StartLat, double StartLon, double EndLat, double EndLon, int DepartInMinutes = 0);
 
 public sealed class TransitUnavailableException(string message, Exception innerException) : Exception(message, innerException);
 

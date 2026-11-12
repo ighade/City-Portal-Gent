@@ -11,13 +11,24 @@ const PAGE_SIZE = 10
 
 type Filter = 'all' | 'week' | 'free'
 
-function EventCard({ event }: { event: GentEvent }) {
+function Icon({ d }: { d: string }) {
+  return (
+    <svg className="event-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  )
+}
+
+const ICON_CLOCK = 'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z'
+const ICON_PIN = 'M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11ZM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z'
+
+function EventCard({ event, featured = false }: { event: GentEvent; featured?: boolean }) {
   const [imageFailed, setImageFailed] = useState(false)
   const start = event.startsAtUtc ? new Date(event.startsAtUtc) : null
   const showImage = event.coverImageUrl && !imageFailed
 
   return (
-    <Link className="card event-card" to={`/events/${encodeURIComponent(event.id)}`}>
+    <Link className={`card event-card${featured ? ' event-card-featured' : ''}`} to={`/events/${encodeURIComponent(event.id)}`}>
       <div className="event-cover">
         {showImage ? (
           <img src={event.coverImageUrl!} alt={event.coverCaption ?? event.name} loading="lazy" referrerPolicy="no-referrer" onError={() => setImageFailed(true)} />
@@ -31,14 +42,14 @@ function EventCard({ event }: { event: GentEvent }) {
           </div>
         )}
         {event.isHappeningNow && <span className="event-live">Nu bezig</span>}
+        {event.ticketPriceLabel && <span className="event-cover-price">{event.ticketPriceLabel}</span>}
       </div>
       <div className="event-body">
         <h3>{event.name}</h3>
-        {start && <p className="event-when">{weekdayFmt.format(start)} · {timeFmt.format(start)}</p>}
-        {event.place && <p className="event-place">{event.place}</p>}
+        {start && <p className="event-meta event-when"><Icon d={ICON_CLOCK} />{weekdayFmt.format(start)} · {timeFmt.format(start)}</p>}
+        {event.place && <p className="event-meta event-place"><Icon d={ICON_PIN} />{event.place}</p>}
         <div className="event-foot">
           {event.socialSummary && <span>{event.socialSummary}</span>}
-          {event.ticketPriceLabel && <span className="event-price">{event.ticketPriceLabel}</span>}
           {event.isOnline && <span className="event-price">Online</span>}
         </div>
       </div>
@@ -95,7 +106,7 @@ export function Events() {
 
   return (
     <>
-      <div className="page-head">
+      <section className="events-hero">
         <div>
           <h1>Evenementen in Gent</h1>
           <p>Wat er binnenkort te doen is. Kom je met de wagen? Check de bezetting van de parkings op de kaart.</p>
@@ -104,11 +115,11 @@ export function Events() {
           <input className="input" type="search" placeholder="Zoek op naam of plaats" value={query} onChange={(e) => setQuery(e.target.value)} />
           <div className="event-filters" role="group" aria-label="Filter">
             {([['all', 'Alles'], ['week', 'Komende 7 dagen'], ['free', 'Zonder ticketprijs']] as const).map(([key, label]) => (
-              <button key={key} type="button" className={`btn btn-sm${filter === key ? ' btn-primary' : ''}`} onClick={() => setFilter(key)}>{label}</button>
+              <button key={key} type="button" className={`chip${filter === key ? ' chip-on' : ''}`} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>
             ))}
           </div>
         </div>
-      </div>
+      </section>
 
       {loading ? (
         <div className="empty">Even geduld…</div>
@@ -118,8 +129,9 @@ export function Events() {
         <div className="empty">Geen evenementen gevonden.</div>
       ) : (
         <>
+          <p className="small muted event-count">{visible.length} evenement{visible.length === 1 ? '' : 'en'}</p>
           <div className="event-grid">
-            {shown.map((e) => <EventCard key={e.id} event={e} />)}
+            {shown.map((e, i) => <EventCard key={e.id} event={e} featured={i === 0 && filter === 'all' && !query.trim()} />)}
           </div>
           {hasMore && <div ref={sentinelRef} style={{ height: 1 }} aria-hidden="true" />}
         </>

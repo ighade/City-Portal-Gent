@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Animated, ViewStyle } from 'react-native'
 
 export function useFadeInAnimation(shouldAnimate = true) {
-  const opacity = useRef(new Animated.Value(0)).current
+  const opacity = useRef(new Animated.Value(shouldAnimate ? 0 : 1)).current
 
   useEffect(() => {
     if (shouldAnimate) {
@@ -18,8 +18,8 @@ export function useFadeInAnimation(shouldAnimate = true) {
 }
 
 export function useSlideInAnimation(shouldAnimate = true) {
-  const translateY = useRef(new Animated.Value(20)).current
-  const opacity = useRef(new Animated.Value(0)).current
+  const translateY = useRef(new Animated.Value(shouldAnimate ? 20 : 0)).current
+  const opacity = useRef(new Animated.Value(shouldAnimate ? 0 : 1)).current
 
   useEffect(() => {
     if (shouldAnimate) {
@@ -42,8 +42,8 @@ export function useSlideInAnimation(shouldAnimate = true) {
 }
 
 export function useScaleInAnimation(shouldAnimate = true) {
-  const scale = useRef(new Animated.Value(0.9)).current
-  const opacity = useRef(new Animated.Value(0)).current
+  const scale = useRef(new Animated.Value(shouldAnimate ? 0.9 : 1)).current
+  const opacity = useRef(new Animated.Value(shouldAnimate ? 0 : 1)).current
 
   useEffect(() => {
     if (shouldAnimate) {

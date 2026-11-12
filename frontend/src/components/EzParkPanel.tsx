@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
 import { transitFareLabel } from '../fare'
+import { textOn } from './ParkingMap'
 import { GarageRate, ManualRateInfo, EndTimeSelect, endOptions, estimateCost } from './RateInfo'
 import type { RoutePoint } from './RouteInputs'
 import type { EzParkLeg, EzParkOption, EzParkResult, EzParkVariant, ParkingRate } from '../types'
@@ -202,17 +203,54 @@ export function Legs({ variant, rate, manualRate }: {
   manualRate?: EzParkOption['manualRate']
 }) {
   const [idx, setIdx] = useState(0)
+  const legs = variant.legs
+  const minutes = legs.map((l) => Math.max(1, Math.round((new Date(l.arrivalAt).getTime() - new Date(l.departureAt).getTime()) / 60000)))
+  const total = minutes.reduce((a, b) => a + b, 0)
+  const colorOf = (l: EzParkLeg) => (l.color ? `#${l.color}` : LEG_COLOR[l.mode])
+  const lineStyle = (l: EzParkLeg) => ({ borderLeftColor: colorOf(l), borderLeftStyle: l.mode === 'walk' ? ('dotted' as const) : ('solid' as const) })
 
   return (
-    <div style={{ marginTop: 16 }}>
+    <div className="tl" style={{ marginTop: 16 }}>
       <h3>Jouw traject · {Math.round(variant.totalMinutes)} min</h3>
-      {transitFareLabel(variant.legs) && <p className="small muted">OV-ticket: <strong>{transitFareLabel(variant.legs)}</strong> (overstappen inbegrepen)</p>}
-      <div className="ov-legs">
-        {variant.legs.map((leg, i) => (
-          <div className="ov-leg" key={`${leg.mode}-${i}`}>
-            <span className={`ov-mode ov-mode-${leg.mode}`} aria-hidden="true">{legIcon(leg.mode)}</span>
-            <div>
-              <strong>{legTitle(leg)}</strong>
+      {transitFareLabel(legs) && <p className="small muted">OV-ticket: <strong>{transitFareLabel(legs)}</strong> (overstappen inbegrepen)</p>}
+      {legs.length > 0 && (
+        <>
+          <div className="tl-bar" aria-hidden="true" style={{ marginTop: 10 }}>
+            {legs.map((l, i) => (
+              <span key={i} style={{ flex: Math.max(minutes[i]!, total * 0.04), background: colorOf(l), opacity: l.mode === 'walk' ? 0.55 : 1 }} />
+            ))}
+          </div>
+          <div className="tl-times small muted">
+            <span>{formatTime(legs[0]!.departureAt)}</span>
+            <span>{total} min</span>
+            <span>{formatTime(legs[legs.length - 1]!.arrivalAt)}</span>
+          </div>
+        </>
+      )}
+      <ol className="tl-list">
+        {legs.length > 0 && (
+          <li className="tl-leg">
+            <div className="tl-rail">
+              <span className="tl-dot" aria-hidden="true" />
+              <span className="tl-line" style={lineStyle(legs[0]!)} />
+            </div>
+            <div className="tl-body">
+              <div className="small muted">Start · {formatTime(legs[0]!.departureAt)}</div>
+              <strong>{legs[0]!.from}</strong>
+            </div>
+          </li>
+        )}
+        {legs.map((leg, i) => (
+          <li className="tl-leg" key={`${leg.mode}-${i}`}>
+            <div className="tl-rail">
+              <span className="ov-mode" style={{ background: colorOf(leg), color: leg.color ? textOn(leg.color) : '#fff' }} aria-hidden="true">{legIcon(leg)}</span>
+              <span className="tl-line" style={lineStyle(leg)} />
+            </div>
+            <div className="tl-body">
+              <div className="tl-head">
+                <strong>{legTitle(leg)}</strong>
+                <span className="tl-dur">{minutes[i]} min</span>
+              </div>
               <div className="small muted">{leg.mode === 'park' ? leg.from : `${leg.from} → ${leg.to}`}</div>
               <div className="small">
                 {formatTime(leg.departureAt)}–{formatTime(leg.arrivalAt)}
@@ -222,9 +260,18 @@ export function Legs({ variant, rate, manualRate }: {
                 ? <ManualRateInfo rate={manualRate} />
                 : <ParkCost leg={leg} rate={rate} index={idx} onIndex={setIdx} />)}
             </div>
-          </div>
+          </li>
         ))}
-      </div>
+        {legs.length > 0 && (
+          <li className="tl-leg">
+            <div className="tl-rail"><span className="tl-dot" aria-hidden="true" /></div>
+            <div className="tl-body">
+              <div className="small muted">Aankomst · {formatTime(legs[legs.length - 1]!.arrivalAt)}</div>
+              <strong>{legs[legs.length - 1]!.to}</strong>
+            </div>
+          </li>
+        )}
+      </ol>
     </div>
   )
 }
@@ -252,8 +299,12 @@ function ParkCost({ leg, rate, index, onIndex }: {
   )
 }
 
-function legIcon(mode: EzParkLeg['mode']): string {
-  return mode === 'drive' ? 'A' : mode === 'park' ? 'P' : mode === 'walk' ? '↗' : mode === 'tram' ? 'T' : 'B'
+const LEG_COLOR = { drive: '#d94a4a', park: '#3b82f6', walk: '#2563eb', bus: '#0f766e', tram: '#d97706' } as const
+
+function legIcon(leg: EzParkLeg): string {
+  const { mode } = leg
+  if (mode === 'bus' || mode === 'tram') return leg.line ?? (mode === 'tram' ? 'T' : 'B')
+  return mode === 'drive' ? 'A' : mode === 'park' ? 'P' : '↗'
 }
 
 function legTitle(leg: EzParkLeg): string {

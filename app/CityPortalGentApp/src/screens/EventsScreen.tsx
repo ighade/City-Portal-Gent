@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { View } from 'react-native'
+import { ScrollView, View } from 'react-native'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 
 import { EventCard } from '@/components/EventCard'
-import { Btn, Empty, Input, Loading, PageHead, Screen } from '@/components/ui'
+import { Btn, Empty, Input, Loading, PageHead, Screen, Txt } from '@/components/ui'
 import { SkeletonEventCard } from '@/components/SkeletonLoader'
 import { api } from '@/lib/api'
 import type { GentEvent } from '@/lib/types'
@@ -12,7 +12,7 @@ const PAGE_SIZE = 10
 
 type Filter = 'all' | 'week' | 'free'
 
-const FILTERS: [Filter, string][] = [['all', 'All Events'], ['week', 'Next 7 Days'], ['free', 'Free Events']]
+const FILTERS: [Filter, string][] = [['all', 'Alles'], ['week', 'Komende 7 dagen'], ['free', 'Zonder ticketprijs']]
 
 export function EventsScreen() {
   const [events, setEvents] = useState<GentEvent[]>([])
@@ -60,17 +60,20 @@ export function EventsScreen() {
   return (
     <Screen onScroll={onScroll}>
       <PageHead
-        title="Events in Gent"
-        subtitle="Discover upcoming events. Coming by car? Check parking availability on the map."
+        title="Evenementen in Gent"
+        subtitle="Wat er binnenkort te doen is. Kom je met de wagen? Check de bezetting van de parkings op de kaart."
       />
-      <View style={{ gap: 10, marginBottom: 16 }}>
-        <Input placeholder="Search by name or location" value={query} onChangeText={setQuery} returnKeyType="search" autoCapitalize="none" />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <View style={{ gap: 10, marginBottom: 12 }}>
+        <Input placeholder="Zoek op naam of plaats" value={query} onChangeText={setQuery} returnKeyType="search" autoCapitalize="none" />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {FILTERS.map(([key, label]) => (
             <Btn key={key} size="sm" label={label} variant={filter === key ? 'primary' : 'default'} onPress={() => setFilter(key)} />
           ))}
-        </View>
+        </ScrollView>
       </View>
+      {!loading && !error && visible.length > 0 && (
+        <Txt variant="smallMuted" style={{ marginBottom: 10 }}>{visible.length} evenement{visible.length === 1 ? '' : 'en'}</Txt>
+      )}
 
       {loading ? (
         <View style={{ gap: 14 }}>
@@ -81,7 +84,7 @@ export function EventsScreen() {
       ) : error ? (
         <Empty>{error}</Empty>
       ) : visible.length === 0 ? (
-        <Empty>No events found.</Empty>
+        <Empty>Geen evenementen gevonden.</Empty>
       ) : (
         shown.map((e, index) => <EventCard key={e.id} event={e} animate={index < PAGE_SIZE} />)
       )}

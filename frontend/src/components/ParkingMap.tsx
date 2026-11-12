@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import L, {
   addThemedBasemap,
@@ -94,6 +94,9 @@ export function textOn(hex?: string) {
   return lum > 0.6 ? '#111827' : '#fff'
 }
 
+/** OV-haltes verschijnen pas vanaf dit zoomniveau. */
+const STOP_MIN_ZOOM = 15
+
 export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, route, onMapClick, ezpark, bluePins, hoverInfo, onEzParkPick, events, onEventPick, friends, rentalBikes, selectedRentalBikeId, onRentalBikeSelect, transitStops, selectedStopId, onStopSelect }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
@@ -118,7 +121,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
   const lez = useRef<L.GeoJSON | null>(null)
   const markers = useRef<Map<string, L.Marker>>(new Map())
   const navigate = useNavigate()
-
+  const [zoom, setZoom] = useState(13)
   // De kaart zelf: één keer aanmaken en laten staan. Hem bij elke nieuwe meting opnieuw bouwen
   // zou de bezoeker om de minuut terugzetten naar het beginzicht.
   useEffect(() => {
@@ -136,6 +139,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
     layer.current = L.layerGroup().addTo(m)
     map.current = m
     m.on('click', (e: L.LeafletMouseEvent) => clickHandler.current?.(e.latlng.lat, e.latlng.lng))
+    m.on('zoomend', () => setZoom(m.getZoom()))
 
     return () => {
       m.remove()
@@ -436,7 +440,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
     if (!m) return
     stopLayer.current?.remove()
     stopLayer.current = null
-    if (!transitStops || transitStops.length === 0) return
+    if (!transitStops || transitStops.length === 0 || zoom < STOP_MIN_ZOOM) return
     const renderer = L.canvas({ padding: 0.5 })
     const group = L.layerGroup().addTo(m)
     for (const s of transitStops) {
@@ -461,7 +465,7 @@ export function ParkingMap({ parkings, basemap, showLez, selected, onSelect, rou
       stopLayer.current?.remove()
       stopLayer.current = null
     }
-  }, [transitStops, selectedStopId])
+  }, [transitStops, selectedStopId, zoom])
 
   // Deelfietsen: logo per aanbieder, geselecteerde fiets met gele ring.
   useEffect(() => {

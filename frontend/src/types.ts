@@ -295,6 +295,7 @@ export interface TransitRouteRequest {
   startLon: number
   endLat: number
   endLon: number
+  departInMinutes?: number
 }
 
 export interface TransitLeg {

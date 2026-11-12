@@ -103,59 +103,76 @@ export function EventDetail() {
     <>
       <Link className="back" to="/events">← Alle evenementen</Link>
       <article className="event-detail card">
-        {event.coverImageUrl && !imageFailed && (
-          <img
-            className="event-detail-cover"
-            src={event.coverImageUrl}
-            alt={event.coverCaption ?? event.name}
-            referrerPolicy="no-referrer"
-            onError={() => setImageFailed(true)}
-          />
-        )}
-        <div className="event-detail-body">
-          <h1>{event.name}</h1>
-          <div className="event-detail-meta">
-            {start && <p className="event-when">{dateFmt.format(start)} · {timeFmt.format(start)}</p>}
-            {event.isHappeningNow && <span className="event-live-inline">Nu bezig</span>}
-            {event.place && <p className="event-place">{event.place}</p>}
-            {event.isOnline && <p className="event-place">Online evenement</p>}
-            <div className="event-foot">
-              {event.ticketPriceLabel && <span className="event-price">{event.ticketPriceLabel}</span>}
-              {event.socialSummary && <span>{event.socialSummary}</span>}
-            </div>
-          </div>
-
-          <div className="event-actions">
-            {tickets.map((url) => (
-              <a key={url} className="btn btn-primary" href={url} target="_blank" rel="noreferrer noopener">
-                Tickets kopen <small>({host(url)})</small>
-              </a>
-            ))}
-            {interested !== null && (
-              <button type="button" className={`btn${interested ? ' btn-primary' : ''}`} onClick={toggleInterest} aria-pressed={interested}>
-                {interested ? '★ Geïnteresseerd' : '☆ Ik ben geïnteresseerd'}
-              </button>
-            )}
-            {canRoute && (
-              <button
-                type="button"
-                className={`btn${tickets.length === 0 ? ' btn-primary' : ''}`}
-                onClick={() => navigate('/route', { state: { destination: { place: event.place, name: event.name } } })}
-              >
-                Route naar dit evenement
-              </button>
-            )}
-            {event.url && <a className="btn" href={event.url} target="_blank" rel="noreferrer noopener">Bekijk op Facebook</a>}
-          </div>
-          {tickets.length === 0 && description && (
-            <p className="muted small">In de beschrijving staat geen ticketlink.</p>
-          )}
-
-          {description ? (
-            <div className="event-description">{linkify(description)}</div>
+        <div className="event-hero">
+          {event.coverImageUrl && !imageFailed ? (
+            <img
+              className="event-detail-cover"
+              src={event.coverImageUrl}
+              alt={event.coverCaption ?? event.name}
+              referrerPolicy="no-referrer"
+              onError={() => setImageFailed(true)}
+            />
           ) : (
-            <p className="muted">Geen beschrijving beschikbaar.</p>
+            <div className="event-hero-fallback" aria-hidden="true">{event.name.slice(0, 1).toUpperCase()}</div>
           )}
+          <div className="event-hero-shade">
+            {event.isHappeningNow && <span className="event-live-inline">Nu bezig</span>}
+            <h1>{event.name}</h1>
+          </div>
+        </div>
+
+        <div className="event-detail-grid">
+          <div className="event-detail-main">
+            {description ? (
+              <>
+                <h2 className="event-section">Over dit evenement</h2>
+                <div className="event-description">{linkify(description)}</div>
+              </>
+            ) : (
+              <p className="muted">Geen beschrijving beschikbaar.</p>
+            )}
+          </div>
+
+          <aside className="event-side">
+            <dl className="event-facts">
+              {start && (
+                <div>
+                  <dt>Wanneer</dt>
+                  <dd>{dateFmt.format(start)}<br /><span className="muted">{timeFmt.format(start)}</span></dd>
+                </div>
+              )}
+              {event.place && <div><dt>Waar</dt><dd>{event.place}</dd></div>}
+              {event.isOnline && <div><dt>Waar</dt><dd>Online evenement</dd></div>}
+              {event.ticketPriceLabel && <div><dt>Prijs</dt><dd><span className="event-price">{event.ticketPriceLabel}</span></dd></div>}
+              {event.socialSummary && <div><dt>Interesse</dt><dd>{event.socialSummary}</dd></div>}
+            </dl>
+
+            <div className="event-actions">
+              {tickets.map((url) => (
+                <a key={url} className="btn btn-primary" href={url} target="_blank" rel="noreferrer noopener">
+                  Tickets kopen <small>({host(url)})</small>
+                </a>
+              ))}
+              {canRoute && (
+                <button
+                  type="button"
+                  className={`btn${tickets.length === 0 ? ' btn-primary' : ''}`}
+                  onClick={() => navigate('/route', { state: { destination: { place: event.place, name: event.name } } })}
+                >
+                  Route naar dit evenement
+                </button>
+              )}
+              {interested !== null && (
+                <button type="button" className={`btn${interested ? ' btn-primary' : ''}`} onClick={toggleInterest} aria-pressed={interested}>
+                  {interested ? '★ Geïnteresseerd' : '☆ Ik ben geïnteresseerd'}
+                </button>
+              )}
+              {event.url && <a className="btn" href={event.url} target="_blank" rel="noreferrer noopener">Bekijk op Facebook</a>}
+            </div>
+            {tickets.length === 0 && description && (
+              <p className="muted small">In de beschrijving staat geen ticketlink.</p>
+            )}
+          </aside>
         </div>
       </article>
     </>
