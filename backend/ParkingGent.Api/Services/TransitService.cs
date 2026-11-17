@@ -57,13 +57,22 @@ public sealed class TransitService(
     private readonly Dictionary<string, List<TransitConnection>> connections = new(StringComparer.Ordinal);
     private readonly Dictionary<string, double[][]> shapes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> routeColors = new(StringComparer.Ordinal);
-    private readonly Dictionary<(string TripId, string StopId), int> realtimeDelays = new();
-    private HashSet<string> canceledTrips = new(StringComparer.Ordinal);
-    private TransitRealtimeSnapshot? liveSnapshot;
+    private volatile RealtimeState realtime = RealtimeState.Empty;
     private DateTime staticUpdatedAtUtc;
     private DateTime realtimeUpdatedAtUtc;
     private bool staticLoaded;
     private int connectionCount;
+
+    private sealed record RealtimeState(
+        IReadOnlyDictionary<(string TripId, string StopId), int> Delays,
+        HashSet<string> CanceledTrips,
+        TransitRealtimeSnapshot? Snapshot)
+    {
+        public static RealtimeState Empty { get; } = new(
+            new Dictionary<(string TripId, string StopId), int>(),
+            new HashSet<string>(StringComparer.Ordinal),
+            null);
+    }
 
     public async Task<IReadOnlyList<TransitStopDto>> GetStopsAsync(CancellationToken ct)
     {
@@ -83,7 +92,7 @@ public sealed class TransitService(
         DateTime? departAt = null)
     {
         await EnsureStaticAsync(ct);
-        await RefreshRealtimeAsync(ct);
+        var realtime = await RefreshRealtimeAsync(ct);
 
         var originCandidates = Nearest(startLat, startLon, 25, 1_500);
         var destinationCandidates = Nearest(endLat, endLon, 50, 1_000);
@@ -146,11 +155,11 @@ public sealed class TransitService(
             if (!connections.TryGetValue(state.StopId, out var outgoing)) continue;
             foreach (var connection in outgoing)
             {
-                if (canceledTrips.Contains(connection.TripId)) continue;
-                if (liveSnapshot?.Trips.TryGetValue(connection.TripId, out var liveTrip) == true
+                if (realtime.CanceledTrips.Contains(connection.TripId)) continue;
+                if (realtime.Snapshot?.Trips.TryGetValue(connection.TripId, out var liveTrip) == true
                     && (liveTrip.SkippedStops.Contains(connection.FromId) || liveTrip.SkippedStops.Contains(connection.ToId))) continue;
-                var delayFrom = LiveDelay(connection.TripId, connection.FromId, connection.Departure);
-                var delayTo = LiveDelay(connection.TripId, connection.ToId, connection.Arrival);
+                var delayFrom = LiveDelay(realtime, connection.TripId, connection.FromId, connection.Departure);
+                var delayTo = LiveDelay(realtime, connection.TripId, connection.ToId, connection.Arrival);
                 var edgeDeparture = AtDate(connection.Departure).AddMinutes(delayFrom);
                 var edgeArrival = AtDate(connection.Arrival).AddMinutes(delayTo);
                 if (edgeDeparture < label.Arrival || edgeArrival <= label.Arrival) continue;
@@ -555,27 +564,29 @@ public sealed class TransitService(
         await transaction.CommitAsync(ct);
     }
 
-    private async Task RefreshRealtimeAsync(CancellationToken ct)
+    private async Task<RealtimeState> RefreshRealtimeAsync(CancellationToken ct)
     {
-        // Met een De Lijn-sleutel komt alles uit de officiële realtime-API (gedeeld en gecachet); anders de oude feed.
-        if (realtimeFeed.Enabled)
-        {
-            var snapshot = await realtimeFeed.GetAsync(ct);
-            realtimeDelays.Clear();
-            foreach (var (tripId, trip) in snapshot.Trips)
-                foreach (var (stopId, seconds) in trip.DelayByStopSeconds)
-                    realtimeDelays[(tripId, stopId)] = TransitRealtimeSnapshot.ToMinutes(seconds);
-            canceledTrips = snapshot.CanceledTrips;
-            liveSnapshot = snapshot;
-            realtimeUpdatedAtUtc = DateTime.UtcNow;
-            return;
-        }
-
-        if (realtimeUpdatedAtUtc != default && DateTime.UtcNow - realtimeUpdatedAtUtc < TimeSpan.FromSeconds(options.Value.RealtimeRefreshSeconds)) return;
         await realtimeGate.WaitAsync(ct);
         try
         {
-            if (realtimeUpdatedAtUtc != default && DateTime.UtcNow - realtimeUpdatedAtUtc < TimeSpan.FromSeconds(options.Value.RealtimeRefreshSeconds)) return;
+            if (realtimeUpdatedAtUtc != default
+                && DateTime.UtcNow - realtimeUpdatedAtUtc < TimeSpan.FromSeconds(Math.Max(10, options.Value.RealtimeRefreshSeconds)))
+                return realtime;
+
+            // Met een De Lijn-sleutel komt alles uit de officiële realtime-API (gedeeld en gecachet); anders de oude feed.
+            if (realtimeFeed.Enabled)
+            {
+                var snapshot = await realtimeFeed.GetAsync(ct);
+                var delays = new Dictionary<(string TripId, string StopId), int>();
+                foreach (var (tripId, trip) in snapshot.Trips)
+                    foreach (var (stopId, seconds) in trip.DelayByStopSeconds)
+                        delays[(tripId, stopId)] = TransitRealtimeSnapshot.ToMinutes(seconds);
+
+                realtime = new RealtimeState(delays, snapshot.CanceledTrips, snapshot);
+                realtimeUpdatedAtUtc = DateTime.UtcNow;
+                return realtime;
+            }
+
             try
             {
                 await using var stream = await http.GetStreamAsync(options.Value.TripUpdatesUrl, ct);
@@ -594,16 +605,16 @@ public sealed class TransitService(
                         if (!string.IsNullOrWhiteSpace(stopId) && delay is not null) delays[(tripId, stopId)] = delay.Value / 60;
                     }
                 }
-                realtimeDelays.Clear();
-                foreach (var (key, delay) in delays) realtimeDelays[key] = delay;
+                realtime = new RealtimeState(delays, new HashSet<string>(StringComparer.Ordinal), null);
                 realtimeUpdatedAtUtc = DateTime.UtcNow;
-                log.LogInformation("GTFS realtime geladen: {Updates} halte-updates.", realtimeDelays.Count);
+                log.LogInformation("GTFS realtime geladen: {Updates} halte-updates.", delays.Count);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 log.LogWarning(ex, "GTFS realtime kon niet opgehaald worden; de dienstregeling blijft bruikbaar.");
                 realtimeUpdatedAtUtc = DateTime.UtcNow;
             }
+            return realtime;
         }
         finally
         {
@@ -738,11 +749,11 @@ public sealed class TransitService(
     };
     private static bool TryTime(string? text, out TimeSpan value) => TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out value);
     // Met de officiële feed telt ook de doorgetrokken vertraging op haltes zonder eigen update; zo vertrekt een bus die al te laat is, niet "op tijd" op de volgende halte.
-    private int LiveDelay(string tripId, string stopId, TimeSpan scheduled)
+    private static int LiveDelay(RealtimeState realtime, string tripId, string stopId, TimeSpan scheduled)
     {
-        if (liveSnapshot is null) return realtimeDelays.GetValueOrDefault((tripId, stopId));
+        if (realtime.Snapshot is null) return realtime.Delays.GetValueOrDefault((tripId, stopId));
         var at = new DateTimeOffset(AtDate(scheduled)).ToUnixTimeSeconds();
-        return liveSnapshot.DelayMinutes(tripId, stopId, at);
+        return realtime.Snapshot.DelayMinutes(tripId, stopId, at);
     }
 
     private static DateTime AtDate(TimeSpan value) => DateTime.Today.Add(value);

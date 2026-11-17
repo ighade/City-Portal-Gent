@@ -58,6 +58,40 @@ for i in range(1, n + 1):
             events.append(e)
 print(json.dumps({"data": {"events": events}}))
 PY
+# Bewaart elke omslagfoto lokaal (event-images/<id>) en wijst CoverImageUrl naar de eigen API, zodat
+# de afbeelding blijft werken als de link bij Facebook verdwijnt. Mislukt een download, dan blijft
+# de oorspronkelijke link staan, of de eerder bewaarde kopie als die al bestaat.
+mkdir -p event-images
+python3 - "$tmp" event-images <<'PY'
+import json, os, re, sys, urllib.request
+path, out = sys.argv[1], sys.argv[2]
+doc = json.load(open(path))
+saved = failed = 0
+for e in doc["data"]["events"]:
+    cover = e.get("cover") or {}
+    url = cover.get("imageUrl")
+    if not url or not re.fullmatch(r"[A-Za-z0-9_-]+", str(e["id"])):
+        continue
+    dest = os.path.join(out, str(e["id"]))
+    if not os.path.exists(dest):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "ParkingGent/2.0"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                data = r.read(10 * 1024 * 1024 + 1)
+            if not data or len(data) > 10 * 1024 * 1024:
+                raise ValueError("leeg of te groot")
+            with open(dest + ".part", "wb") as f:
+                f.write(data)
+            os.replace(dest + ".part", dest)
+        except Exception as ex:
+            failed += 1
+            print(f"afbeelding {e['id']} niet bewaard: {ex}", file=sys.stderr)
+            continue
+        saved += 1
+    cover["imageUrl"] = f"/api/event-images/{e['id']}"
+json.dump(doc, open(path, "w"))
+print(f"{saved} afbeelding(en) nieuw bewaard, {failed} mislukt", file=sys.stderr)
+PY
 echo "$page oproep(en), $(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["data"]["events"]))' "$tmp") unieke evenementen" >&2
 
 {

@@ -221,7 +221,7 @@ export function RoutePlanner() {
     setTransitRoute(null)
     setError(null)
     setLezBlocked(false)
-    setEzOn(next === 'car')
+    setEzOn(next === 'car' && !showChargingStations)
   }
 
   const departAt = useMemo(
@@ -300,6 +300,7 @@ export function RoutePlanner() {
   function startEzPark() {
     setError(null)
     setLezBlocked(false)
+    setShowChargingStations(false)
     setEzOn(true)
   }
 
@@ -323,7 +324,11 @@ export function RoutePlanner() {
     </label>
 
     <label className="toggle" title="Toon laadpalen voor elektrische auto's">
-      <input type="checkbox" role="switch" checked={showChargingStations} onChange={(e) => setShowChargingStations(e.target.checked)} />
+      <input type="checkbox" role="switch" checked={showChargingStations} onChange={(e) => {
+        const enabled = e.target.checked
+        setShowChargingStations(enabled)
+        if (enabled) setEzOn(false)
+      }} />
       <span className="toggle-track" aria-hidden="true" />
       Laadpalen (EV)
     </label>

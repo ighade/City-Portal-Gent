@@ -7,6 +7,7 @@ import { Card, Txt } from '@/components/ui'
 import { Radius } from '@/constants/theme'
 import { useSlideInAnimation } from '@/hooks/useAnimations'
 import { usePalette } from '@/context/ThemeContext'
+import { assetUrl } from '@/lib/api'
 import { dayMonthParts, timeBrussels, weekdayLong } from '@/lib/format'
 import type { GentEvent } from '@/lib/types'
 
@@ -26,7 +27,7 @@ export function EventCard({ event, animate = true }: { event: GentEvent; animate
             <View style={{ height: 180, backgroundColor: p.brandSoft, alignItems: 'center', justifyContent: 'center' }}>
               {showImage ? (
                 <Image
-                  source={{ uri: event.coverImageUrl! }}
+                  source={{ uri: assetUrl(event.coverImageUrl!) }}
                   accessibilityLabel={event.coverCaption ?? event.name}
                   style={{ width: '100%', height: '100%' }}
                   resizeMode="cover"

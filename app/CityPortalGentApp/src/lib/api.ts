@@ -11,6 +11,9 @@ export class ApiError extends Error {
 /** Basis-URL van de backend, uit .env (EXPO_PUBLIC_API_URL). Zonder slash op het einde. */
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/+$/, '')
 
+/** Maakt van een relatief pad (lokaal bewaarde afbeelding) een volledige URL. */
+export const assetUrl = (u: string) => (u.startsWith('/') ? `${API_URL}${u}` : u)
+
 const COOKIE_KEY = 'parkinggent.cookie'
 
 // De sessie is een cookie. React Native bewaart die normaal zelf (credentials: 'include'); lukt dat

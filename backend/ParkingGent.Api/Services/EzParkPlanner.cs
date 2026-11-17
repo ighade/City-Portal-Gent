@@ -60,7 +60,7 @@ public sealed class EzParkPlanner(
     ILogger<EzParkPlanner> log)
 {
     public const int ParkMinutes = 5;
-    private const int Shortlist = 9;
+    private const int Shortlist = 6;
     private const int Suggestions = 6;
     private const double WalkMetersPerSecond = 1.35;
 
@@ -174,6 +174,10 @@ public sealed class EzParkPlanner(
             catch (TransitUnavailableException)
             {
                 log.LogInformation("OV niet beschikbaar voor EZ Park-optie {Parking}.", p.Name);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                log.LogWarning(ex, "OV-route niet beschikbaar voor EZ Park-optie {Parking}; de wandeloptie blijft behouden.", p.Name);
             }
         }
 

@@ -7,3 +7,4 @@ backend/ParkingGent.Api/seed/delijn-gtfs.zip
 bin/
 obj/
 TestResults/
+event-images/

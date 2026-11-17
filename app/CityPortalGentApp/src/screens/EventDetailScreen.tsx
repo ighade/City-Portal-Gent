@@ -10,7 +10,7 @@ import { Btn, Card, Empty, Loading, Screen, Txt } from '@/components/ui'
 import { Radius } from '@/constants/theme'
 import { useAuth } from '@/context/AuthContext'
 import { usePalette } from '@/context/ThemeContext'
-import { api, ApiError } from '@/lib/api'
+import { api, ApiError, assetUrl } from '@/lib/api'
 import { dateLong, timeBrussels } from '@/lib/format'
 import { openExternal } from '@/lib/links'
 import type { GentEventDetail } from '@/lib/types'
@@ -124,7 +124,7 @@ export function EventDetailScreen({ id }: { id: string }) {
         <View style={{ height: 240, backgroundColor: p.brandSoft, justifyContent: 'flex-end' }}>
           {event.coverImageUrl && !imageFailed ? (
             <Image
-              source={{ uri: event.coverImageUrl }}
+              source={{ uri: assetUrl(event.coverImageUrl) }}
               accessibilityLabel={event.coverCaption ?? event.name}
               style={{ position: 'absolute', width: '100%', height: '100%' }}
               resizeMode="cover"

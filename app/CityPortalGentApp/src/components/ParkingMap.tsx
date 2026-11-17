@@ -11,7 +11,7 @@ import { Btn, Txt } from '@/components/ui'
 import type { EzOverlay } from '@/components/EzParkPanel'
 import { Radius } from '@/constants/theme'
 import { usePalette } from '@/context/ThemeContext'
-import { api } from '@/lib/api'
+import { api, assetUrl } from '@/lib/api'
 import { dayMonthParts, nl, timeBrussels, weekdayLong } from '@/lib/format'
 import { GENT_BOUNDS, GENT_REGION, geoJsonPolygons } from '@/lib/map'
 import type { MapPolygon } from '@/lib/map'
@@ -555,7 +555,7 @@ function MapEventCard({ item, onDetails, onRoute }: { item: MapEvent; onDetails:
     <View style={{ flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: p.border, borderRadius: Radius.md, overflow: 'hidden', backgroundColor: p.surface2 }}>
       <Pressable onPress={onDetails} style={{ width: 84, minHeight: 110, backgroundColor: p.brandSoft, alignItems: 'center', justifyContent: 'center' }}>
         {e.coverImageUrl ? (
-          <Image source={{ uri: e.coverImageUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <Image source={{ uri: assetUrl(e.coverImageUrl) }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         ) : (
           <Txt variant="h1" style={{ color: p.brandStrong }}>{e.name.slice(0, 1).toUpperCase()}</Txt>
         )}

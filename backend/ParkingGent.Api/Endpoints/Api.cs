@@ -43,6 +43,7 @@ public static class Api
         api.MapGet("/events", Events).CacheOutput("events");
         // Zonder uitvoercache: de eerste aanvraag haalt de beschrijving op (1 credit) en bewaart ze.
         api.MapGet("/events/{id}", EventDetail);
+        api.MapGet("/event-images/{id}", EventImage);
         api.MapGet("/transit/stops", TransitStops).CacheOutput("lang");
         api.MapPost("/transit/route", TransitRoute);
         api.MapGet("/transit/stops/{stopId}/departures", TransitStopDepartures);
@@ -446,6 +447,27 @@ public static class Api
                 e.Kind, e.SocialSummary, e.InterestedCount, e.GoingCount, e.WentCount, e.TicketPriceLabel))
             .ToListAsync(ct);
         return Results.Ok(rows);
+    }
+
+    // Lokale kopie van de omslagfoto, geschreven door scripts/import-events.sh. Zonder extensie in de
+    // URL, zodat de nginx-regel voor statische bestanden de aanvraag niet onderschept.
+    private static IResult EventImage(string id, IConfiguration config)
+    {
+        if (!System.Text.RegularExpressions.Regex.IsMatch(id, "^[A-Za-z0-9_-]{1,64}$")) return Results.NotFound();
+        var dir = config["EventImages:Directory"] ?? "/app/event-images";
+        var path = Path.Combine(dir, id);
+        if (!File.Exists(path)) return Results.NotFound();
+
+        Span<byte> head = stackalloc byte[12];
+        using (var fs = File.OpenRead(path)) fs.ReadAtLeast(head, 0, throwOnEndOfStream: false);
+        var type = head switch
+        {
+            [0x89, 0x50, 0x4E, 0x47, ..] => "image/png",
+            [0x47, 0x49, 0x46, ..] => "image/gif",
+            [0x52, 0x49, 0x46, 0x46, _, _, _, _, 0x57, 0x45, 0x42, 0x50] => "image/webp",
+            _ => "image/jpeg"
+        };
+        return Results.File(File.OpenRead(path), type);
     }
 
     private static async Task<IResult> EventDetail(string id, AppDbContext db, EventDescriptions descriptions, CancellationToken ct)
