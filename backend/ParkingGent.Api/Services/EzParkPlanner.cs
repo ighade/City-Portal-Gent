@@ -63,6 +63,7 @@ public sealed class EzParkPlanner(
     private const int Shortlist = 6;
     private const int Suggestions = 6;
     private const double WalkMetersPerSecond = 1.35;
+    private static readonly TimeSpan RoutingBudget = TimeSpan.FromSeconds(12);
 
     public async Task<EzParkResult?> PlanAsync(EzParkRequest request, CancellationToken ct)
     {
@@ -70,18 +71,18 @@ public sealed class EzParkPlanner(
         var utcNow = DateTime.UtcNow;
 
         var rows = await db.Parkings
+            .AsNoTracking()
             .Include(p => p.Status)
             .Include(p => p.ManualRate)
-            .AsNoTracking()
             .Where(p => p.Kind != ParkingKind.Bicycle && p.IsPublic)
             .ToListAsync(ct);
 
-                var open = rows.Where(p => p.Status is null
-                        ? true
-                        : p.Status.IsOpen
-                            && !p.Status.TemporarilyClosed
-                            && (!p.Status.IsPlausible || p.Status.AvailableSpaces > 0)
-                            && utcNow - p.Status.MeasuredAtUtc <= Mapping.StaleAfter);
+        var open = rows.Where(p => p.Status is null
+                ? true
+                : p.Status.IsOpen
+                    && !p.Status.TemporarilyClosed
+                    && (!p.Status.IsPlausible || p.Status.AvailableSpaces > 0)
+                    && utcNow - p.Status.MeasuredAtUtc <= Mapping.StaleAfter);
 
         if (request.AvoidLez)
         {
@@ -100,34 +101,81 @@ public sealed class EzParkPlanner(
         if (candidates.Count == 0)
             return new EzParkResult(departure, [], "Geen open parkings met vrije plaatsen gevonden.");
 
-        var built = await Task.WhenAll(candidates.Select(p => TryBuildAsync(p, request, departure, ct)));
-        var options = built
-            .Where(o => o is not null)
-            .Select(o => o!)
-            .OrderBy(o => o.Variants.Min(v => v.TotalMinutes))
-            .Take(Suggestions)
-            .ToArray();
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(RoutingBudget);
 
-        return new EzParkResult(departure, options, options.Length == 0 ? "De routes konden niet berekend worden." : null);
-    }
-
-    private async Task<EzParkOption?> TryBuildAsync(Parking p, EzParkRequest request, DateTime departure, CancellationToken ct)
-    {
-        try { return await BuildAsync(p, request, departure, ct); }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        try
         {
-            log.LogWarning(ex, "EZ Park-optie {Parking} kon niet berekend worden.", p.Name);
-            return null;
+            // Queue driving routes first: without one, an option cannot be offered at all.
+            var drives = candidates.Select(p =>
+                routes.PlanAsync(request.StartLat, request.StartLon, p.Latitude, p.Longitude, "car", false, budget.Token)).ToArray();
+            var built = await Task.WhenAll(candidates.Select((p, i) =>
+                TryBuildAsync(p, request, departure, drives[i], budget.Token, ct)));
+            var options = built
+                .Where(o => o.Option is not null)
+                .Select(o => o.Option!)
+                .OrderBy(o => o.Variants.Min(v => v.TotalMinutes))
+                .Take(Suggestions)
+                .ToArray();
+
+            var warning = options.Length == 0
+                ? "De routes konden niet berekend worden."
+                : built.Any(o => o.Incomplete)
+                    ? "Sommige routes of OV-opties konden niet worden berekend. Een wandelroute kan een schatting in rechte lijn zijn."
+                    : null;
+            if (budget.IsCancellationRequested && !ct.IsCancellationRequested)
+                log.LogWarning("EZ Park-routing overschreed de tijdslimiet van {Seconds} seconden; {Count} opties beschikbaar.", RoutingBudget.TotalSeconds, options.Length);
+            ct.ThrowIfCancellationRequested();
+            return new EzParkResult(departure, options, warning);
+        }
+        finally
+        {
+            budget.Dispose();
         }
     }
 
-    private async Task<EzParkOption?> BuildAsync(Parking p, EzParkRequest request, DateTime departure, CancellationToken ct)
+    private async Task<(EzParkOption? Option, bool Incomplete)> TryBuildAsync(
+        Parking p, EzParkRequest request, DateTime departure, Task<RoutePlanResult?> driveTask,
+        CancellationToken budget, CancellationToken ct)
     {
-        var driveTask = routes.PlanAsync(request.StartLat, request.StartLon, p.Latitude, p.Longitude, "car", false, ct);
-        var walkTask = routes.PlanAsync(p.Latitude, p.Longitude, request.EndLat, request.EndLon, "foot-walking", false, ct);
+        try { return await BuildAsync(p, request, departure, driveTask, budget, ct); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && budget.IsCancellationRequested)
+        {
+            return (null, true);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            log.LogWarning(ex, "EZ Park-optie {Parking} kon niet berekend worden.", p.Name);
+            return (null, true);
+        }
+    }
+
+    private async Task<(EzParkOption? Option, bool Incomplete)> BuildAsync(
+        Parking p, EzParkRequest request, DateTime departure, Task<RoutePlanResult?> driveTask,
+        CancellationToken budget, CancellationToken ct)
+    {
         var drive = await driveTask;
-        var walk = await walkTask;
-        if (drive is null) return null;
+        if (drive is null) return (null, true);
+
+        RoutePlanResult? walk = null;
+        bool incomplete = false;
+        if (!budget.IsCancellationRequested)
+        {
+            try
+            {
+                walk = await routes.PlanAsync(p.Latitude, p.Longitude, request.EndLat, request.EndLon, "foot-walking", false, budget);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested && budget.IsCancellationRequested)
+            {
+                incomplete = true;
+            }
+        }
+        else
+        {
+            incomplete = true;
+        }
+
+        ct.ThrowIfCancellationRequested();
 
         var driveArrival = departure.AddMinutes(drive.DurationMinutes);
         var parked = driveArrival.AddMinutes(ParkMinutes);
@@ -137,8 +185,8 @@ public sealed class EzParkPlanner(
 
         var variants = new List<EzParkVariant>();
 
-        var walkMinutes = walk?.DurationMinutes
-            ?? Haversine(p.Latitude, p.Longitude, request.EndLat, request.EndLon) * 1.3 / WalkMetersPerSecond / 60d;
+        var walkDistance = Haversine(p.Latitude, p.Longitude, request.EndLat, request.EndLon) * 1.3;
+        var walkMinutes = walk?.DurationMinutes ?? walkDistance / WalkMetersPerSecond / 60d;
         var walkArrival = parked.AddMinutes(walkMinutes);
         var walkCoords = walk is null
             ? new[] { new[] { p.Latitude, p.Longitude }, new[] { request.EndLat, request.EndLon } }
@@ -146,15 +194,15 @@ public sealed class EzParkPlanner(
         variants.Add(new EzParkVariant("walk", walkArrival, (walkArrival - departure).TotalMinutes,
         [
             driveLeg, parkLeg,
-            new EzParkLeg("walk", null, p.Name, "Eindpunt", parked, walkArrival, walk?.DistanceKm ?? 0, walkCoords),
+            new EzParkLeg("walk", null, p.Name, "Eindpunt", parked, walkArrival, walk?.DistanceKm ?? walkDistance / 1000d, walkCoords),
         ]));
 
         // Under ~400 m the bus stop is farther than the destination.
-        if (Haversine(p.Latitude, p.Longitude, request.EndLat, request.EndLon) > 400)
+        if (walkDistance / 1.3 > 400 && !budget.IsCancellationRequested)
         {
             try
             {
-                var ov = await transit.PlanAsync(p.Latitude, p.Longitude, request.EndLat, request.EndLon, ct, parked);
+                var ov = await transit.PlanAsync(p.Latitude, p.Longitude, request.EndLat, request.EndLon, budget, parked);
                 if (ov is not null)
                 {
                     var legs = new List<EzParkLeg> { driveLeg, parkLeg };
@@ -175,19 +223,28 @@ public sealed class EzParkPlanner(
             {
                 log.LogInformation("OV niet beschikbaar voor EZ Park-optie {Parking}.", p.Name);
             }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested && budget.IsCancellationRequested)
+            {
+                incomplete = true;
+            }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 log.LogWarning(ex, "OV-route niet beschikbaar voor EZ Park-optie {Parking}; de wandeloptie blijft behouden.", p.Name);
             }
         }
+        else if (walkDistance / 1.3 > 400 && budget.IsCancellationRequested)
+        {
+            incomplete = true;
+        }
 
-        return new EzParkOption(
+        ct.ThrowIfCancellationRequested();
+        return (new EzParkOption(
             p.Slug, p.Name, p.Address, p.Latitude, p.Longitude,
             p.Status is { IsPlausible: true } ? p.Status.AvailableSpaces : null, p.Status?.TotalCapacity ?? p.Capacity,
             drive.DurationMinutes, drive.DistanceKm, ParkMinutes,
             variants.ToArray(),
             cityRates.For(p.Slug, parked),
-            p.ManualRate?.ToDto());
+            p.ManualRate?.ToDto()), incomplete);
     }
 
     private static double[][] Flip(double[][] lonLat) =>

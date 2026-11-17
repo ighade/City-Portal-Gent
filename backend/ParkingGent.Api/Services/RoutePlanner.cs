@@ -34,8 +34,10 @@ public sealed class RoutePlanner(
 {
     // ORS limits requests per minute; a burst from EZ Park would otherwise trip the circuit breaker.
     private static readonly SemaphoreSlim OrsGate = new(2);
-    private static readonly ConcurrentDictionary<string, (DateTime At, RoutePlanResult Result)> Cache = new();
+    private static readonly ConcurrentDictionary<string, CacheEntry> Cache = new();
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(30);
+
+    private sealed record CacheEntry(DateTime ExpiresAt, RoutePlanResult Result);
 
     public async Task<RoutePlanResult?> PlanAsync(
         double startLat,
@@ -89,7 +91,7 @@ public sealed class RoutePlanner(
         var cacheKey = via is { Count: > 0 }
             ? null
             : string.Create(CultureInfo.InvariantCulture, $"{profile}:{startLat:0.0000},{startLon:0.0000}:{endLat:0.0000},{endLon:0.0000}");
-        if (cacheKey is not null && Cache.TryGetValue(cacheKey, out var cached) && DateTime.UtcNow - cached.At < CacheTtl)
+        if (cacheKey is not null && Cache.TryGetValue(cacheKey, out var cached) && DateTime.UtcNow < cached.ExpiresAt)
         {
             return cached.Result;
         }
@@ -147,7 +149,10 @@ public sealed class RoutePlanner(
                 RouteSummary: $"{distanceMeters / 1000d:0.1} km · {(durationSeconds / 60d):0} min",
                 LezRestricted: lezRestricted,
                 LezWarning: lezWarning);
-            if (cacheKey is not null) Cache[cacheKey] = (DateTime.UtcNow, planned);
+            if (cacheKey is not null)
+            {
+                Cache[cacheKey] = new CacheEntry(DateTime.UtcNow.Add(CacheTtl), planned);
+            }
             return planned;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
