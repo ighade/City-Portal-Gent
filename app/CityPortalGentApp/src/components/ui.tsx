@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect } from 'react'
+import { useMemo, useRef, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ActivityIndicator,
@@ -231,6 +231,62 @@ export function SwitchRow({ label, value, onValueChange }: { label: string; valu
       />
       <Txt style={{ flex: 1, fontWeight: '500' }}>{label}</Txt>
     </View>
+  )
+}
+
+/** Een aanraakbare kaart met titel, uitleg en een schuifknop; de kaart kleurt mee als de optie aan staat. */
+export function ToggleCard({ label, description, value, onValueChange }: {
+  label: string
+  description?: string
+  value: boolean
+  onValueChange: (v: boolean) => void
+}) {
+  const p = usePalette()
+  const [slide] = useState(() => new Animated.Value(value ? 1 : 0))
+
+  useEffect(() => {
+    Animated.timing(slide, { toValue: value ? 1 : 0, duration: 160, useNativeDriver: true }).start()
+  }, [value, slide])
+
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      accessibilityLabel={label}
+      onPress={() => onValueChange(!value)}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: Radius.md,
+        borderWidth: 1.5,
+        borderColor: value ? p.brand : p.border,
+        backgroundColor: value ? p.brandSoft : p.surface2,
+        opacity: pressed ? 0.85 : 1,
+      })}>
+      <View style={{ flex: 1 }}>
+        <Txt variant="strong">{label}</Txt>
+        {description ? <Txt variant="smallMuted">{description}</Txt> : null}
+      </View>
+      <View style={{ width: 48, height: 28, borderRadius: 14, justifyContent: 'center', backgroundColor: value ? p.brand : p.borderStrong }}>
+        <Animated.View
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 11,
+            backgroundColor: '#ffffff',
+            shadowColor: '#000',
+            shadowOpacity: 0.25,
+            shadowRadius: 2,
+            shadowOffset: { width: 0, height: 1 },
+            elevation: 2,
+            transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [3, 23] }) }],
+          }}
+        />
+      </View>
+    </Pressable>
   )
 }
 

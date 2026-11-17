@@ -496,9 +496,9 @@ export function ParkingMap({
                     lineCap="round"
                   />
                   {(leg.mode === 'bus' || leg.mode === 'tram') && leg.line ? (
-                    <Marker coordinate={mid} tracksViewChanges={false} anchor={{ x: 0.5, y: 0.5 }}>
+                    <PinMarker coordinate={mid} anchor={{ x: 0.5, y: 0.5 }} zIndex={20} version={`${leg.line}-${transitColor}`}>
                       <LineBadge line={leg.line} color={transitColor} />
-                    </Marker>
+                    </PinMarker>
                   ) : null}
                 </Fragment>
               )

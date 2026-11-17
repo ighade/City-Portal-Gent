@@ -78,8 +78,8 @@ export function ChargingStationsMobile({ destination, selectedId, onSelect, onSh
             backgroundColor: sel ? (dark ? '#0c4a6e' : '#e0f2fe') : i === 0 ? p.brandSoft : p.surface,
             gap: 6,
           }}>
-          <Txt style={{ fontWeight: '600', color: sel ? (dark ? '#f0f9ff' : '#111827') : undefined }}>{s.street} · {formatDistance(s.distanceMeters)}</Txt>
-          <Txt variant="small" style={{ color: sel ? (dark ? '#f0f9ff' : '#111827') : undefined }}>{[s.operator, s.type, s.kw ? `${s.kw} kW` : null, s.location].filter(Boolean).join(' · ')}</Txt>
+          <Txt style={[{ fontWeight: '600' }, sel && { color: dark ? '#f0f9ff' : '#111827' }]}>{s.street} · {formatDistance(s.distanceMeters)}</Txt>
+          <Txt variant="small" style={sel ? { color: dark ? '#f0f9ff' : '#111827' } : undefined}>{[s.operator, s.type, s.kw ? `${s.kw} kW` : null, s.location].filter(Boolean).join(' · ')}</Txt>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Pressable
               onPress={() => onRouteTo(s)}

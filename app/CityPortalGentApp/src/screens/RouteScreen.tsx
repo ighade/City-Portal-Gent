@@ -18,12 +18,13 @@ import { TransitDeparturesPanel } from '@/components/TransitDeparturesPanel'
 import { GarageRate, ManualRateInfo, StreetRate } from '@/components/RateInfo'
 import { useRouteInputs } from '@/components/RouteInputs'
 import type { RoutePoint } from '@/components/RouteInputs'
-import { Banner, Card, Fact, SwitchRow, Txt, PageHead } from '@/components/ui'
+import { Banner, Card, Fact, ToggleCard, Txt, PageHead } from '@/components/ui'
 import { SkeletonCard, SkeletonLoader } from '@/components/SkeletonLoader'
 import { StatBox, DataGrid, DetailItem, Section, Badge, ValueDisplay } from '@/components/DataDisplay'
 import { useSlideInAnimation } from '@/hooks/useAnimations'
 import { Radius } from '@/constants/theme'
 import { useApp } from '@/context/AppContext'
+import { usePersistedFlag } from '@/hooks/usePersistedFlag'
 import { usePalette } from '@/context/ThemeContext'
 import { api, ApiError } from '@/lib/api'
 import { locatePlace } from '@/lib/eventGeo'
@@ -88,7 +89,7 @@ export function RouteScreen() {
   const [containerH, setContainerH] = useState(0)
   const [plannerBottom, setPlannerBottom] = useState(0)
   const [planning, setPlanning] = useState(false)
-  const [showLez, setShowLez] = useState(false)
+  const [showLez, setShowLez] = usePersistedFlag('parkinggent.route.lez')
   const [error, setError] = useState<string | null>(null)
   const [route, setRoute] = useState<RoutePlanResult | null>(null)
   const [transitRoute, setTransitRoute] = useState<TransitRouteResult | null>(null)
@@ -106,12 +107,15 @@ export function RouteScreen() {
   const [userPosition, setUserPosition] = useState<{ lat: number; lon: number } | null>(null)
   const [focusLocation, setFocusLocation] = useState<{ lat: number; lon: number } | null>(null)
   const [ezOn, setEzOn] = useState(false)
+  // EZ Park hoort bij het auto-tabblad; de gekozen stand wordt onthouden en bij het openen van dat tabblad hersteld.
+  const [ezPref, setEzPref] = usePersistedFlag('parkinggent.route.ezpark')
   const [carOpen, setCarOpen] = useState(0)
+  const [stopOpen, setStopOpen] = useState(0)
   const [lezBlocked, setLezBlocked] = useState(false)
   const [ezOverlay, setEzOverlay] = useState<EzOverlay | null>(null)
   const [mapClick, setMapClick] = useState<{ lat: number; lon: number; n: number } | null>(null)
   const [ezPick, setEzPick] = useState<{ slug: string; n: number } | null>(null)
-  const [showChargingStations, setShowChargingStations] = useState(false)
+  const [showChargingStations, setShowChargingStations] = usePersistedFlag('parkinggent.route.charging')
   const [chargingStations, setChargingStations] = useState<ChargingStation[]>([])
   const [chargingSelected, setChargingSelected] = useState<string | null>(null)
 
@@ -226,7 +230,7 @@ export function RouteScreen() {
     setTransitRoute(null)
     setError(null)
     setLezBlocked(false)
-    if (next !== mode) setEzOn(next === 'car')
+    if (next !== mode) setEzOn(next === 'car' && ezPref)
   }
 
   const departAt = useMemo(
@@ -389,18 +393,39 @@ export function RouteScreen() {
     setError(null)
     setLezBlocked(false)
     setEzOn(true)
+    setEzPref(true)
   }
 
   const toggles = mode !== 'car' ? null : (
-    <View style={{ gap: 12 }}>
-      <SwitchRow label="Lage-emissiezone" value={showLez} onValueChange={(v) => { setShowLez(v); setError(null) }} />
-      <SwitchRow label="Laadpalen (EV)" value={showChargingStations} onValueChange={setShowChargingStations} />
-      <SwitchRow label="EZ Park" value={ezOn} onValueChange={(v) => (v ? startEzPark() : setEzOn(false))} />
+    <View style={{ gap: 10 }}>
+      <ToggleCard
+        label="Lage-emissiezone"
+        description="Toon de zone en vermijd ze bij het plannen"
+        value={showLez}
+        onValueChange={(v) => { setShowLez(v); setError(null) }}
+      />
+      <ToggleCard
+        label="Laadpalen (EV)"
+        description="Toon laadpunten bij je bestemming"
+        value={showChargingStations}
+        onValueChange={setShowChargingStations}
+      />
+      <ToggleCard
+        label="EZ Park"
+        description="Parkeer buiten het centrum en ga verder te voet of met het OV"
+        value={ezOn}
+        onValueChange={(v) => {
+          setEzPref(v)
+          if (v) startEzPark()
+          else setEzOn(false)
+        }}
+      />
     </View>
   )
   const rentalBikeToggle = mode === 'bike' ? (
-    <SwitchRow
+    <ToggleCard
       label="Toon Dott- en Bolt-deelfietsen"
+      description="Kies een deelfiets in de buurt van je start"
       value={showRentalBikes}
       onValueChange={(value) => {
         setShowRentalBikes(value)
@@ -460,7 +485,11 @@ export function RouteScreen() {
           rentalBikes={mode === 'bike' && showRentalBikes ? nearbyRentalBikes : undefined}
           transitStops={mode === 'transit' ? transitStops : undefined}
           selectedStopId={selectedStopId}
-          onStopSelect={setSelectedStopId}
+          onStopSelect={(id) => {
+            setSelectedStopId(id)
+            // Een gekozen halte klapt het paneel open, zodat de vertrektijden meteen zichtbaar zijn.
+            if (id) setStopOpen((n) => n + 1)
+          }}
           selectedRentalBikeId={selectedRentalBikeId}
           chargingStations={chargingStations}
           selectedChargingId={chargingSelected}
@@ -478,7 +507,7 @@ export function RouteScreen() {
         <Card style={{ marginBottom: 0, padding: 8 }}>{inputs.fields}</Card>
       </View>
 
-      <BottomSheet containerHeight={containerH} minHeight={132} topInset={plannerBottom + 12} expandKey={carOpen}>
+      <BottomSheet containerHeight={containerH} minHeight={132} topInset={plannerBottom + 12} expandKey={carOpen + stopOpen}>
         <ModePicker value={mode} onChange={selectMode} />
         {inputs.departField}
         {toggles}

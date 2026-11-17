@@ -44,7 +44,7 @@ export function TransitDeparturesPanel({ stopId, stopName, onClose }: { stopId: 
         return (
           <View key={`${d.line}-${d.scheduledAt}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}>
             <LegBadge mode={d.mode === 'tram' ? 'tram' : 'bus'} line={d.line} color={d.color && d.color !== 'FFFFFF' ? d.color : undefined} />
-            <Txt numberOfLines={1} style={{ flex: 1, textDecorationLine: d.canceled ? 'line-through' : 'none', color: d.canceled ? p.critInk : undefined }}>{d.destination ?? ''}</Txt>
+            <Txt numberOfLines={1} style={[{ flex: 1, textDecorationLine: d.canceled ? 'line-through' : 'none' }, d.canceled && { color: p.critInk }]}>{d.destination ?? ''}</Txt>
             {(d.canceled || late) && <Txt variant="small" style={{ textDecorationLine: 'line-through' }}>{hhmm(d.scheduledAt)}</Txt>}
             {!d.canceled && <Txt variant="strong">{hhmm(d.expectedAt)}</Txt>}
             {d.canceled && <Txt style={{ backgroundColor: p.crit, color: '#fff', fontWeight: '700', fontSize: 12, paddingHorizontal: 8, borderRadius: 10, overflow: 'hidden' }}>Geschrapt</Txt>}
