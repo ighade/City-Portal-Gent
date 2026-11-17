@@ -6,6 +6,10 @@ Begonnen als de graduaatsproef van **Asilhan Tavukcu** (HoGent, maart 2025) en i
 
 De webapp opent met Gentse evenementen; de routeplanner behoudt onder meer de OV-routeoptie.
 
+EZ Park geeft autoroutes voorrang en beperkt de routingevaluatie tot 12 seconden, na het
+selecteren van parkings. Als niet alles lukt, toont het beschikbare opties met een waarschuwing;
+een ontbrekende wandelroute wordt daarbij als rechte-lijnschatting aangeduid.
+
 De backend houdt één regel aan: **lezen mag iedereen, schrijven vraagt een identiteit.**
 
 Omdat de dienst op het open internet staat, is de begrenzing strakker dan elders: 60 verzoeken

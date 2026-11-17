@@ -135,6 +135,7 @@ public sealed class TransitService(
         var bestScore = double.MaxValue;
         while (queue.TryDequeue(out var label, out _))
         {
+            ct.ThrowIfCancellationRequested();
             var state = label.State;
             if (!best.TryGetValue(state, out var labels) || !labels.Contains(label)) continue;
             if (Score(label.Arrival, label.Transfers, label.OriginWalkMinutes, 0) >= bestScore) continue;

@@ -318,6 +318,76 @@ public class EzParkTests : IClassFixture<RoutingFactory>
         Assert.Equal("De routes konden niet berekend worden.", body.GetProperty("warning").GetString());
     }
 
+    [Fact]
+    public async Task Keeps_completed_options_when_one_driving_route_times_out()
+    {
+        factory.Ors.AsyncResponder = async (request, ct) =>
+        {
+            var url = Uri.UnescapeDataString(request.RequestUri!.ToString());
+            if (url.Contains("driving-car") && url.Contains("end=3.731,51.061"))
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return RoutingFactory.OrsRoute();
+        };
+        try
+        {
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            var response = await EzPark(new { startLat = NextStartLat(), startLon = 3.9, endLat = 51.0523, endLon = 3.7345 });
+            timer.Stop();
+
+            var body = await response.JsonAsync();
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal(["ez-outside-open"], Slugs(body));
+            Assert.Contains("Sommige routes", body.GetProperty("warning").GetString());
+            Assert.InRange(timer.Elapsed, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(18));
+        }
+        finally
+        {
+            factory.Ors.AsyncResponder = null;
+        }
+    }
+
+    [Fact]
+    public async Task Warns_when_a_walking_route_is_estimated()
+    {
+        factory.Ors.Responder = request => request.RequestUri!.AbsolutePath.Contains("foot-walking")
+            ? StubHandler.Respond(HttpStatusCode.Forbidden)
+            : RoutingFactory.OrsRoute();
+
+        var response = await EzPark(new { startLat = NextStartLat(), startLon = 3.9, endLat = 51.0534, endLon = 3.7367 });
+        var body = await response.JsonAsync();
+
+        Assert.Equal(2, body.GetProperty("options").GetArrayLength());
+        Assert.Contains("schatting", body.GetProperty("warning").GetString());
+        var walk = body.GetProperty("options")[0].GetProperty("variants")[0].GetProperty("legs")[2];
+        Assert.True(walk.GetProperty("distanceKm").GetDouble() > 0);
+    }
+
+    [Fact]
+    public async Task Keeps_driving_options_when_walking_routes_time_out()
+    {
+        factory.Ors.AsyncResponder = async (request, ct) =>
+        {
+            if (request.RequestUri!.AbsolutePath.Contains("foot-walking"))
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return RoutingFactory.OrsRoute();
+        };
+        try
+        {
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            var response = await EzPark(new { startLat = NextStartLat(), startLon = 3.9, endLat = 51.0545, endLon = 3.7389 });
+            timer.Stop();
+            var body = await response.JsonAsync();
+
+            Assert.Equal(2, body.GetProperty("options").GetArrayLength());
+            Assert.Contains("schatting", body.GetProperty("warning").GetString());
+            Assert.InRange(timer.Elapsed, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(18));
+        }
+        finally
+        {
+            factory.Ors.AsyncResponder = null;
+        }
+    }
+
     [Theory]
     [InlineData(0, 0)]
     [InlineData(-30, 0)]          // negatief: meteen vertrekken

@@ -5,6 +5,7 @@ import { Pressable, View } from 'react-native'
 import { BottomSheet } from '@/components/BottomSheet'
 import { useEzPark } from '@/components/EzParkPanel'
 import { TransitLegsOverview } from '@/components/TransitLegsOverview'
+import type { OverviewLeg } from '@/components/TransitLegsOverview'
 import type { EzOverlay } from '@/components/EzParkPanel'
 import { Icon } from '@/components/Icon'
 import type { IconName } from '@/components/Icon'
@@ -103,6 +104,7 @@ export function RouteScreen() {
   const [bikeTrip, setBikeTrip] = useState<{ walk: RoutePlanResult; ride: RoutePlanResult } | null>(null)
   const [rentalBikeOpenError, setRentalBikeOpenError] = useState<string | null>(null)
   const [userPosition, setUserPosition] = useState<{ lat: number; lon: number } | null>(null)
+  const [focusLocation, setFocusLocation] = useState<{ lat: number; lon: number } | null>(null)
   const [ezOn, setEzOn] = useState(false)
   const [carOpen, setCarOpen] = useState(0)
   const [lezBlocked, setLezBlocked] = useState(false)
@@ -124,7 +126,8 @@ export function RouteScreen() {
   const friendsOnMap = useFriendsOnMap()
   const submit = useRef<() => void>(() => undefined)
   const endSelection = useRef<(target: RoutePoint | string) => void>(() => undefined)
-  const inputs = useRouteInputs(carParkings, mapClick, () => submit.current(), (target) => endSelection.current(target))
+  const endGeocodeRequest = useRef(0)
+  const inputs = useRouteInputs(carParkings, mapClick, () => submit.current(), (target) => endSelection.current(target), setFocusLocation)
   const { start, end } = inputs
   const onUserPosition = useCallback((position: { lat: number; lon: number } | null) => setUserPosition(position), [])
   const rentalBikeOrigin = useMemo(
@@ -223,7 +226,7 @@ export function RouteScreen() {
     setTransitRoute(null)
     setError(null)
     setLezBlocked(false)
-    setEzOn(next === 'car')
+    if (next !== mode) setEzOn(next === 'car')
   }
 
   const departAt = useMemo(
@@ -233,6 +236,26 @@ export function RouteScreen() {
     [route, inputs.departTime],
   )
   const arriveAt = route ? new Date(departAt.getTime() + route.durationMinutes * 60000) : null
+
+  const carLegs = useMemo<OverviewLeg[]>(() => {
+    if (mode !== 'car' || !route || route.lezRestricted || !arriveAt) return []
+    const from = start?.label ?? 'Start'
+    const to = end?.label ?? 'Destination'
+    const legs: OverviewLeg[] = [{
+      mode: 'drive',
+      from,
+      to,
+      departureAt: departAt.toISOString(),
+      arrivalAt: arriveAt.toISOString(),
+      distanceKm: route.distanceKm,
+    }]
+    const parkingName = route.destinationGarage?.name ?? route.destinationParking?.name
+    if (parkingName) {
+      legs.push({ mode: 'park', from: parkingName, to: parkingName, departureAt: arriveAt.toISOString(), arrivalAt: arriveAt.toISOString(), distanceKm: 0 })
+    }
+    return legs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, route, departAt, start?.label, end?.label])
 
   async function handlePlan(target?: RoutePoint | string, forMode: Mode = mode) {
     setPlanning(true)
@@ -332,15 +355,28 @@ export function RouteScreen() {
   // Wordt het startpunt ingevuld terwijl de bestemming al bekend is, dan wordt meteen berekend.
   useEffect(() => {
     if (!start || !end) return
-    if (mode === 'car' && ezOn) void ez.plan()
-    else void handlePlan(undefined, mode)
+    if (mode !== 'car' || !ezOn) void handlePlan(undefined, mode)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start])
 
   useEffect(() => {
+    if (mode === 'car' && ezOn && start && end) void ez.plan()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start, end])
+
+  useEffect(() => {
     submit.current = () => selectMode(mode)
     endSelection.current = (target) => {
-      if (!ezOn && inputs.hasStart) void handlePlan(target)
+      const requestId = ++endGeocodeRequest.current
+      if (ezOn && typeof target === 'string') {
+        setError(null)
+        void api.geocode(target).then((point) => {
+          if (requestId === endGeocodeRequest.current) inputs.chooseEnd(point, false)
+        }).catch((err: unknown) => {
+          if (requestId === endGeocodeRequest.current)
+            setError(err instanceof Error ? err.message : 'De bestemming kon niet worden gevonden.')
+        })
+      } else if (!ezOn && inputs.hasStart) void handlePlan(target)
     }
   })
 
@@ -390,6 +426,7 @@ export function RouteScreen() {
   }
 
   const ez = useEzPark({
+    enabled: ezOn,
     avoidLez: showLez,
     start,
     end,
@@ -416,6 +453,7 @@ export function RouteScreen() {
           friends={friendsOnMap}
           onEventPick={pickEvent}
           onUserPosition={onUserPosition}
+          focusLocation={focusLocation}
           eventSheetTop={plannerBottom + 8}
           onEzParkPick={(slug) => setEzPick({ slug, n: Date.now() })}
           route={ezOn ? null : routeOverlay}
@@ -440,7 +478,7 @@ export function RouteScreen() {
         <Card style={{ marginBottom: 0, padding: 8 }}>{inputs.fields}</Card>
       </View>
 
-      <BottomSheet containerHeight={containerH} minHeight={132} initialHeight={230} topInset={plannerBottom + 12} expandKey={carOpen}>
+      <BottomSheet containerHeight={containerH} minHeight={132} topInset={plannerBottom + 12} expandKey={carOpen}>
         <ModePicker value={mode} onChange={selectMode} />
         {inputs.departField}
         {toggles}
@@ -463,7 +501,6 @@ export function RouteScreen() {
             onOpen={() => void openSelectedRentalBike()}
           />
         )}
-        {inputs.locateError && !start && <Banner style={{ marginBottom: 0 }}>{inputs.locateError}</Banner>}
         {error && !lezBlocked && <Banner style={{ marginBottom: 0 }}>{error}</Banner>}
         {lezBlocked && (
           <Banner style={{ marginBottom: 0 }}>
@@ -514,6 +551,13 @@ export function RouteScreen() {
                   {transitRoute && (
                     <Section title="Transit Legs" animate={true}>
                       <TransitLegsOverview legs={transitRoute.legs} />
+                    </Section>
+                  )}
+
+                  {/* Car legs */}
+                  {carLegs.length > 0 && (
+                    <Section title="Car Route" animate={true}>
+                      <TransitLegsOverview legs={carLegs} />
                     </Section>
                   )}
 

@@ -10,7 +10,6 @@ interface Props {
   /** Hoogte van de container waarin het paneel onderaan hangt. */
   containerHeight: number
   minHeight?: number
-  initialHeight?: number
   /** Ruimte die bovenaan vrij blijft als het paneel helemaal open staat. */
   topInset?: number
   /** Een nieuwe waarde (> 0) klapt het paneel open tot de maximale hoogte. */
@@ -18,10 +17,10 @@ interface Props {
 }
 
 /** Paneel onderaan het scherm; sleep aan de greep om het hoger of lager te zetten. */
-export function BottomSheet({ children, containerHeight, minHeight = 150, initialHeight = 220, topInset, expandKey = 0 }: Props) {
+export function BottomSheet({ children, containerHeight, minHeight = 150, topInset, expandKey = 0 }: Props) {
   const p = usePalette()
-  const [height, setHeight] = useState(initialHeight)
-  const startHeight = useRef(initialHeight)
+  const [height, setHeight] = useState(minHeight)
+  const startHeight = useRef(minHeight)
   const max = useRef(0)
   const min = useRef(minHeight)
   const current = useRef(height)
@@ -34,6 +33,11 @@ export function BottomSheet({ children, containerHeight, minHeight = 150, initia
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandKey])
 
+  const snap = () => {
+    const mid = (min.current + max.current) / 2
+    setHeight(current.current >= mid ? max.current : min.current)
+  }
+
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -43,6 +47,9 @@ export function BottomSheet({ children, containerHeight, minHeight = 150, initia
       onPanResponderMove: (_, g) => {
         setHeight(Math.min(max.current, Math.max(min.current, startHeight.current - g.dy)))
       },
+              // Slechts twee standen: bij loslaten naar de dichtstbijzijnde (min of max).
+              onPanResponderRelease: snap,
+              onPanResponderTerminate: snap,
     }),
   ).current
 

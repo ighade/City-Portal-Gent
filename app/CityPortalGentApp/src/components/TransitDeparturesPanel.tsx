@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pressable, View } from 'react-native'
 
-import { LegBadge } from '@/components/EzParkPanel'
+import { LegBadge } from '@/components/LegBadge'
 import { Card, Txt } from '@/components/ui'
 import { usePalette } from '@/context/ThemeContext'
 import { api } from '@/lib/api'

@@ -152,7 +152,7 @@ async function flemishSuggest(q: string): Promise<string[]> {
   return sorted
 }
 
-async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
+async function call<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (sessionCookie) headers.Cookie = sessionCookie
@@ -162,6 +162,7 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
     credentials: 'include',
+    signal,
   })
   captureCookie(res)
 
@@ -200,7 +201,7 @@ export const api = {
   suggest: flemishSuggest,
   geocode: flemishGeocode,
   placeByName,
-  ezPark: (payload: EzParkRequest) => call<EzParkResult>('POST', '/api/route/ezpark', payload),
+  ezPark: (payload: EzParkRequest, signal?: AbortSignal) => call<EzParkResult>('POST', '/api/route/ezpark', payload, signal),
   transit: {
     stops: () => call<TransitStop[]>('GET', '/api/transit/stops'),
     departures: (stopId: string) => call<TransitDeparturesResult>('GET', `/api/transit/stops/${encodeURIComponent(stopId)}/departures?count=8`),

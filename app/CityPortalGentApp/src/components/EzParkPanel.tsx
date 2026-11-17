@@ -1,14 +1,14 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 
 import { EndTimeSelect, endOptions, estimateCost, GarageRate, ManualRateInfo } from '@/components/RateInfo'
 import type { RoutePoint } from '@/components/RouteInputs'
+import { TransitLegsOverview } from '@/components/TransitLegsOverview'
 import { Banner, Btn, Card, Txt } from '@/components/ui'
 import { usePalette } from '@/context/ThemeContext'
 import { api } from '@/lib/api'
 import { transitFareLabel } from '@/lib/fare'
-import { textOn } from '@/lib/map'
 import type { EzParkLeg, EzParkOption, EzParkResult, EzParkVariant, ParkingRate } from '@/lib/types'
 
 export type EzPoint = RoutePoint
@@ -23,6 +23,7 @@ export interface EzOverlay {
 }
 
 interface Props {
+  enabled: boolean
   avoidLez: boolean
   start: EzPoint | null
   end: EzPoint | null
@@ -50,11 +51,31 @@ function bestVariant(o: EzParkOption): EzParkVariant {
  * EZ Park: de invoer en de knop (`controls`) staan in het formulier, de voorstellen en het
  * gekozen traject (`overview`) in het Routeoverzicht.
  */
-export function useEzPark({ avoidLez, start, end, canPlan, resolveStart, resolveEnd, departInMinutes, hint, onOverlay, pick }: Props) {
+export function useEzPark({ enabled, avoidLez, start, end, canPlan, resolveStart, resolveEnd, departInMinutes, hint, onOverlay, pick }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<EzParkResult | null>(null)
   const [selected, setSelected] = useState<{ slug: string; type: EzParkVariant['type'] } | null>(null)
+  const latestRequest = useRef(0)
+  const pending = useRef<{ key: string; controller: AbortController; promise: Promise<EzParkResult> } | null>(null)
+
+  useEffect(() => {
+    if (!enabled) {
+      latestRequest.current++
+      pending.current?.controller.abort()
+      pending.current = null
+      setLoading(false)
+      setResult(null)
+      setSelected(null)
+      setError(null)
+    }
+  }, [enabled])
+
+  useEffect(() => () => {
+    latestRequest.current++
+    pending.current?.controller.abort()
+    pending.current = null
+  }, [])
 
   const option = useMemo(() => result?.options.find((o) => o.slug === selected?.slug) ?? null, [result, selected])
   const variant = useMemo(() => option?.variants.find((v) => v.type === selected?.type) ?? null, [option, selected])
@@ -81,7 +102,11 @@ export function useEzPark({ avoidLez, start, end, canPlan, resolveStart, resolve
   }, [pickN])
 
   async function plan() {
+    const requestId = ++latestRequest.current
     if (!canPlan) {
+      pending.current?.controller.abort()
+      pending.current = null
+      setLoading(false)
       setError('Kies een start en een bestemming.')
       return
     }
@@ -89,26 +114,40 @@ export function useEzPark({ avoidLez, start, end, canPlan, resolveStart, resolve
     setError(null)
     setResult(null)
     setSelected(null)
+    let current: typeof pending.current = null
     try {
       const [from, to] = await Promise.all([resolveStart(), resolveEnd()])
-      const res = await api.ezPark({
+      if (requestId !== latestRequest.current) return
+      const payload = {
         startLat: from.lat,
         startLon: from.lon,
         endLat: to.lat,
         endLon: to.lon,
         departInMinutes: departInMinutes(),
         avoidLez,
-      })
-      setResult(res)
+      }
+      const key = JSON.stringify(payload)
+      if (pending.current?.key !== key) {
+        pending.current?.controller.abort()
+        const controller = new AbortController()
+        pending.current = { key, controller, promise: api.ezPark(payload, controller.signal) }
+      }
+      current = pending.current
+      const res = await current.promise
+      if (requestId === latestRequest.current) setResult(res)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'EZ Park kon niet berekend worden.')
+      if (requestId === latestRequest.current) {
+        setError(err instanceof Error ? err.message : 'EZ Park kon niet berekend worden.')
+      }
     } finally {
-      setLoading(false)
+      if (current && pending.current === current) pending.current = null
+      if (requestId === latestRequest.current) setLoading(false)
     }
   }
 
   const controls = (
     <View style={{ gap: 10 }}>
+      <Btn label={loading ? 'Parkings zoeken…' : 'Zoek parkings'} onPress={() => void plan()} disabled={loading || !canPlan} variant="primary" />
       {loading && <Txt variant="note" style={{ marginTop: 0 }}>Parkings zoeken…</Txt>}
       {hint && <Txt variant="note" style={{ marginTop: 0 }}>{hint}</Txt>}
       {error && <Banner style={{ marginBottom: 0 }}>{error}</Banner>}
@@ -188,20 +227,6 @@ function OptionCard({ option, selected, onSelect }: {
   )
 }
 
-/** Eén stap van een traject: een rondje met het vervoermiddel en de uren eronder. */
-export function LegBadge({ mode, line, color }: { mode: EzParkLeg['mode']; line?: string; color?: string }) {
-  const p = usePalette()
-  const transit = mode === 'bus' || mode === 'tram'
-  const bg = color ? `#${color}` : mode === 'drive' ? p.crit : mode === 'park' ? '#3b82f6' : mode === 'walk' ? '#2563eb' : mode === 'tram' ? '#d97706' : '#0f766e'
-  const text = color ? textOn(color) : '#fff'
-  const label = transit && line ? line : mode === 'drive' ? 'A' : mode === 'park' ? 'P' : mode === 'walk' ? '↗' : mode === 'tram' ? 'T' : 'B'
-  return (
-    <View style={{ minWidth: 30, height: 30, paddingHorizontal: 6, borderRadius: 15, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
-      <Txt style={{ color: text, fontWeight: '700', fontSize: 13, lineHeight: 16 }}>{label}</Txt>
-    </View>
-  )
-}
-
 export function Legs({ variant, rate, manualRate }: {
   variant: EzParkVariant
   rate?: ParkingRate
@@ -216,21 +241,13 @@ export function Legs({ variant, rate, manualRate }: {
       {fare && (
         <Txt variant="smallMuted">OV-ticket: <Txt variant="small" style={{ fontWeight: '700' }}>{fare}</Txt> (overstappen inbegrepen)</Txt>
       )}
-      <View style={{ gap: 12, marginTop: 8 }}>
-        {variant.legs.map((leg, i) => (
-          <View key={`${leg.mode}-${i}`} style={{ flexDirection: 'row', gap: 10 }}>
-            <LegBadge mode={leg.mode} color={leg.color} />
-            <View style={{ flex: 1 }}>
-              <Txt variant="strong">{legTitle(leg)}</Txt>
-              <Txt variant="smallMuted">{leg.mode === 'park' ? leg.from : `${leg.from} → ${leg.to}`}</Txt>
-              <Txt variant="small">
-                {formatTime(leg.departureAt)}–{formatTime(leg.arrivalAt)}
-                {leg.distanceKm > 0 ? ` · ${leg.distanceKm.toFixed(1)} km` : ''}
-              </Txt>
-              {leg.mode === 'park' && (manualRate ? <ManualRateInfo rate={manualRate} /> : <ParkCost leg={leg} rate={rate} index={idx} onIndex={setIdx} />)}
-            </View>
-          </View>
-        ))}
+      <View style={{ marginTop: 8 }}>
+        <TransitLegsOverview
+          legs={variant.legs}
+          renderExtra={(leg) => leg.mode === 'park'
+            ? (manualRate ? <ManualRateInfo rate={manualRate} /> : <ParkCost leg={variant.legs.find((l) => l.mode === 'park')!} rate={rate} index={idx} onIndex={setIdx} />)
+            : null}
+        />
       </View>
     </View>
   )
@@ -264,14 +281,4 @@ function ParkCost({ leg, rate, index, onIndex }: {
       </Txt>
     </View>
   )
-}
-
-function legTitle(leg: EzParkLeg): string {
-  switch (leg.mode) {
-    case 'drive': return 'Rijden'
-    case 'park': return 'Parkeren'
-    case 'walk': return 'Wandelen'
-    case 'tram': return `Tram ${leg.line ?? ''}`
-    default: return `Bus ${leg.line ?? ''}`
-  }
 }

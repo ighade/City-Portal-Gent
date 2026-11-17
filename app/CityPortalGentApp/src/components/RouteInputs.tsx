@@ -196,6 +196,7 @@ export function useRouteInputs(
   mapClick: { lat: number; lon: number; n: number } | null,
   onSubmit?: () => void,
   onEndSelected?: (target: RoutePoint | string) => void,
+  onLocate?: (point: RoutePoint) => void,
 ) {
   const p = usePalette()
   const [start, setStart] = useState<RoutePoint | null>(null)
@@ -206,32 +207,36 @@ export function useRouteInputs(
   const [departTime, setDepartTime] = useState('')
   const [locating, setLocating] = useState(false)
   const [locateError, setLocateError] = useState<string | null>(null)
+  const startRevision = useRef(0)
 
   useEffect(() => {
     api.transit.stops().then(setStops).catch(() => undefined)
   }, [])
 
-  const locate = useCallback(async () => {
+  const locate = useCallback(async (focusMap = false) => {
+    const revision = ++startRevision.current
     setLocateError(null)
     setLocating(true)
     try {
       const perm = await Location.requestForegroundPermissionsAsync()
-      if (perm.status !== 'granted') throw new Error('denied')
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-      const { latitude, longitude } = pos.coords
-      // Een emulator geeft vaak een vaste locatie (Californië); daarmee is geen route naar Gent mogelijk.
-      if (Math.abs(latitude - 51.05) > 1.5 || Math.abs(longitude - 3.72) > 2.5) {
-        setLocateError('Je toestel-locatie ligt te ver van Gent om een route te berekenen; typ een startpunt of klik het op de kaart.')
+      if (!perm.granted) {
+        if (revision === startRevision.current) setLocateError('Geef de app toestemming voor locatie in de instellingen van je toestel.')
         return
       }
-      setStart({ lat: latitude, lon: longitude, label: 'Mijn locatie' })
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      if (revision !== startRevision.current) return
+      const { latitude, longitude } = pos.coords
+      const point = { lat: latitude, lon: longitude, label: 'Mijn locatie' }
+      setStart(point)
       setStartText('Mijn locatie')
-    } catch {
-      setLocateError('Je locatie is niet beschikbaar; klik je startpunt op de kaart.')
+      if (focusMap) onLocate?.(point)
+    } catch (error) {
+      console.warn('Locatie ophalen mislukt:', error)
+      if (revision === startRevision.current) setLocateError('Je locatie is niet beschikbaar. Controleer of locatie op je toestel is ingeschakeld en probeer opnieuw.')
     } finally {
       setLocating(false)
     }
-  }, [])
+  }, [onLocate])
 
   useEffect(() => {
     void locate()
@@ -242,6 +247,7 @@ export function useRouteInputs(
     if (!mapClick) return
     const point = { lat: mapClick.lat, lon: mapClick.lon, label: 'Gekozen op kaart' }
     if (!start && !startText.trim()) {
+      startRevision.current++
       setStart(point)
       setStartText(point.label)
     } else {
@@ -267,6 +273,7 @@ export function useRouteInputs(
   const sameLabel = (a: string, b: string) => a.trim().toLocaleLowerCase('nl-BE') === b.trim().toLocaleLowerCase('nl-BE')
 
   function onStartText(value: string) {
+    startRevision.current++
     setStartText(value)
     setStart(null)
     suggestStart(value)
@@ -330,7 +337,7 @@ export function useRouteInputs(
           onSubmitEditing={onSubmit}
           right={
             <Pressable
-              onPress={() => void locate()}
+              onPress={() => void locate(true)}
               disabled={locating}
               accessibilityRole="button"
               accessibilityLabel="Gebruik mijn locatie"
@@ -343,11 +350,13 @@ export function useRouteInputs(
         <SuggestionList
           items={startSuggestions}
           onPick={(label) => {
+            startRevision.current++
             setStartText(label)
             setStart(null)
             clearStart()
           }}
         />
+        {locateError && <Txt variant="small" style={{ color: p.ink2, marginTop: 4 }}>{locateError}</Txt>}
       </View>
 
       <View>
@@ -380,7 +389,6 @@ export function useRouteInputs(
     departInMinutes,
     fields,
     hint,
-    locateError,
     chooseEnd,
   }
 }

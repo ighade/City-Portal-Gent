@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Image, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import MapView, { Callout, Marker, Polygon, Polyline } from 'react-native-maps'
 import type { Region } from 'react-native-maps'
 
@@ -13,7 +13,7 @@ import { Radius } from '@/constants/theme'
 import { usePalette } from '@/context/ThemeContext'
 import { api, assetUrl } from '@/lib/api'
 import { dayMonthParts, nl, timeBrussels, weekdayLong } from '@/lib/format'
-import { GENT_BOUNDS, GENT_REGION, geoJsonPolygons } from '@/lib/map'
+import { GENT_REGION, geoJsonPolygons } from '@/lib/map'
 import type { MapPolygon } from '@/lib/map'
 import type { RentalBike } from '@/lib/rentalBikes'
 import type { ChargingStation } from '@/lib/chargingStations'
@@ -73,6 +73,7 @@ interface Props {
   selectedStopId?: string | null
   onStopSelect?: (id: string) => void
   onUserPosition?: (position: { lat: number; lon: number } | null) => void
+  focusLocation?: { lat: number; lon: number } | null
   /** Zet de evenementenkaarten bovenaan, deze afstand van de bovenkant, in plaats van onderaan. */
   eventSheetTop?: number
   height?: number | string
@@ -152,6 +153,7 @@ export function ParkingMap({
   selectedStopId,
   onStopSelect,
   onUserPosition,
+  focusLocation,
   height = '100%',
 }: Props) {
   const p = usePalette()
@@ -176,8 +178,9 @@ export function ParkingMap({
   const [sheet, setSheet] = useState<MapEvent[] | null>(null)
   const markerPressAt = useRef(0)
   const [userPos, setUserPos] = useState<{ lat: number; lon: number } | null>(null)
+  const [mapReady, setMapReady] = useState(false)
 
-  // Eigen locatie volgen (alleen met toestemming); buiten Gent tonen we niets.
+  // Eigen locatie volgen, alleen met toestemming.
   useEffect(() => {
     let sub: Location.LocationSubscription | null = null
     let cancelled = false
@@ -186,15 +189,15 @@ export function ParkingMap({
         const perm = await Location.requestForegroundPermissionsAsync()
         if (!perm.granted || cancelled) return
         sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, distanceInterval: 10 }, (pos) => {
+          if (cancelled) return
           const { latitude: lat, longitude: lon } = pos.coords
-          const inGent = lat >= GENT_BOUNDS[0][0] && lat <= GENT_BOUNDS[1][0] && lon >= GENT_BOUNDS[0][1] && lon <= GENT_BOUNDS[1][1]
-          const position = inGent ? { lat, lon } : null
+          const position = { lat, lon }
           setUserPos(position)
           onUserPosition?.(position)
         })
         if (cancelled) sub.remove()
-      } catch {
-        // zonder locatie blijft de kaart gewoon werken
+      } catch (error) {
+        console.warn('Locatie volgen mislukt:', error)
       }
     })()
     return () => {
@@ -217,14 +220,18 @@ export function ParkingMap({
     }
   }, [showLez, lez])
 
-  const onReady = useCallback(() => {
-    if (Platform.OS === 'android') {
-      map.current?.setMapBoundaries(
-        { latitude: GENT_BOUNDS[1][0], longitude: GENT_BOUNDS[1][1] },
-        { latitude: GENT_BOUNDS[0][0], longitude: GENT_BOUNDS[0][1] },
-      )
-    }
-  }, [])
+  useEffect(() => {
+    if (!focusLocation || !mapReady) return
+    // De handmatig opgevraagde positie kan eerder aankomen dan de locatie-watch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUserPos(focusLocation)
+    map.current?.animateToRegion({
+      latitude: focusLocation.lat,
+      longitude: focusLocation.lon,
+      latitudeDelta: 0.012,
+      longitudeDelta: 0.012,
+    }, 300)
+  }, [focusLocation, mapReady])
 
   const edge = { top: 180, right: 60, bottom: 180, left: 60 }
 
@@ -329,9 +336,8 @@ export function ParkingMap({
         maxZoomLevel={18}
         userInterfaceStyle={p.scheme}
         showsCompass={false}
-        showsUserLocation={!!userPos}
         showsMyLocationButton={false}
-        onMapReady={onReady}
+        onMapReady={() => setMapReady(true)}
         onRegionChangeComplete={setRegion}
         onPress={(e) => {
           // Sommige platforms sturen na een markerklik ook een kaartklik; die mag de kaart niet meteen sluiten.
@@ -364,6 +370,11 @@ export function ParkingMap({
           />
         )}
 
+        {userPos && (
+          <PinMarker coordinate={{ latitude: userPos.lat, longitude: userPos.lon }} title="Mijn locatie" anchor={{ x: 0.5, y: 0.5 }} zIndex={1001}>
+            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#2563eb', borderWidth: 3, borderColor: '#fff' }} />
+          </PinMarker>
+        )}
         {route && dot(route.start, '#2563eb', 'Start')}
         {route && dot(route.end, '#c2410c', 'Bestemming')}
 

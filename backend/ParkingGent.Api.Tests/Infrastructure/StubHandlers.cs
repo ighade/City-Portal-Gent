@@ -10,13 +10,16 @@ public class StubHandler : HttpMessageHandler
 {
     public ConcurrentQueue<HttpRequestMessage> Requests { get; } = new();
     public Func<HttpRequestMessage, HttpResponseMessage> Responder { get; set; } = _ => Respond(HttpStatusCode.NotFound);
+    public Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? AsyncResponder { get; set; }
 
     public IEnumerable<string> Urls => Requests.Select(r => r.RequestUri!.ToString());
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Requests.Enqueue(request);
-        return Task.FromResult(Responder(request));
+        return AsyncResponder is { } responder
+            ? responder(request, cancellationToken)
+            : Task.FromResult(Responder(request));
     }
 
     public static HttpResponseMessage Respond(HttpStatusCode status, object? body = null) => new(status)

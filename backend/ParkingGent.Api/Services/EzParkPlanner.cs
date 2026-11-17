@@ -158,7 +158,6 @@ public sealed class EzParkPlanner(
         if (drive is null) return (null, true);
 
         RoutePlanResult? walk = null;
-        bool incomplete = false;
         if (!budget.IsCancellationRequested)
         {
             try
@@ -167,14 +166,10 @@ public sealed class EzParkPlanner(
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested && budget.IsCancellationRequested)
             {
-                incomplete = true;
             }
         }
-        else
-        {
-            incomplete = true;
-        }
 
+        var incomplete = walk is null;
         ct.ThrowIfCancellationRequested();
 
         var driveArrival = departure.AddMinutes(drive.DurationMinutes);
