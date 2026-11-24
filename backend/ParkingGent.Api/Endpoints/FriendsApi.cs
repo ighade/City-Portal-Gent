@@ -35,6 +35,40 @@ public static class FriendsApi
         g.MapGet("/overview", Authed(async (FriendUser me, Friends f, CancellationToken ct) =>
             Results.Ok(await f.OverviewAsync(me, ct))));
 
+        // Chat endpoints (must be before /{id:guid} catch-all to avoid routing conflicts)
+        g.MapGet("/chats", AuthedChat(async (FriendUser me, Chat c, CancellationToken ct) =>
+            Results.Ok(await c.GetConversationsAsync(me, ct))));
+        
+        g.MapGet("/chats/{conversationId:guid}", AuthedChat(async (FriendUser me, Chat c, Guid conversationId, CancellationToken ct) =>
+        {
+            var conv = await c.GetConversationAsync(me, conversationId, ct);
+            return conv is not null
+                ? Results.Ok(conv)
+                : Results.NotFound(new { error = "Dat gesprek bestaat niet of je bent er geen lid van." });
+        }));
+        
+        g.MapPost("/chats/direct/{friendId:guid}", AuthedChatDirect(async (FriendUser me, Chat c, Guid friendId, CancellationToken ct) =>
+            Results.Ok(new { conversationId = await c.GetOrCreateDirectConversationAsync(me.Id, friendId, ct) })));
+        
+        g.MapPost("/chats/group", AuthedChat<CreateGroupRequest>((me, c, body, ct) => CreateGroupChat(me, c, body, ct)));
+        
+        g.MapPost("/chats/{conversationId:guid}/messages", AuthedChat<SendMessageRequest>((me, c, conversationId, body, ct) => SendChatMessage(me, c, conversationId, body, ct)));
+        
+        g.MapPost("/chats/{conversationId:guid}/members", AuthedChat<AddGroupMemberRequest>((me, c, conversationId, body, ct) => AddChatMember(me, c, conversationId, body, ct)));
+        
+        g.MapDelete("/chats/{conversationId:guid}/members/{memberId:guid}", 
+            AuthedChat(async (FriendUser me, Chat c, Guid conversationId, Guid memberId, CancellationToken ct) =>
+                await c.RemoveGroupMemberAsync(me, conversationId, memberId, ct)
+                    ? Results.NoContent()
+                    : Results.BadRequest(new { error = "Kan lid niet verwijderen." })));
+        
+        g.MapDelete("/chats/{conversationId:guid}", AuthedChat(async (FriendUser me, Chat c, Guid conversationId, CancellationToken ct) =>
+            await c.DeleteGroupAsync(me, conversationId, ct)
+                ? Results.NoContent()
+                : Results.BadRequest(new { error = "Kan groep niet verwijderen." })));
+        
+        g.MapPost("/chats/{conversationId:guid}/events", AuthedChat<EventShareRequest>((me, c, conversationId, body, ct) => ShareChatEvent(me, c, conversationId, body, ct)));
+
         g.MapPost("/requests", Authed(async (FriendUser me, Friends f, FriendRequestBody body, CancellationToken ct) =>
         {
             var error = await f.RequestAsync(me, body.Username, ct);
@@ -55,40 +89,6 @@ public static class FriendsApi
             await f.RemoveInterestAsync(me, eventId, ct);
             return Results.NoContent();
         }));
-
-        // Chat endpoints
-        g.MapGet("/chats", AuthedChat(async (FriendUser me, Chat c, CancellationToken ct) =>
-            Results.Ok(await c.GetConversationsAsync(me, ct))));
-        
-        g.MapGet("/chats/{conversationId:guid}", AuthedChat(async (FriendUser me, Chat c, Guid conversationId, CancellationToken ct) =>
-        {
-            var conv = await c.GetConversationAsync(me, conversationId, ct);
-            return conv is not null
-                ? Results.Ok(conv)
-                : Results.NotFound(new { error = "Dat gesprek bestaat niet of je bent er geen lid van." });
-        }));
-        
-        g.MapPost("/chats/direct/{friendId:guid}", AuthedChat(async (FriendUser me, Chat c, Guid friendId, CancellationToken ct) =>
-            Results.Ok(new { conversationId = await c.GetOrCreateDirectConversationAsync(me.Id, friendId, ct) })));
-        
-        g.MapPost("/chats/group", AuthedChat<CreateGroupRequest>(CreateGroupChat));
-        
-        g.MapPost("/chats/{conversationId:guid}/messages", AuthedChat<SendMessageRequest>(SendChatMessage));
-        
-        g.MapPost("/chats/{conversationId:guid}/members", AuthedChat<AddGroupMemberRequest>(AddChatMember));
-        
-        g.MapDelete("/chats/{conversationId:guid}/members/{memberId:guid}", 
-            AuthedChat(async (FriendUser me, Chat c, Guid conversationId, Guid memberId, CancellationToken ct) =>
-                await c.RemoveGroupMemberAsync(me, conversationId, memberId, ct)
-                    ? Results.NoContent()
-                    : Results.BadRequest(new { error = "Kan lid niet verwijderen." })));
-        
-        g.MapDelete("/chats/{conversationId:guid}", AuthedChat(async (FriendUser me, Chat c, Guid conversationId, CancellationToken ct) =>
-            await c.DeleteGroupAsync(me, conversationId, ct)
-                ? Results.NoContent()
-                : Results.BadRequest(new { error = "Kan groep niet verwijderen." })));
-        
-        g.MapPost("/chats/{conversationId:guid}/events", AuthedChat<EventShareRequest>(ShareChatEvent));
     }
 
     /// <summary>Verpakt een eindpunt zodat het alleen met een geldige sessie draait; anders 401.</summary>
@@ -151,6 +151,57 @@ public static class FriendsApi
         {
             var me = await f.ResolveAsync(ctx.Request.Cookies[Friends.CookieName], ct);
             return me is null ? Unauthorized() : await inner(me, f, a, b, ct);
+        };
+
+    // AuthedChat overloads for chat-specific handlers (to disambiguate from Friends handlers)
+    private static Delegate AuthedChat(Func<FriendUser, Chat, CancellationToken, Task<IResult>> inner)
+        => async (HttpContext ctx, Chat c, CancellationToken ct) =>
+        {
+            var f = ctx.RequestServices.GetRequiredService<Friends>();
+            var me = await f.ResolveAsync(ctx.Request.Cookies[Friends.CookieName], ct);
+            return me is null ? Unauthorized() : await inner(me, c, ct);
+        };
+
+    // AuthedChatDirect: specific wrapper for /chats/direct endpoint that uses friendId
+    private static Delegate AuthedChatDirect(Func<FriendUser, Chat, Guid, CancellationToken, Task<IResult>> inner)
+        => async (HttpContext ctx, Chat c, Guid friendId, CancellationToken ct) =>
+        {
+            var f = ctx.RequestServices.GetRequiredService<Friends>();
+            var me = await f.ResolveAsync(ctx.Request.Cookies[Friends.CookieName], ct);
+            return me is null ? Unauthorized() : await inner(me, c, friendId, ct);
+        };
+
+    // AuthedChat: generic wrapper for other endpoints that use conversationId
+    private static Delegate AuthedChat(Func<FriendUser, Chat, Guid, CancellationToken, Task<IResult>> inner)
+        => async (HttpContext ctx, Chat c, Guid conversationId, CancellationToken ct) =>
+        {
+            var f = ctx.RequestServices.GetRequiredService<Friends>();
+            var me = await f.ResolveAsync(ctx.Request.Cookies[Friends.CookieName], ct);
+            return me is null ? Unauthorized() : await inner(me, c, conversationId, ct);
+        };
+
+    private static Delegate AuthedChat(Func<FriendUser, Chat, Guid, Guid, CancellationToken, Task<IResult>> inner)
+        => async (HttpContext ctx, Chat c, Guid conversationId, Guid memberId, CancellationToken ct) =>
+        {
+            var f = ctx.RequestServices.GetRequiredService<Friends>();
+            var me = await f.ResolveAsync(ctx.Request.Cookies[Friends.CookieName], ct);
+            return me is null ? Unauthorized() : await inner(me, c, conversationId, memberId, ct);
+        };
+
+    private static Delegate AuthedChat<T1>(Func<FriendUser, Chat, T1, CancellationToken, Task<IResult>> inner)
+        => async (HttpContext ctx, Chat c, T1 a, CancellationToken ct) =>
+        {
+            var f = ctx.RequestServices.GetRequiredService<Friends>();
+            var me = await f.ResolveAsync(ctx.Request.Cookies[Friends.CookieName], ct);
+            return me is null ? Unauthorized() : await inner(me, c, a, ct);
+        };
+
+    private static Delegate AuthedChat<T1>(Func<FriendUser, Chat, Guid, T1, CancellationToken, Task<IResult>> inner)
+        => async (HttpContext ctx, Chat c, Guid conversationId, T1 a, CancellationToken ct) =>
+        {
+            var f = ctx.RequestServices.GetRequiredService<Friends>();
+            var me = await f.ResolveAsync(ctx.Request.Cookies[Friends.CookieName], ct);
+            return me is null ? Unauthorized() : await inner(me, c, conversationId, a, ct);
         };
 
     private static IResult Unauthorized() => Results.Json(new { error = "Meld je eerst aan." }, statusCode: StatusCodes.Status401Unauthorized);
@@ -223,3 +274,4 @@ public static class FriendsApi
             ? Results.NoContent()
             : Results.BadRequest(new { error = "Kan dit evenement niet delen." });
     }
+}
