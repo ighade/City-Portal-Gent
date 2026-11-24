@@ -18,6 +18,7 @@ export function Chat({ me, onClose }: ChatProps) {
   const [busy, setBusy] = useState(false)
   const [messageText, setMessageText] = useState('')
   const [showGroupForm, setShowGroupForm] = useState(false)
+  const [showDirectForm, setShowDirectForm] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [showAddMembers, setShowAddMembers] = useState(false)
@@ -102,11 +103,29 @@ export function Chat({ me, onClose }: ChatProps) {
     setBusy(true)
     setError(null)
     try {
-      for (const username of friendsToAdd) {
-        await api.friends.chats.addMember(activeConvId, username)
+      // friendsToAdd contains usernames, not IDs
+      for (const friendId of friendsToAdd) {
+        const friend = allFriends.find(f => f.id === friendId)
+        if (friend) {
+          await api.friends.chats.addMember(activeConvId, friend.username)
+        }
       }
       setFriendsToAdd([])
       setShowAddMembers(false)
+      await load()
+    } catch (err) {
+      setError(message(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function createDirectChat(friendId: string) {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await api.friends.chats.createDirect(friendId)
+      setActiveConvId(result.conversationId)
       await load()
     } catch (err) {
       setError(message(err))
@@ -134,7 +153,7 @@ export function Chat({ me, onClose }: ChatProps) {
         <div className="chat-header-sidebar">
           <h2>Chats</h2>
           <div className="chat-action-buttons">
-            <button className="btn-icon" title="Nieuw bericht" onClick={() => {}}>📝</button>
+            <button className="btn-icon" title="Nieuw bericht" onClick={() => setShowDirectForm(!showDirectForm)}>📝</button>
             <button className="btn-icon" title="Meer opties" onClick={() => {}}>⋮</button>
             <button className="btn-icon" title="Sluiten" onClick={onClose}>✕</button>
           </div>
@@ -193,6 +212,45 @@ export function Chat({ me, onClose }: ChatProps) {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {showDirectForm && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <h3>Bericht sturen naar vrienden</h3>
+              <div className="form-group">
+                <label>Selecteer een vriend:</label>
+                <div className="friend-select-list">
+                  {allFriends.length === 0 ? (
+                    <div style={{ padding: '12px', color: '#999', textAlign: 'center' }}>
+                      Je hebt nog geen vrienden
+                    </div>
+                  ) : (
+                    allFriends.map(friend => (
+                      <button
+                        key={friend.id}
+                        type="button"
+                        className="friend-select-item"
+                        onClick={() => createDirectChat(friend.id).then(() => setShowDirectForm(false))}
+                        style={{ display: 'flex', justifyContent: 'space-between' }}
+                      >
+                        <span>{friend.username}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div className="form-buttons">
+                <button 
+                  type="button"
+                  className="btn"
+                  onClick={() => setShowDirectForm(false)}
+                >
+                  Sluiten
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
