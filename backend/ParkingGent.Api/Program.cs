@@ -134,6 +134,7 @@ builder.Services.AddScoped<Backfill>();
 builder.Services.AddScoped<Trends>();
 builder.Services.AddScoped<EzParkPlanner>();
 builder.Services.AddScoped<Friends>();
+builder.Services.AddScoped<Chat>();
 builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddHostedService<ParkingSyncService>();
 

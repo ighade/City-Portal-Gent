@@ -2,10 +2,11 @@ import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native'
-import MapView, { Callout, Marker, Polygon, Polyline } from 'react-native-maps'
-import type { Region } from 'react-native-maps'
+import { Camera, GeoJSONSource, Layer, Map as MapView } from '@maplibre/maplibre-react-native'
+import type { CameraRef } from '@maplibre/maplibre-react-native'
 
 import { BluePin, ChargingPin, DotLabel, EventPin, LineBadge, ParkingPin, PinMarker, RentalBikePin } from '@/components/MapPins'
+import { MapLine } from '@/components/MapLine'
 import { FriendMarkers } from '@/components/FriendsMap'
 import { Btn, Txt } from '@/components/ui'
 import type { EzOverlay } from '@/components/EzParkPanel'
@@ -13,11 +14,11 @@ import { Radius } from '@/constants/theme'
 import { usePalette } from '@/context/ThemeContext'
 import { api, assetUrl } from '@/lib/api'
 import { dayMonthParts, nl, timeBrussels, weekdayLong } from '@/lib/format'
-import { GENT_REGION, geoJsonPolygons } from '@/lib/map'
-import type { MapPolygon } from '@/lib/map'
+import { GENT_REGION, GENT_VIEW, boundsOf, lngLatOf, mapStyleUrl, regionOf } from '@/lib/map'
+import type { Region } from '@/lib/map'
 import type { RentalBike } from '@/lib/rentalBikes'
 import type { ChargingStation } from '@/lib/chargingStations'
-import { busyness, busynessLabel, kindLabel } from '@/lib/types'
+import { kindLabel } from '@/lib/types'
 import type { Friend, GentEvent, Parking, TransitStop } from '@/lib/types'
 
 interface RoutePoint {
@@ -83,16 +84,6 @@ const EVENT_CLUSTER_PX = 34
 
 const occupancyColor = (pct: number) => (pct < 50 ? '#16a34a' : pct < 80 ? '#f59e0b' : '#dc2626')
 
-function describe(p: Parking): string {
-  if (!p.status) return `geen meting, ${p.capacity} plaatsen`
-  const available = p.status.available === null
-    ? `vrije plaatsen onbekend van ${p.status.capacity}`
-    : `${p.status.available} vrij van ${p.status.capacity}`
-  if (!p.isPublic) return `privaat, ${available}`
-  if (!p.status.isOpen) return 'gesloten'
-  return `${busynessLabel[busyness(p.status)]}, ${available}`
-}
-
 function Bar({ available, capacity }: { available: number; capacity: number }) {
   const pct = Math.min(100, Math.max(0, Math.round(((capacity - available) / capacity) * 100)))
   return (
@@ -126,6 +117,8 @@ function ParkingCallout({ p, withLink }: { p: Parking; withLink: boolean }) {
   )
 }
 
+type LezCollection = Awaited<ReturnType<typeof api.lez>>
+
 /** OV-haltes verschijnen pas als de kaart ver genoeg ingezoomd is (ongeveer zoomniveau 15). */
 const STOP_MAX_LAT_DELTA = 0.02
 
@@ -158,11 +151,12 @@ export function ParkingMap({
 }: Props) {
   const p = usePalette()
   const router = useRouter()
-  const map = useRef<MapView>(null)
-  const markers = useRef<Map<string, InstanceType<typeof Marker> | null>>(new Map())
+  const camera = useRef<CameraRef>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const [region, setRegion] = useState<Region>(GENT_REGION)
-  const [lez, setLez] = useState<MapPolygon[] | null>(null)
+  const [lez, setLez] = useState<LezCollection | null>(null)
+  // Welke speld een popup open heeft ("parking-<slug>", "bike-<id>", enz.); null is alles dicht.
+  const [openKey, setOpenKey] = useState<string | null>(null)
   const visibleStops = useMemo(() => {
     if (!transitStops || transitStops.length === 0 || region.latitudeDelta > STOP_MAX_LAT_DELTA) return []
     const padLat = region.latitudeDelta * 0.6
@@ -212,7 +206,7 @@ export function ParkingMap({
     api
       .lez()
       .then((collection) => {
-        if (!cancelled && collection.features.length > 0) setLez(geoJsonPolygons(collection.features))
+        if (!cancelled && collection.features.length > 0) setLez(collection)
       })
       .catch(() => undefined)
     return () => {
@@ -225,47 +219,42 @@ export function ParkingMap({
     // De handmatig opgevraagde positie kan eerder aankomen dan de locatie-watch.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setUserPos(focusLocation)
-    map.current?.animateToRegion({
-      latitude: focusLocation.lat,
-      longitude: focusLocation.lon,
-      latitudeDelta: 0.012,
-      longitudeDelta: 0.012,
-    }, 300)
+    camera.current?.easeTo({ center: lngLatOf(focusLocation.lat, focusLocation.lon), zoom: 15, duration: 300 })
   }, [focusLocation, mapReady])
 
   const edge = { top: 180, right: 60, bottom: 180, left: 60 }
 
   useEffect(() => {
-    if (!route || !map.current) return
-    const pts = [
-      { latitude: route.start.lat, longitude: route.start.lon },
-      { latitude: route.end.lat, longitude: route.end.lon },
-      ...route.points.map((q) => ({ latitude: q.lat, longitude: q.lon })),
-      ...(route.walkPoints ?? []).map((q) => ({ latitude: q.lat, longitude: q.lon })),
+    if (!route || !camera.current) return
+    const pts: [number, number][] = [
+      lngLatOf(route.start.lat, route.start.lon),
+      lngLatOf(route.end.lat, route.end.lon),
+      ...route.points.map((q): [number, number] => lngLatOf(q.lat, q.lon)),
+      ...(route.walkPoints ?? []).map((q): [number, number] => lngLatOf(q.lat, q.lon)),
     ]
-    map.current.fitToCoordinates(pts, { edgePadding: edge, animated: true })
+    camera.current.fitBounds(boundsOf(pts), { padding: edge, duration: 300 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route])
 
   useEffect(() => {
-    if (!ezpark || ezpark.legs.length === 0 || !map.current) return
-    const pts: { latitude: number; longitude: number }[] = []
-    if (ezpark.start) pts.push({ latitude: ezpark.start.lat, longitude: ezpark.start.lon })
-    if (ezpark.end) pts.push({ latitude: ezpark.end.lat, longitude: ezpark.end.lon })
-    for (const park of ezpark.parks) pts.push({ latitude: park.lat, longitude: park.lon })
-    for (const leg of ezpark.legs) for (const [lat, lon] of leg.coordinates) pts.push({ latitude: lat!, longitude: lon! })
-    if (pts.length > 0) map.current.fitToCoordinates(pts, { edgePadding: edge, animated: true })
+    if (!ezpark || ezpark.legs.length === 0 || !camera.current) return
+    const pts: [number, number][] = []
+    if (ezpark.start) pts.push(lngLatOf(ezpark.start.lat, ezpark.start.lon))
+    if (ezpark.end) pts.push(lngLatOf(ezpark.end.lat, ezpark.end.lon))
+    for (const park of ezpark.parks) pts.push(lngLatOf(park.lat, park.lon))
+    for (const leg of ezpark.legs) for (const [lat, lon] of leg.coordinates) pts.push(lngLatOf(lat!, lon!))
+    if (pts.length > 0) camera.current.fitBounds(boundsOf(pts), { padding: edge, duration: 300 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ezpark])
 
   // Wat in de lijst aangewezen wordt, opent op de kaart.
   useEffect(() => {
     if (!selected || hoverInfo) return
-    const mk = markers.current.get(selected)
     const target = parkings.find((x) => x.slug === selected)
-    if (!mk || !target) return
-    map.current?.animateToRegion({ ...region, latitude: target.lat, longitude: target.lon }, 300)
-    mk.showCallout()
+    if (!target) return
+    camera.current?.easeTo({ center: lngLatOf(target.lat, target.lon), duration: 300 })
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpenKey(`parking-${selected}`)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected])
 
@@ -273,7 +262,7 @@ export function ParkingMap({
     if (!selectedRentalBikeId) return
     const bike = rentalBikes?.find((item) => item.id === selectedRentalBikeId)
     if (!bike) return
-    map.current?.animateToRegion({ ...region, latitude: bike.lat, longitude: bike.lon }, 300)
+    camera.current?.easeTo({ center: lngLatOf(bike.lat, bike.lon), duration: 300 })
     // Keep the map centered on a bike only when a bike is selected, not after every map movement.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRentalBikeId])
@@ -282,7 +271,7 @@ export function ParkingMap({
     if (!selectedChargingId) return
     const s = chargingStations?.find((item) => item.id === selectedChargingId)
     if (!s) return
-    map.current?.animateToRegion({ ...region, latitude: s.lat, longitude: s.lon }, 300)
+    camera.current?.easeTo({ center: lngLatOf(s.lat, s.lon), duration: 300 })
     // Alleen bij een andere selectie centreren, niet na elke kaartbeweging.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChargingId])
@@ -319,184 +308,197 @@ export function ParkingMap({
   const onUser = (pt: { lat: number; lon: number }) =>
     !!userPos && Math.abs(userPos.lat - pt.lat) < 0.0003 && Math.abs(userPos.lon - pt.lon) < 0.0004
 
-  const dot = (pt: { lat: number; lon: number }, color: string, label: string) =>
+  const dot = (id: string, pt: { lat: number; lon: number }, color: string, label: string) =>
     (label !== 'Start' && onOtherIcon(pt)) || (label === 'Start' && onUser(pt)) ? null : (
-      <Marker key={label} coordinate={{ latitude: pt.lat, longitude: pt.lon }} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+      <PinMarker key={id} id={id} lat={pt.lat} lon={pt.lon} anchor="bottom">
         <DotLabel label={label} color={color} />
-      </Marker>
+      </PinMarker>
     )
 
   return (
     <View style={[styles.box, { height: height as number, backgroundColor: p.surface3 }]} onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
       <MapView
-        ref={map}
         style={StyleSheet.absoluteFill}
-        initialRegion={GENT_REGION}
-        minZoomLevel={11}
-        maxZoomLevel={18}
-        userInterfaceStyle={p.scheme}
-        showsCompass={false}
-        showsMyLocationButton={false}
-        onMapReady={() => setMapReady(true)}
-        onRegionChangeComplete={setRegion}
+        mapStyle={mapStyleUrl(p.scheme)}
+        compass={false}
+        onDidFinishLoadingMap={() => setMapReady(true)}
+        onRegionDidChange={(e) => setRegion(regionOf(e.nativeEvent.bounds))}
         onPress={(e) => {
           // Sommige platforms sturen na een markerklik ook een kaartklik; die mag de kaart niet meteen sluiten.
           if (Date.now() - markerPressAt.current < 400) return
           setSheet(null)
-          onMapClick?.(e.nativeEvent.coordinate.latitude, e.nativeEvent.coordinate.longitude)
+          setOpenKey(null)
+          const [lon, lat] = e.nativeEvent.lngLat
+          onMapClick?.(lat, lon)
         }}>
-        {showLez &&
-          lez?.map((poly, i) => (
-            <Polygon key={i} coordinates={poly.coordinates} holes={poly.holes} strokeColor={p.lezLine} fillColor={p.lezFill} strokeWidth={2} lineDashPattern={[6, 6]} />
-          ))}
+        <Camera ref={camera} initialViewState={GENT_VIEW} minZoom={11} maxZoom={18} />
+
+        {showLez && lez && (
+          <>
+            <GeoJSONSource id="lez" data={lez as unknown as GeoJSON.FeatureCollection} />
+            <Layer id="lez-fill" type="fill" source="lez" paint={{ 'fill-color': p.lezFill }} />
+            <Layer id="lez-line" type="line" source="lez" paint={{ 'line-color': p.lezLine, 'line-width': 2, 'line-dasharray': [6, 6] }} />
+          </>
+        )}
 
         {route && (
-          <Polyline
-            coordinates={route.points.map((q) => ({ latitude: q.lat, longitude: q.lon }))}
-            strokeColor={route.mode === 'foot-walking' ? '#2563eb' : route.mode === 'cycling-regular' ? '#16a34a' : '#d94a4a'}
-            strokeWidth={route.mode === 'foot-walking' ? 4 : 5}
-            lineDashPattern={route.mode === 'foot-walking' ? [2, 8] : undefined}
-            lineCap="round"
+          <MapLine
+            id="route"
+            points={route.points.map((q): [number, number] => lngLatOf(q.lat, q.lon))}
+            color={route.mode === 'foot-walking' ? '#2563eb' : route.mode === 'cycling-regular' ? '#16a34a' : '#d94a4a'}
+            width={route.mode === 'foot-walking' ? 4 : 5}
+            dash={route.mode === 'foot-walking' ? [2, 8] : undefined}
           />
         )}
 
         {route?.walkPoints && route.walkPoints.length > 0 && (
-          <Polyline
-            coordinates={route.walkPoints.map((q) => ({ latitude: q.lat, longitude: q.lon }))}
-            strokeColor="#2563eb"
-            strokeWidth={4}
-            lineDashPattern={[2, 8]}
-            lineCap="round"
-          />
+          <MapLine id="route-walk" points={route.walkPoints.map((q): [number, number] => lngLatOf(q.lat, q.lon))} color="#2563eb" width={4} dash={[2, 8]} />
         )}
 
-        {userPos && (
-          <PinMarker coordinate={{ latitude: userPos.lat, longitude: userPos.lon }} title="Mijn locatie" anchor={{ x: 0.5, y: 0.5 }} zIndex={1001}>
-            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#2563eb', borderWidth: 3, borderColor: '#fff' }} />
-          </PinMarker>
-        )}
-        {route && dot(route.start, '#2563eb', 'Start')}
-        {route && dot(route.end, '#c2410c', 'Bestemming')}
+        {route && dot('route-start', route.start, '#2563eb', 'Start')}
+        {route && dot('route-end', route.end, '#c2410c', 'Bestemming')}
 
-        {visibleStops.map((s) => (
-          <PinMarker
-            key={`stop-${s.id}`}
-            coordinate={{ latitude: s.lat, longitude: s.lon }}
-            title={s.name}
-            anchor={{ x: 0.5, y: 0.5 }}
-            zIndex={selectedStopId === s.id ? 30 : 5}
-            version={`${selectedStopId === s.id}`}
-            onPress={() => {
-              markerPressAt.current = Date.now()
-              onStopSelect?.(s.id)
-            }}>
-            <View style={{ width: selectedStopId === s.id ? 20 : 14, height: selectedStopId === s.id ? 20 : 14, borderRadius: 10, borderWidth: 3, borderColor: selectedStopId === s.id ? '#b45309' : '#1d4ed8', backgroundColor: selectedStopId === s.id ? '#fbbf24' : '#fff' }} />
-          </PinMarker>
-        ))}
+        {visibleStops.map((s) => {
+          const key = `stop-${s.id}`
+          const selectedStop = selectedStopId === s.id
+          return (
+            <PinMarker
+              key={key}
+              id={key}
+              lat={s.lat}
+              lon={s.lon}
+              open={openKey === key}
+              callout={<View style={[styles.callout, { borderColor: p.border }]}><Txt variant="strong" style={{ color: '#111827' }}>{s.name}</Txt></View>}
+              onPress={() => {
+                markerPressAt.current = Date.now()
+                setOpenKey(key)
+                onStopSelect?.(s.id)
+              }}>
+              <View style={{ width: selectedStop ? 20 : 14, height: selectedStop ? 20 : 14, borderRadius: 10, borderWidth: 3, borderColor: selectedStop ? '#b45309' : '#1d4ed8', backgroundColor: selectedStop ? '#fbbf24' : '#fff' }} />
+            </PinMarker>
+          )
+        })}
 
-        {chargingStations?.map((s) => (
-          <PinMarker
-            key={`charging-${s.id}`}
-            coordinate={{ latitude: s.lat, longitude: s.lon }}
-            title={`Laadpaal ${s.street}`}
-            anchor={{ x: 0.5, y: 0.5 }}
-            zIndex={selectedChargingId === s.id ? 30 : 12}
-            version={`charging-${selectedChargingId === s.id}`}
-            onPress={() => {
-              markerPressAt.current = Date.now()
-              onChargingSelect?.(s.id)
-            }}>
-            <ChargingPin selected={selectedChargingId === s.id} />
-          </PinMarker>
-        ))}
+        {chargingStations?.map((s) => {
+          const key = `charging-${s.id}`
+          return (
+            <PinMarker
+              key={key}
+              id={key}
+              lat={s.lat}
+              lon={s.lon}
+              open={openKey === key}
+              callout={<View style={[styles.callout, { borderColor: p.border }]}><Txt variant="strong" style={{ color: '#111827' }}>{`Laadpaal ${s.street}`}</Txt></View>}
+              onPress={() => {
+                markerPressAt.current = Date.now()
+                setOpenKey(key)
+                onChargingSelect?.(s.id)
+              }}>
+              <ChargingPin selected={selectedChargingId === s.id} />
+            </PinMarker>
+          )
+        })}
 
-        {rentalBikes?.map((bike) => (
-          <PinMarker
-            key={`rental-${bike.provider}-${bike.id}`}
-            coordinate={{ latitude: bike.lat, longitude: bike.lon }}
-            title={`${bike.provider} deelfiets`}
-            description="Selecteer deze fiets in het routepaneel"
-            anchor={{ x: 0.5, y: 0.5 }}
-            zIndex={selectedRentalBikeId === bike.id ? 20 : 10}
-            version={`${bike.provider}-${selectedRentalBikeId === bike.id}`}
-            onPress={() => {
-              markerPressAt.current = Date.now()
-              onRentalBikeSelect?.(bike.id)
-            }}>
-            <RentalBikePin provider={bike.provider} selected={selectedRentalBikeId === bike.id} />
-            <Callout tooltip>
-              <View style={[styles.callout, { borderColor: p.border }]}>
-                <Txt variant="strong" style={{ color: '#111827' }}>{bike.provider} deelfiets</Txt>
-                <Txt variant="small" style={{ color: '#111827' }}>Selecteer in het routepaneel om te openen.</Txt>
-              </View>
-            </Callout>
-          </PinMarker>
-        ))}
+        {rentalBikes?.map((bike) => {
+          const key = `rental-${bike.provider}-${bike.id}`
+          return (
+            <PinMarker
+              key={key}
+              id={key}
+              lat={bike.lat}
+              lon={bike.lon}
+              open={openKey === key}
+              callout={
+                <View style={[styles.callout, { borderColor: p.border }]}>
+                  <Txt variant="strong" style={{ color: '#111827' }}>{bike.provider} deelfiets</Txt>
+                  <Txt variant="small" style={{ color: '#111827' }}>Selecteer in het routepaneel om te openen.</Txt>
+                </View>
+              }
+              onPress={() => {
+                markerPressAt.current = Date.now()
+                setOpenKey(key)
+                onRentalBikeSelect?.(bike.id)
+              }}>
+              <RentalBikePin provider={bike.provider} selected={selectedRentalBikeId === bike.id} />
+            </PinMarker>
+          )
+        })}
 
-        {ordered.map((pk) => (
-          <PinMarker
-            key={pk.slug}
-            ref={(r) => {
-              markers.current.set(pk.slug, r)
-            }}
-            coordinate={{ latitude: pk.lat, longitude: pk.lon }}
-            title={pk.name}
-            description={describe(pk)}
-            anchor={{ x: 0.5, y: 0.5 }}
-            zIndex={pk.isPublic ? 2 : 1}
-            version={`${pk.status?.available}-${pk.status?.isOpen}-${bluePins}`}
-            onPress={() => onSelect?.(pk.slug)}>
-            {bluePins ? <BluePin /> : <ParkingPin parking={pk} />}
-            <Callout tooltip onPress={() => !hoverInfo && router.push({ pathname: '/parking/[slug]', params: { slug: pk.slug } })}>
-              <View style={[styles.callout, { borderColor: p.border }]}>
-                <ParkingCallout p={pk} withLink={!hoverInfo} />
-              </View>
-            </Callout>
-          </PinMarker>
-        ))}
+        {ordered.map((pk) => {
+          const key = `parking-${pk.slug}`
+          return (
+            <PinMarker
+              key={key}
+              id={key}
+              lat={pk.lat}
+              lon={pk.lon}
+              open={openKey === key}
+              callout={
+                <Pressable
+                  onPress={() => !hoverInfo && router.push({ pathname: '/parking/[slug]', params: { slug: pk.slug } })}
+                  style={[styles.callout, { borderColor: p.border }]}>
+                  <ParkingCallout p={pk} withLink={!hoverInfo} />
+                </Pressable>
+              }
+              onPress={() => {
+                markerPressAt.current = Date.now()
+                setOpenKey(key)
+                onSelect?.(pk.slug)
+              }}>
+              {bluePins ? <BluePin /> : <ParkingPin parking={pk} />}
+            </PinMarker>
+          )
+        })}
 
         {ezpark && (
           <>
-            {ezpark.start && dot(ezpark.start, '#2563eb', 'Start')}
-            {ezpark.end && dot(ezpark.end, '#c2410c', 'Bestemming')}
-            {ezpark.parks.map((park) => (
-              <PinMarker
-                key={`ez-${park.slug}`}
-                coordinate={{ latitude: park.lat, longitude: park.lon }}
-                zIndex={1000}
-                anchor={{ x: 0.5, y: 0.5 }}
-                version={park.slug}
-                onPress={() => onEzParkPick?.(park.slug)}>
-                <BluePin size={34} />
-                <Callout tooltip>
-                  <View style={[styles.callout, { borderColor: p.border }]}>
-                    <Txt variant="strong" style={{ color: '#111827' }}>{park.name}</Txt>
-                    {park.available != null && park.capacity > 0 ? (
-                      <Bar available={park.available} capacity={park.capacity} />
-                    ) : (
-                      <Txt variant="small" style={{ color: '#111827' }}>Beschikbaarheid onbekend</Txt>
-                    )}
-                    {park.details.map((d) => <Txt key={d} variant="small" style={{ color: '#111827' }}>{d}</Txt>)}
-                  </View>
-                </Callout>
-              </PinMarker>
-            ))}
+            {ezpark.start && dot('ez-start', ezpark.start, '#2563eb', 'Start')}
+            {ezpark.end && dot('ez-end', ezpark.end, '#c2410c', 'Bestemming')}
+            {ezpark.parks.map((park) => {
+              const key = `ez-${park.slug}`
+              return (
+                <PinMarker
+                  key={key}
+                  id={key}
+                  lat={park.lat}
+                  lon={park.lon}
+                  open={openKey === key}
+                  callout={
+                    <View style={[styles.callout, { borderColor: p.border }]}>
+                      <Txt variant="strong" style={{ color: '#111827' }}>{park.name}</Txt>
+                      {park.available != null && park.capacity > 0 ? (
+                        <Bar available={park.available} capacity={park.capacity} />
+                      ) : (
+                        <Txt variant="small" style={{ color: '#111827' }}>Beschikbaarheid onbekend</Txt>
+                      )}
+                      {park.details.map((d) => <Txt key={d} variant="small" style={{ color: '#111827' }}>{d}</Txt>)}
+                    </View>
+                  }
+                  onPress={() => {
+                    markerPressAt.current = Date.now()
+                    setOpenKey(key)
+                    onEzParkPick?.(park.slug)
+                  }}>
+                  <BluePin size={34} />
+                </PinMarker>
+              )
+            })}
             {ezpark.legs.map((leg, i) => {
               if (leg.coordinates.length < 2) return null
-              const coords = leg.coordinates.map(([lat, lon]) => ({ latitude: lat!, longitude: lon! }))
+              const coords = leg.coordinates.map(([lat, lon]): [number, number] => [lon!, lat!])
               const transitColor = leg.color ? `#${leg.color}` : leg.mode === 'tram' ? '#d97706' : '#0f766e'
               const mid = coords[Math.floor(coords.length / 2)]!
               return (
                 <Fragment key={`leg-${i}`}>
-                  <Polyline
-                    coordinates={coords}
-                    strokeColor={leg.mode === 'drive' ? '#d94a4a' : leg.mode === 'walk' ? '#2563eb' : transitColor}
-                    strokeWidth={leg.mode === 'drive' ? 5 : leg.mode === 'walk' ? 4 : 6}
-                    lineDashPattern={leg.mode === 'walk' ? [2, 8] : undefined}
-                    lineCap="round"
+                  <MapLine
+                    id={`ez-leg-${i}`}
+                    points={coords}
+                    color={leg.mode === 'drive' ? '#d94a4a' : leg.mode === 'walk' ? '#2563eb' : transitColor}
+                    width={leg.mode === 'drive' ? 5 : leg.mode === 'walk' ? 4 : 6}
+                    dash={leg.mode === 'walk' ? [2, 8] : undefined}
                   />
                   {(leg.mode === 'bus' || leg.mode === 'tram') && leg.line ? (
-                    <PinMarker coordinate={mid} anchor={{ x: 0.5, y: 0.5 }} zIndex={20} version={`${leg.line}-${transitColor}`}>
+                    <PinMarker id={`ez-line-${i}`} lat={mid[1]} lon={mid[0]}>
                       <LineBadge line={leg.line} color={transitColor} />
                     </PinMarker>
                   ) : null}
@@ -508,11 +510,10 @@ export function ParkingMap({
 
         {clusters.map((c, ci) => (
           <PinMarker
-            key={`ev-${ci}-${c.items.map((i) => i.event.id).join('|')}`}
-            coordinate={{ latitude: c.lat, longitude: c.lon }}
-            zIndex={500}
-            anchor={{ x: 0.5, y: 0.5 }}
-            version={c.items.length}
+            key={`event-${ci}`}
+            id={`event-${ci}`}
+            lat={c.lat}
+            lon={c.lon}
             onPress={() => {
               markerPressAt.current = Date.now()
               setSheet(c.items)
@@ -522,6 +523,12 @@ export function ParkingMap({
         ))}
 
         {friends && friends.length > 0 && <FriendMarkers friends={friends} />}
+
+        {userPos && (
+          <PinMarker id="user-position" lat={userPos.lat} lon={userPos.lon}>
+            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#2563eb', borderWidth: 3, borderColor: '#fff' }} />
+          </PinMarker>
+        )}
       </MapView>
 
       {sheet && (

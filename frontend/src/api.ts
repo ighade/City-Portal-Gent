@@ -1,4 +1,4 @@
-import type { AdminEvent, AdminParking, AdminUser, AuditEntry, StaleParking, ManualEventInput, EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, ManualParkingRate, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, StreetTariffAdmin, SyncRun, TransitRouteRequest, TransitRouteResult, TransitDeparturesResult, TransitStop, Trend } from './types'
+import type { AdminEvent, AdminParking, AdminUser, AuditEntry, StaleParking, ManualEventInput, EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, ManualParkingRate, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, StreetTariffAdmin, SyncRun, TransitRouteRequest, TransitRouteResult, TransitDeparturesResult, TransitStop, Trend, ChatConversation, ChatMessage } from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {
@@ -141,6 +141,24 @@ export const api = {
     remove: (id: string) => call<void>('DELETE', `/api/friends/${id}`),
     interest: (eventId: string, on: boolean) =>
       call<void>(on ? 'PUT' : 'DELETE', `/api/friends/interests/${encodeURIComponent(eventId)}`),
+    chats: {
+      list: () => call<ChatConversation[]>('GET', '/api/friends/chats'),
+      get: (conversationId: string) => call<ChatConversation>('GET', `/api/friends/chats/${conversationId}`),
+      createDirect: (friendId: string) => 
+        call<{ conversationId: string }>('POST', `/api/friends/chats/direct/${friendId}`),
+      createGroup: (body: { groupName?: string; groupImageUrl?: string | null; initialMemberIds?: string[] }) =>
+        call<{ conversationId: string }>('POST', '/api/friends/chats/group', body),
+      sendMessage: (conversationId: string, content: string) =>
+        call<void>('POST', `/api/friends/chats/${conversationId}/messages`, { content }),
+      addMember: (conversationId: string, username: string) =>
+        call<void>('POST', `/api/friends/chats/${conversationId}/members`, { username }),
+      removeMember: (conversationId: string, memberId: string) =>
+        call<void>('DELETE', `/api/friends/chats/${conversationId}/members/${memberId}`),
+      deleteGroup: (conversationId: string) =>
+        call<void>('DELETE', `/api/friends/chats/${conversationId}`),
+      shareEvent: (conversationId: string, eventId: string) =>
+        call<void>('POST', `/api/friends/chats/${conversationId}/events`, { eventId }),
+    },
   },
 
   /**

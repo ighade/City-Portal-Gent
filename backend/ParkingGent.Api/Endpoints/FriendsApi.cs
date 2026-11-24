@@ -8,6 +8,10 @@ public sealed record LoginRequest(string? Identifier, string? Password);
 public sealed record SettingsRequest(bool? ShareLocation, bool? ShowFriendsOnMap, string? Avatar, bool? ClearAvatar);
 public sealed record LocationRequest(double Lat, double Lon);
 public sealed record FriendRequestBody(string? Username);
+public sealed record CreateGroupRequest(string? GroupName, string? GroupImageUrl, List<Guid>? InitialMemberIds);
+public sealed record SendMessageRequest(string? Content);
+public sealed record AddGroupMemberRequest(string? Username);
+public sealed record EventShareRequest(string? EventId);
 
 /// <summary>
 /// Eindpunten van de vriendenservice onder <c>/api/friends</c>. Anders dan de rest van de API is
@@ -51,6 +55,40 @@ public static class FriendsApi
             await f.RemoveInterestAsync(me, eventId, ct);
             return Results.NoContent();
         }));
+
+        // Chat endpoints
+        g.MapGet("/chats", AuthedChat(async (FriendUser me, Chat c, CancellationToken ct) =>
+            Results.Ok(await c.GetConversationsAsync(me, ct))));
+        
+        g.MapGet("/chats/{conversationId:guid}", AuthedChat(async (FriendUser me, Chat c, Guid conversationId, CancellationToken ct) =>
+        {
+            var conv = await c.GetConversationAsync(me, conversationId, ct);
+            return conv is not null
+                ? Results.Ok(conv)
+                : Results.NotFound(new { error = "Dat gesprek bestaat niet of je bent er geen lid van." });
+        }));
+        
+        g.MapPost("/chats/direct/{friendId:guid}", AuthedChat(async (FriendUser me, Chat c, Guid friendId, CancellationToken ct) =>
+            Results.Ok(new { conversationId = await c.GetOrCreateDirectConversationAsync(me.Id, friendId, ct) })));
+        
+        g.MapPost("/chats/group", AuthedChat<CreateGroupRequest>(CreateGroupChat));
+        
+        g.MapPost("/chats/{conversationId:guid}/messages", AuthedChat<SendMessageRequest>(SendChatMessage));
+        
+        g.MapPost("/chats/{conversationId:guid}/members", AuthedChat<AddGroupMemberRequest>(AddChatMember));
+        
+        g.MapDelete("/chats/{conversationId:guid}/members/{memberId:guid}", 
+            AuthedChat(async (FriendUser me, Chat c, Guid conversationId, Guid memberId, CancellationToken ct) =>
+                await c.RemoveGroupMemberAsync(me, conversationId, memberId, ct)
+                    ? Results.NoContent()
+                    : Results.BadRequest(new { error = "Kan lid niet verwijderen." })));
+        
+        g.MapDelete("/chats/{conversationId:guid}", AuthedChat(async (FriendUser me, Chat c, Guid conversationId, CancellationToken ct) =>
+            await c.DeleteGroupAsync(me, conversationId, ct)
+                ? Results.NoContent()
+                : Results.BadRequest(new { error = "Kan groep niet verwijderen." })));
+        
+        g.MapPost("/chats/{conversationId:guid}/events", AuthedChat<EventShareRequest>(ShareChatEvent));
     }
 
     /// <summary>Verpakt een eindpunt zodat het alleen met een geldige sessie draait; anders 401.</summary>
@@ -59,6 +97,38 @@ public static class FriendsApi
         {
             var me = await f.ResolveAsync(ctx.Request.Cookies[Friends.CookieName], ct);
             return me is null ? Unauthorized() : await inner(me, f, a, ct);
+        };
+
+    private static Delegate Authed<T1>(Func<FriendUser, Chat, T1, CancellationToken, Task<IResult>> inner)
+        => async (HttpContext ctx, Chat c, T1 a, CancellationToken ct) =>
+        {
+            var f = ctx.RequestServices.GetRequiredService<Friends>();
+            var me = await f.ResolveAsync(ctx.Request.Cookies[Friends.CookieName], ct);
+            return me is null ? Unauthorized() : await inner(me, c, a, ct);
+        };
+
+    private static Delegate Authed(Func<FriendUser, Chat, CancellationToken, Task<IResult>> inner)
+        => async (HttpContext ctx, Chat c, CancellationToken ct) =>
+        {
+            var f = ctx.RequestServices.GetRequiredService<Friends>();
+            var me = await f.ResolveAsync(ctx.Request.Cookies[Friends.CookieName], ct);
+            return me is null ? Unauthorized() : await inner(me, c, ct);
+        };
+
+    private static Delegate Authed(Func<FriendUser, Chat, Guid, Guid, CancellationToken, Task<IResult>> inner)
+        => async (HttpContext ctx, Chat c, Guid a, Guid b, CancellationToken ct) =>
+        {
+            var f = ctx.RequestServices.GetRequiredService<Friends>();
+            var me = await f.ResolveAsync(ctx.Request.Cookies[Friends.CookieName], ct);
+            return me is null ? Unauthorized() : await inner(me, c, a, b, ct);
+        };
+
+    private static Delegate Authed<T1>(Func<FriendUser, Chat, Guid, T1, CancellationToken, Task<IResult>> inner)
+        => async (HttpContext ctx, Chat c, Guid id, T1 a, CancellationToken ct) =>
+        {
+            var f = ctx.RequestServices.GetRequiredService<Friends>();
+            var me = await f.ResolveAsync(ctx.Request.Cookies[Friends.CookieName], ct);
+            return me is null ? Unauthorized() : await inner(me, c, id, a, ct);
         };
 
     /// <summary>Zoals <c>Authed</c>, met één routewaarde als tekst (een lambda kent zijn parameternaam niet voor de binding).</summary>
@@ -124,4 +194,32 @@ public static class FriendsApi
         var error = await f.UpdateSettingsAsync(me, body.ShareLocation, body.ShowFriendsOnMap, body.Avatar, avatarProvided, ct);
         return error is null ? Results.Ok(Friends.ToMe(me)) : Results.BadRequest(new { error });
     }
-}
+
+    private static async Task<IResult> CreateGroupChat(FriendUser me, Chat c, CreateGroupRequest body, CancellationToken ct)
+    {
+        var groupId = await c.CreateGroupAsync(me, body.GroupName, body.GroupImageUrl, body.InitialMemberIds, ct);
+        return groupId == Guid.Empty
+            ? Results.BadRequest(new { error = "Groepsnaam is verplicht en moet tussen 1 en 200 tekens zijn." })
+            : Results.Ok(new { conversationId = groupId });
+    }
+
+    private static async Task<IResult> SendChatMessage(FriendUser me, Chat c, Guid conversationId, SendMessageRequest body, CancellationToken ct)
+    {
+        return await c.SendMessageAsync(me, conversationId, body.Content ?? "", ct)
+            ? Results.NoContent()
+            : Results.BadRequest(new { error = "Bericht moet tussen 1 en 2000 tekens zijn." });
+    }
+
+    private static async Task<IResult> AddChatMember(FriendUser me, Chat c, Guid conversationId, AddGroupMemberRequest body, CancellationToken ct)
+    {
+        return await c.AddGroupMemberAsync(me, conversationId, body.Username ?? "", ct)
+            ? Results.NoContent()
+            : Results.BadRequest(new { error = "Kan deze gebruiker niet toevoegen aan de groep." });
+    }
+
+    private static async Task<IResult> ShareChatEvent(FriendUser me, Chat c, Guid conversationId, EventShareRequest body, CancellationToken ct)
+    {
+        return await c.SendEventAsync(me, conversationId, body.EventId ?? "", ct)
+            ? Results.NoContent()
+            : Results.BadRequest(new { error = "Kan dit evenement niet delen." });
+    }

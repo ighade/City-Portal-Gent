@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import { FriendsMap } from '../components/FriendsMap'
+import { Chat } from '../components/Chat'
 import { friendStatus, initial, resizeAvatar } from '../friendsUi'
 import type { Friend, FriendMe, FriendsOverview } from '../types'
 
@@ -113,6 +114,7 @@ function Dashboard({ me, onMe, onLogout }: { me: FriendMe; onMe: (m: FriendMe) =
   const [newFriend, setNewFriend] = useState('')
   const [info, setInfo] = useState<string | null>(null)
   const [, setTick] = useState(0)
+  const [showChat, setShowChat] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -185,6 +187,7 @@ function Dashboard({ me, onMe, onLogout }: { me: FriendMe; onMe: (m: FriendMe) =
 
   return (
     <>
+      {showChat && <Chat me={me} onClose={() => setShowChat(false)} />}
       <div className="page-head">
         <div>
           <h1>Vrienden</h1>
@@ -193,6 +196,7 @@ function Dashboard({ me, onMe, onLogout }: { me: FriendMe; onMe: (m: FriendMe) =
         <div className="friend-me">
           <Avatar name={me.username} src={me.avatar} />
           <strong>{me.username}</strong>
+          <button className="btn btn-sm" onClick={() => setShowChat(true)}>Chats</button>
           <button className="btn btn-sm" onClick={() => void logout()}>Afmelden</button>
         </div>
       </div>

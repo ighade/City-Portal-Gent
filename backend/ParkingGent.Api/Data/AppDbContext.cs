@@ -24,6 +24,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<FriendSession> FriendSessions => Set<FriendSession>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<CityParkingRate> CityParkingRates => Set<CityParkingRate>();
+    public DbSet<ChatConversation> ChatConversations => Set<ChatConversation>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<GroupMember> GroupMembers => Set<GroupMember>();
+    public DbSet<ChatEvent> ChatEvents => Set<ChatEvent>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -205,6 +209,40 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasKey(x => new { x.ShapeId, x.Sequence });
             e.Property(x => x.ShapeId).HasMaxLength(160);
             e.HasIndex(x => x.ShapeId);
+        });
+
+        b.Entity<ChatConversation>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.GroupName).HasMaxLength(200);
+            e.Property(x => x.GroupImageUrl).HasMaxLength(150000);
+            e.HasIndex(x => x.CreatedAtUtc);
+        });
+
+        b.Entity<ChatMessage>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Content).HasMaxLength(2000);
+            e.HasOne(x => x.Conversation).WithMany(x => x.Messages)
+                .HasForeignKey(x => x.ConversationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.ConversationId, x.SentAtUtc });
+        });
+
+        b.Entity<GroupMember>(e =>
+        {
+            e.HasKey(x => new { x.ConversationId, x.UserId });
+            e.HasOne(x => x.Conversation).WithMany(x => x.GroupMembers)
+                .HasForeignKey(x => x.ConversationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.UserId);
+        });
+
+        b.Entity<ChatEvent>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.EventId).HasMaxLength(60);
+            e.HasOne(x => x.Conversation).WithMany()
+                .HasForeignKey(x => x.ConversationId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.ConversationId, x.SentAtUtc });
         });
     }
 }

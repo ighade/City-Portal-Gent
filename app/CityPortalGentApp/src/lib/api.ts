@@ -153,6 +153,8 @@ async function flemishSuggest(q: string): Promise<string[]> {
 }
 
 async function call<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  // Zonder basis-URL wordt het een relatief pad, dat een native toestel niet kan opvragen.
+  if (!API_URL) throw new ApiError(0, 'Serveradres ontbreekt: EXPO_PUBLIC_API_URL was niet ingesteld toen de app gebouwd werd.')
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (sessionCookie) headers.Cookie = sessionCookie
