@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api, ApiError } from '../api'
-import type { ChatConversation } from '../types'
+import type { ChatConversation, FriendMe } from '../types'
 import './Chat.css'
 
 const message = (err: unknown) => (err instanceof ApiError || err instanceof Error ? err.message : 'Er ging iets mis.')
 
 interface ChatProps {
+  me: FriendMe | null
   onClose: () => void
 }
 
-export function Chat({ onClose }: ChatProps) {
+export function Chat({ me, onClose }: ChatProps) {
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [activeConvId, setActiveConvId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -19,6 +20,9 @@ export function Chat({ onClose }: ChatProps) {
   const [showGroupForm, setShowGroupForm] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [showAddMembers, setShowAddMembers] = useState(false)
+  const [friendsToAdd, setFriendsToAdd] = useState<string[]>([])
+  const [allFriends, setAllFriends] = useState<Array<{ id: string; username: string }>>([])
 
   const load = useCallback(async () => {
     try {
@@ -31,6 +35,19 @@ export function Chat({ onClose }: ChatProps) {
       setError(message(err))
     }
   }, [activeConvId])
+
+  // Load friends on component mount
+  useEffect(() => {
+    const loadFriends = async () => {
+      try {
+        const overview = await api.friends.overview()
+        setAllFriends(overview.friends.map(f => ({ id: f.id, username: f.username })))
+      } catch (err) {
+        console.error('Failed to load friends:', err)
+      }
+    }
+    void loadFriends()
+  }, [])
 
   useEffect(() => {
     void load()
@@ -78,11 +95,37 @@ export function Chat({ onClose }: ChatProps) {
     }
   }
 
+  async function addMembersToGroup(e: FormEvent) {
+    e.preventDefault()
+    if (!activeConvId || friendsToAdd.length === 0) return
+
+    setBusy(true)
+    setError(null)
+    try {
+      for (const username of friendsToAdd) {
+        await api.friends.chats.addMember(activeConvId, username)
+      }
+      setFriendsToAdd([])
+      setShowAddMembers(false)
+      await load()
+    } catch (err) {
+      setError(message(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const activeConv = conversations.find(c => c.id === activeConvId)
+  const isGroupChat = activeConv?.groupName !== undefined && activeConv?.groupName !== null
   const filteredConversations = conversations.filter(conv => {
     const name = conv.groupName || 'Direct bericht'
     return name.toLowerCase().includes(searchQuery.toLowerCase())
   })
+
+  // Get friends not already in the group
+  const availableFriendsToAdd = allFriends.filter(
+    f => !activeConv?.groupMembers?.includes(f.id) && f.username !== me?.username
+  )
 
   return (
     <div className="chat-container">
@@ -107,7 +150,7 @@ export function Chat({ onClose }: ChatProps) {
         </div>
 
         <button 
-          className="btn btn-sm btn-primary"
+          className="btn btn-primary"
           style={{ margin: '12px', borderRadius: '20px' }}
           onClick={() => setShowGroupForm(!showGroupForm)}
         >
@@ -115,8 +158,8 @@ export function Chat({ onClose }: ChatProps) {
         </button>
 
         {showGroupForm && (
-          <div className="group-creation-modal">
-            <form onSubmit={createGroup} className="group-creation-form">
+          <div className="modal-overlay">
+            <form onSubmit={createGroup} className="modal-content">
               <h3>Groep maken</h3>
               <div className="form-group">
                 <label>Groepsnaam</label>
@@ -130,10 +173,10 @@ export function Chat({ onClose }: ChatProps) {
                   autoFocus
                 />
               </div>
-              <div className="group-creation-buttons">
+              <div className="form-buttons">
                 <button 
                   type="button"
-                  className="btn btn-sm"
+                  className="btn"
                   onClick={() => {
                     setShowGroupForm(false)
                     setGroupName('')
@@ -143,7 +186,7 @@ export function Chat({ onClose }: ChatProps) {
                 </button>
                 <button 
                   type="submit"
-                  className="btn btn-sm btn-primary" 
+                  className="btn btn-primary" 
                   disabled={busy}
                 >
                   Groep maken
@@ -194,14 +237,94 @@ export function Chat({ onClose }: ChatProps) {
               <div className="chat-info">
                 <h3 className="chat-title">{activeConv.groupName || 'Direct bericht'}</h3>
                 <p className="chat-subtitle">
-                  {activeConv.groupMembers?.length ?? 1} deelnemers
+                  {activeConv.groupMembers?.length ?? 1} deelnemer{activeConv.groupMembers && activeConv.groupMembers.length !== 1 ? 's' : ''}
                 </p>
               </div>
-              <div className="chat-action-buttons">
-                <button className="btn-icon" title="Zoeken">🔍</button>
-                <button className="btn-icon" title="Meer">⋮</button>
+              <div className="chat-header-actions">
+                {isGroupChat && (
+                  <button 
+                    className="btn btn-primary"
+                    onClick={() => setShowAddMembers(!showAddMembers)}
+                    style={{ padding: '6px 12px', fontSize: '13px' }}
+                  >
+                    👤 Toevoegen
+                  </button>
+                )}
+                <div className="chat-action-buttons">
+                  <button className="btn-icon" title="Zoeken">🔍</button>
+                  <button className="btn-icon" title="Meer">⋮</button>
+                </div>
               </div>
             </div>
+
+            {showAddMembers && availableFriendsToAdd.length > 0 && (
+              <form onSubmit={addMembersToGroup} className="modal-overlay">
+                <div className="modal-content">
+                  <h3>Vrienden toevoegen</h3>
+                  
+                  {friendsToAdd.length > 0 && (
+                    <div className="selected-friends">
+                      {friendsToAdd.map(friendId => {
+                        const friend = allFriends.find(f => f.id === friendId)
+                        return (
+                          <div key={friendId} className="friend-badge">
+                            {friend?.username}
+                            <button
+                              type="button"
+                              onClick={() => setFriendsToAdd(friendsToAdd.filter(f => f !== friendId))}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  <div className="form-group">
+                    <label>Selecteer vrienden:</label>
+                    <div className="friend-select-list">
+                      {availableFriendsToAdd.map(friend => (
+                        <label key={friend.id} className="friend-select-item">
+                          <input
+                            type="checkbox"
+                            checked={friendsToAdd.includes(friend.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFriendsToAdd([...friendsToAdd, friend.id])
+                              } else {
+                                setFriendsToAdd(friendsToAdd.filter(f => f !== friend.id))
+                              }
+                            }}
+                          />
+                          <span>{friend.username}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="form-buttons">
+                    <button 
+                      type="button"
+                      className="btn"
+                      onClick={() => {
+                        setShowAddMembers(false)
+                        setFriendsToAdd([])
+                      }}
+                    >
+                      Annuleren
+                    </button>
+                    <button 
+                      type="submit"
+                      className="btn btn-primary" 
+                      disabled={busy || friendsToAdd.length === 0}
+                    >
+                      Toevoegen ({friendsToAdd.length})
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
 
             <div className="chat-messages-container">
               {activeConv.recentMessages.length === 0 ? (
@@ -209,16 +332,21 @@ export function Chat({ onClose }: ChatProps) {
               ) : (
                 activeConv.recentMessages.map((msg, idx) => {
                   const nextMsg = activeConv.recentMessages[idx + 1]
-                  const showSender = !nextMsg || nextMsg.senderUsername !== msg.senderUsername
+                  const isSentByMe = msg.sentByUserId === me?.id
+                  const isLastInSequence = !nextMsg || nextMsg.senderUsername !== msg.senderUsername
                   
                   return (
-                    <div key={msg.id} className="message received">
-                      {showSender && (
-                        <div className="message-sender">{msg.senderUsername}</div>
-                      )}
-                      <div className="message-bubble">{msg.content}</div>
-                      <div className="message-time">
-                        {new Date(msg.sentAtUtc).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
+                    <div key={msg.id} className={`message ${isSentByMe ? 'sent' : 'received'}`}>
+                      <div className="message-content">
+                        <div className="message-bubble">{msg.content}</div>
+                        {isLastInSequence && (
+                          <div className="message-meta">
+                            <span className="message-time">
+                              {new Date(msg.sentAtUtc).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <span className="message-sender">{msg.senderUsername}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )
