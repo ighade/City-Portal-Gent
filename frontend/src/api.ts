@@ -1,4 +1,4 @@
-import type { AdminEvent, AdminParking, AdminUser, AuditEntry, StaleParking, ManualEventInput, EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, ManualParkingRate, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, StreetTariffAdmin, SyncRun, TransitRouteRequest, TransitRouteResult, TransitDeparturesResult, TransitStop, Trend, ChatConversation, ChatMessage } from './types'
+import type { AdminEvent, AdminParking, AdminUser, AuditEntry, StaleParking, ManualEventInput, EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, ManualParkingRate, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, StreetTariffAdmin, SyncRun, TransitRouteRequest, TransitRouteResult, TransitDeparturesResult, TransitStop, Trend, ChatConversation } from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {

@@ -1,25 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api, ApiError } from '../api'
-import type { ChatConversation, FriendMe } from '../types'
-import { initial } from '../friendsUi'
+import type { ChatConversation } from '../types'
 
 const message = (err: unknown) => (err instanceof ApiError || err instanceof Error ? err.message : 'Er ging iets mis.')
 
 interface ChatProps {
-  me: FriendMe
   onClose: () => void
 }
 
-function Avatar({ name, src, size = 32 }: { name: string; src?: string | null; size?: number }) {
-  return (
-    <span className={`avatar`} style={{ width: size, height: size }} title={name}>
-      {src ? <img src={src} alt={name} /> : <span>{initial(name)}</span>}
-    </span>
-  )
-}
-
-export function Chat({ me, onClose }: ChatProps) {
+export function Chat({ onClose }: ChatProps) {
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [activeConvId, setActiveConvId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)

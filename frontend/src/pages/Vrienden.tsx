@@ -187,7 +187,7 @@ function Dashboard({ me, onMe, onLogout }: { me: FriendMe; onMe: (m: FriendMe) =
 
   return (
     <>
-      {showChat && <Chat me={me} onClose={() => setShowChat(false)} />}
+      {showChat && <Chat onClose={() => setShowChat(false)} />}
       <div className="page-head">
         <div>
           <h1>Vrienden</h1>
