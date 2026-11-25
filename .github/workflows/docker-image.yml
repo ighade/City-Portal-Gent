@@ -14,6 +14,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    
+    - name: Prepare .env
+      run: cp .env.example .env || touch .env
 
     - name: Validate compose file
       run: docker compose config --quiet
