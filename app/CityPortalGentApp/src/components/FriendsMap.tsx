@@ -1,34 +1,36 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import MapView, { Callout } from 'react-native-maps'
+import { Camera, Map as MapView } from '@maplibre/maplibre-react-native'
+import type { CameraRef } from '@maplibre/maplibre-react-native'
 
 import { FriendPin, PinMarker } from '@/components/MapPins'
 import { Txt } from '@/components/ui'
 import { usePalette } from '@/context/ThemeContext'
 import { friendStatus } from '@/lib/friendsUi'
-import { GENT_REGION } from '@/lib/map'
+import { GENT_VIEW, boundsOf, lngLatOf, mapStyleUrl } from '@/lib/map'
 import type { Friend } from '@/lib/types'
 
 /** De vrienden met een bekende locatie als markers; gedeeld door de vriendenpagina en de routekaart. */
 export function FriendMarkers({ friends }: { friends: Friend[] }) {
+  const [openId, setOpenId] = useState<string | null>(null)
   return (
     <>
       {friends.map((f) =>
         f.lat == null || f.lon == null ? null : (
           <PinMarker
             key={f.id}
-            coordinate={{ latitude: f.lat, longitude: f.lon }}
-            title={f.username}
-            zIndex={800}
-            anchor={{ x: 0.5, y: 0.5 }}
-            version={`${f.avatar ?? ''}${f.locationAtUtc ?? ''}`}>
-            <FriendPin friend={f} />
-            <Callout tooltip={false}>
-              <View style={{ minWidth: 120 }}>
+            id={`friend-${f.id}`}
+            lat={f.lat}
+            lon={f.lon}
+            onPress={() => setOpenId((cur) => (cur === f.id ? null : f.id))}
+            open={openId === f.id}
+            callout={
+              <View style={styles.callout}>
                 <Txt variant="strong" style={{ color: '#111827' }}>{f.username}</Txt>
                 <Txt variant="smallMuted">{friendStatus(f)}</Txt>
               </View>
-            </Callout>
+            }>
+            <FriendPin friend={f} />
           </PinMarker>
         ),
       )}
@@ -38,20 +40,25 @@ export function FriendMarkers({ friends }: { friends: Friend[] }) {
 
 export function FriendsMap({ friends, height = 280 }: { friends: Friend[]; height?: number }) {
   const p = usePalette()
-  const ref = useRef<MapView>(null)
+  const camera = useRef<CameraRef>(null)
   const fitted = useRef(false)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    const points = friends.filter((f) => f.lat != null && f.lon != null).map((f) => ({ latitude: f.lat!, longitude: f.lon! }))
-    if (points.length > 0 && !fitted.current && ref.current) {
+    const points = friends.filter((f) => f.lat != null && f.lon != null).map((f) => lngLatOf(f.lat!, f.lon!))
+    if (points.length > 0 && loaded && !fitted.current && camera.current) {
       fitted.current = true
-      ref.current.fitToCoordinates(points, { edgePadding: { top: 60, right: 60, bottom: 60, left: 60 }, animated: false })
+      camera.current.fitBounds(boundsOf(points), { padding: { top: 60, right: 60, bottom: 60, left: 60 }, duration: 0 })
     }
-  }, [friends])
+  }, [friends, loaded])
 
   return (
     <View style={[styles.box, { height, borderColor: p.border }]}>
-      <MapView ref={ref} style={StyleSheet.absoluteFill} initialRegion={GENT_REGION} userInterfaceStyle={p.scheme} maxZoomLevel={18}>
+      <MapView
+        style={StyleSheet.absoluteFill}
+        mapStyle={mapStyleUrl(p.scheme)}
+        onDidFinishLoadingMap={() => setLoaded(true)}>
+        <Camera ref={camera} initialViewState={GENT_VIEW} maxZoom={18} />
         <FriendMarkers friends={friends} />
       </MapView>
     </View>
@@ -60,4 +67,5 @@ export function FriendsMap({ friends, height = 280 }: { friends: Friend[]; heigh
 
 const styles = StyleSheet.create({
   box: { borderRadius: 12, overflow: 'hidden', borderWidth: 1 },
+  callout: { minWidth: 120, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#d1d5db', padding: 8 },
 })

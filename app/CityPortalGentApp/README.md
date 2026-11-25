@@ -10,10 +10,34 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Build and install a development build. MapLibre contains native code and
+   does not work in Expo Go. Rebuild the app whenever native dependencies or
+   native configuration change.
+
+   For Android locally (requires the Android SDK and an emulator or device):
 
    ```bash
-   npx expo start
+   npx expo prebuild --clean --platform android
+   npx expo run:android
+   ```
+
+   `prebuild --clean` replaces the existing Android native directory; save any
+   manual native changes first. For iOS, use `--platform ios` instead.
+
+   For a cloud build, use the existing development profile:
+
+   ```bash
+   npx eas-cli@latest build --platform android --profile development
+   ```
+
+   For iOS, use `--platform ios` with the cloud build, or run
+   `npx expo run:ios` on macOS. Install the resulting development build on your
+   device.
+
+3. Start the development server and open the installed development build
+
+   ```bash
+   npx expo start --dev-client
    ```
 
 In the output, you'll find options to open the app in a
@@ -21,7 +45,6 @@ In the output, you'll find options to open the app in a
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)
 - [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
 You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 

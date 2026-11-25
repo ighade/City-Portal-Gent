@@ -1,9 +1,6 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect, useState } from 'react'
-import type { ReactNode, Ref } from 'react'
+import type { ReactNode } from 'react'
 import { Image, StyleSheet, Text, View } from 'react-native'
-import { Marker } from 'react-native-maps'
-import type { MapMarkerProps } from 'react-native-maps'
+import { ViewAnnotation } from '@maplibre/maplibre-react-native'
 
 import { Icon } from '@/components/Icon'
 import { usePalette } from '@/context/ThemeContext'
@@ -14,22 +11,36 @@ import { RENTAL_BIKE_ICONS } from '@/lib/rentalBikes'
 import type { RentalBikeProvider } from '@/lib/rentalBikes'
 import { busyness } from '@/lib/types'
 import type { Friend, Parking } from '@/lib/types'
+export interface PinMarkerProps {
+  id: string
+  lat: number
+  lon: number
+  onPress?: () => void
+  /** Waar de speld op de coördinaat zit: midden (de meeste pinnen) of onderkant (de punt van een pin). */
+  anchor?: 'center' | 'bottom'
+  children: ReactNode
+  /** Popup boven de speld; wordt alleen getoond als `open` waar is. */
+  callout?: ReactNode
+  open?: boolean
+}
 
 /**
- * Een marker met een eigen view. Native kaarten tekenen die view één keer als bitmap; daarom blijft
- * `tracksViewChanges` even aan en gaat daarna uit, anders zou elke marker de kaart blijven herschilderen.
+ * Een speld als React-view op de kaart. De popup is een tweede view boven de speld, die alleen bestaat
+ * terwijl hij open is, zodat er niet voortdurend extra views op de kaart staan.
  */
-export function PinMarker({ children, version, ref, ...rest }: MapMarkerProps & { children: ReactNode; version?: string | number; ref?: Ref<InstanceType<typeof Marker>> }) {
-  const [tracks, setTracks] = useState(true)
-  useEffect(() => {
-    setTracks(true)
-    const id = setTimeout(() => setTracks(false), 900)
-    return () => clearTimeout(id)
-  }, [version])
+export function PinMarker({ id, lat, lon, onPress, anchor = 'center', children, callout, open = false }: PinMarkerProps) {
+  const lngLat: [number, number] = [lon, lat]
   return (
-    <Marker ref={ref} {...rest} tracksViewChanges={tracks}>
-      {children}
-    </Marker>
+    <>
+      <ViewAnnotation id={id} lngLat={lngLat} anchor={anchor} onPress={onPress ? () => onPress() : undefined}>
+        <>{children}</>
+      </ViewAnnotation>
+      {open && callout ? (
+        <ViewAnnotation id={`${id}-callout`} lngLat={lngLat} anchor="bottom" offset={[0, -24]}>
+          <>{callout}</>
+        </ViewAnnotation>
+      ) : null}
+    </>
   )
 }
 
@@ -66,8 +77,9 @@ export function RentalBikePin({ provider, selected }: { provider: RentalBikeProv
   )
 }
 
-/** Laadpaal-speld: bliksemicoon; de geselecteerde paal is groter, geel en heeft een groene rand. */
+/** Laadpaal-speld: bliksemicoon; lichtblauw, en de geselecteerde paal is groter en paars (merkkleur). */
 export function ChargingPin({ selected }: { selected: boolean }) {
+  const pal = usePalette()
   const size = selected ? 42 : 34
   return (
     <View style={{
@@ -76,11 +88,11 @@ export function ChargingPin({ selected }: { selected: boolean }) {
       borderRadius: size / 2,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: selected ? '#facc15' : '#16a34a',
+      backgroundColor: selected ? pal.brand : '#38bdf8',
       borderWidth: 3,
-      borderColor: selected ? '#16a34a' : '#fff',
+      borderColor: '#fff',
     }}>
-      <Text style={{ fontSize: selected ? 22 : 18, color: selected ? '#111827' : '#fff', fontWeight: '800' }}>⚡</Text>
+      <Text style={{ fontSize: selected ? 22 : 18, color: selected ? pal.brandInk : '#0c4a6e', fontWeight: '800' }}>⚡</Text>
     </View>
   )
 }

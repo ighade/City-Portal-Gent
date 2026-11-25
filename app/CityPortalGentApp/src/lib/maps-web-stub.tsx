@@ -1,8 +1,9 @@
+import { forwardRef } from 'react'
 import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
 
-// react-native-maps heeft geen webversie; op het web tonen we alleen een plaatsaanduiding.
-export default function MapView({ style }: { style?: unknown; children?: ReactNode }) {
+// MapLibre heeft geen webversie; op het web tonen we alleen een plaatsaanduiding.
+export function Map({ style }: { style?: unknown; children?: ReactNode }) {
   return (
     <View
       style={[{ alignItems: 'center', justifyContent: 'center', backgroundColor: '#e5e7eb' }, style as object]}>
@@ -13,7 +14,7 @@ export default function MapView({ style }: { style?: unknown; children?: ReactNo
 
 const Nothing = () => null
 
-export const Marker = Nothing
-export const Callout = Nothing
-export const Polygon = Nothing
-export const Polyline = Nothing
+export const Camera = forwardRef(Nothing)
+export const ViewAnnotation = Nothing
+export const GeoJSONSource = Nothing
+export const Layer = Nothing

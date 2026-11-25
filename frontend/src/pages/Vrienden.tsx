@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import { FriendsMap } from '../components/FriendsMap'
+import { Chat } from '../components/Chat'
 import { friendStatus, initial, resizeAvatar } from '../friendsUi'
 import type { Friend, FriendMe, FriendsOverview } from '../types'
 
@@ -180,119 +181,202 @@ function Dashboard({ me, onMe, onLogout }: { me: FriendMe; onMe: (m: FriendMe) =
     onLogout()
   }
 
-  const friends = overview?.friends ?? []
-  const byId = new Map(friends.map((f) => [f.id, f]))
-
   return (
-    <>
-      <div className="page-head">
-        <div>
+    <div className="vrienden-dashboard">
+      {/* Header */}
+      <header className="vrienden-header">
+        <div className="vrienden-header-content">
           <h1>Vrienden</h1>
-          <p>Waar je vrienden zijn en naar welke evenementen ze willen gaan.</p>
+          <div className="user-profile">
+            <Avatar name={me.username} src={me.avatar} size={40} />
+            <span>{me.username}</span>
+            <button className="btn btn-sm btn-ghost" onClick={() => void logout()} title="Afmelden">Afmelden</button>
+          </div>
         </div>
-        <div className="friend-me">
-          <Avatar name={me.username} src={me.avatar} />
-          <strong>{me.username}</strong>
-          <button className="btn btn-sm" onClick={() => void logout()}>Afmelden</button>
-        </div>
-      </div>
+      </header>
 
+      {/* Messages */}
       {error && <div className="banner" role="alert">{error}</div>}
       {info && <div className="banner banner-ok" role="status">{info}</div>}
 
-      <section className="card">
-        <div className="card-title"><h2>Evenementen waar je vrienden naartoe willen</h2></div>
-        {!overview ? <div className="empty">Even geduld…</div> : overview.events.length === 0 ? (
-          <p className="muted">Nog geen interesses van je vrienden. Open een evenement en tik op “Ik ben geïnteresseerd”.</p>
-        ) : (
-          <div className="friend-events">
-            {overview.events.map((e) => (
-              <Link key={e.id} to={`/events/${encodeURIComponent(e.id)}`} className="friend-event">
-                <div className="avatar-stack">
-                  {e.friendIds.map((id) => byId.get(id)).filter((f): f is Friend => !!f).map((f) => (
-                    <Avatar key={f.id} name={f.username} src={f.avatar} size={34} />
+      {/* Chats: altijd open, schermvullend */}
+      <div className="vrienden-chats-section">
+        <Chat me={me} />
+      </div>
+
+      {/* Main Content */}
+      <div className="vrienden-content">
+          {/* Vrienden Section */}
+          <section className="vrienden-main-section">
+            <div className="section-header">
+              <h2>Vrienden</h2>
+            </div>
+
+            {/* Map */}
+            <div className="friends-map-section">
+              <div className="map-container">
+                {!overview ? <div className="empty">Even geduld…</div> : (
+                  <FriendsMap friends={overview.friends} />
+                )}
+              </div>
+            </div>
+
+            {/* Friends List */}
+            <div className="friends-list-section">
+              <h3>Jouw vrienden ({overview?.friends.length ?? 0})</h3>
+              {overview?.friends.length === 0 ? (
+                <p className="muted">Je hebt nog geen vrienden toegevoegd.</p>
+              ) : (
+                <ul className="friends-list">
+                  {overview?.friends.map((f) => (
+                    <li key={f.id} className="friend-item">
+                      <Avatar name={f.username} src={f.avatar} size={40} off={!f.online} />
+                      <div className="friend-details">
+                        <strong>{f.username}</strong>
+                        <div className="friend-status">{friendStatus(f)}</div>
+                      </div>
+                      <button className="btn btn-sm btn-ghost" onClick={() => void run(() => api.friends.remove(f.id))} title="Verwijderen">Verwijderen</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Add Friend */}
+            <div className="add-friend-section">
+              <h3>Voeg vrienden toe</h3>
+              <form
+                className="friend-add-form"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const name = newFriend.trim()
+                  if (!name) return
+                  void run(() => api.friends.request(name), 'Verzoek verstuurd.').then(() => setNewFriend(''))
+                }}
+              >
+                <input className="input" placeholder="Voer gebruikersnaam in" value={newFriend} onChange={(e) => setNewFriend(e.target.value)} maxLength={30} />
+                <button className="btn btn-primary">Verzoek sturen</button>
+              </form>
+
+              {(overview?.incoming.length ?? 0) > 0 && (
+                <div className="friend-requests-section">
+                  <h4>Verzoeken ontvangen</h4>
+                  {overview?.incoming.map((p) => (
+                    <div key={p.id} className="friend-request incoming">
+                      <Avatar name={p.username} src={p.avatar} size={36} />
+                      <div className="request-info">
+                        <strong>{p.username}</strong>
+                        <span className="text-small muted">wil je vriend zijn</span>
+                      </div>
+                      <div className="request-actions">
+                        <button className="btn btn-sm btn-primary" onClick={() => void run(() => api.friends.accept(p.id))}>Accepteren</button>
+                        <button className="btn btn-sm btn-ghost" onClick={() => void run(() => api.friends.remove(p.id))}>Weigeren</button>
+                      </div>
+                    </div>
                   ))}
                 </div>
-                <strong>{e.name}</strong>
-                <span className="muted small">
-                  {e.startsAtUtc ? whenFmt.format(new Date(e.startsAtUtc)) : e.dayTimeLabel}
-                  {e.place ? ` · ${e.place}` : ''}
-                </span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
+              )}
 
-      <section className="card">
-        <div className="card-title"><h2>Locaties</h2></div>
-        <FriendsMap friends={friends} />
-        {friends.length === 0 && overview && <p className="muted">Je hebt nog geen vrienden toegevoegd.</p>}
-        <ul className="friend-list">
-          {friends.map((f) => (
-            <li key={f.id}>
-              <Avatar name={f.username} src={f.avatar} off={!f.online} />
-              <div>
-                <strong>{f.username}</strong>
-                <div className="muted small">{friendStatus(f)}</div>
+              {(overview?.outgoing.length ?? 0) > 0 && (
+                <div className="friend-requests-section">
+                  <h4>Openstaande verzoeken</h4>
+                  {overview?.outgoing.map((p) => (
+                    <div key={p.id} className="friend-request outgoing">
+                      <Avatar name={p.username} src={p.avatar} size={36} />
+                      <div className="request-info">
+                        <span className="text-small muted">Verzoek aan</span>
+                        <strong>{p.username}</strong>
+                      </div>
+                      <button className="btn btn-sm btn-ghost" onClick={() => void run(() => api.friends.remove(p.id))}>Intrekken</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Events Section */}
+          <section className="vrienden-main-section">
+            <div className="section-header">
+              <h2>Evenementen</h2>
+            </div>
+            {!overview ? (
+              <div className="empty">Even geduld…</div>
+            ) : overview.events.length === 0 ? (
+              <p className="muted">Nog geen interesses van je vrienden.</p>
+            ) : (
+              <div className="events-grid">
+                {overview.events.map((e) => {
+                  const byId = new Map(overview.friends.map((f) => [f.id, f]))
+                  return (
+                    <Link key={e.id} to={`/events/${encodeURIComponent(e.id)}`} className="event-card">
+                      <div className="event-header">
+                        <strong>{e.name}</strong>
+                      </div>
+                      <div className="event-details">
+                        <span className="event-when">
+                          {e.startsAtUtc ? whenFmt.format(new Date(e.startsAtUtc)) : e.dayTimeLabel}
+                        </span>
+                        {e.place && <span className="event-place">{e.place}</span>}
+                      </div>
+                      <div className="event-avatars">
+                        <span className="avatar-stack">
+                          {e.friendIds.map((id) => byId.get(id)).filter((f): f is Friend => !!f).map((f) => (
+                            <Avatar key={f.id} name={f.username} src={f.avatar} size={32} />
+                          ))}
+                        </span>
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
-              <button className="btn btn-sm btn-ghost" onClick={() => void run(() => api.friends.remove(f.id))}>Verwijderen</button>
-            </li>
-          ))}
-        </ul>
-      </section>
+            )}
+          </section>
 
-      <section className="card">
-        <div className="card-title"><h2>Vriend toevoegen</h2></div>
-        <form
-          className="friend-add"
-          onSubmit={(e) => {
-            e.preventDefault()
-            const name = newFriend.trim()
-            if (!name) return
-            void run(() => api.friends.request(name), 'Verzoek verstuurd.').then(() => setNewFriend(''))
-          }}
-        >
-          <input className="input" placeholder="Gebruikersnaam" value={newFriend} onChange={(e) => setNewFriend(e.target.value)} maxLength={30} />
-          <button className="btn btn-primary">Verzoek sturen</button>
-        </form>
-        {overview?.incoming.map((p) => (
-          <div key={p.id} className="friend-request">
-            <Avatar name={p.username} src={p.avatar} />
-            <strong>{p.username}</strong> wil je vriend zijn
-            <button className="btn btn-sm btn-primary" onClick={() => void run(() => api.friends.accept(p.id))}>Aanvaarden</button>
-            <button className="btn btn-sm" onClick={() => void run(() => api.friends.remove(p.id))}>Weigeren</button>
-          </div>
-        ))}
-        {overview?.outgoing.map((p) => (
-          <div key={p.id} className="friend-request muted">
-            <Avatar name={p.username} src={p.avatar} />
-            Verzoek aan <strong>{p.username}</strong> staat open
-            <button className="btn btn-sm btn-ghost" onClick={() => void run(() => api.friends.remove(p.id))}>Intrekken</button>
-          </div>
-        ))}
-      </section>
+          {/* Settings Section */}
+          <section className="vrienden-main-section">
+            <div className="section-header">
+              <h2>Instellingen</h2>
+            </div>
 
-      <section className="card">
-        <div className="card-title"><h2>Instellingen</h2></div>
-        <div className="friend-settings">
-          <label className="toggle">
-            <input type="checkbox" role="switch" checked={me.shareLocation} onChange={(e) => void setting({ shareLocation: e.target.checked })} />
-            <span className="toggle-track" aria-hidden="true" />
-            Mijn locatie delen met vrienden
-          </label>
-          <label className="toggle">
-            <input type="checkbox" role="switch" checked={me.showFriendsOnMap} onChange={(e) => void setting({ showFriendsOnMap: e.target.checked })} />
-            <span className="toggle-track" aria-hidden="true" />
-            Vrienden tonen op de routekaart
-          </label>
-          <label className="avatar-pick">
-            Profielfoto wijzigen
-            <input type="file" accept="image/*" onChange={(e) => void changeAvatar(e.target.files?.[0])} />
-          </label>
-          {me.shareLocation && <p className="muted small">Je locatie wordt doorgegeven zolang deze pagina openstaat.</p>}
-        </div>
-      </section>
-    </>
+            <div className="settings-group">
+              <h3>Profielfoto</h3>
+              <div className="profile-photo-section">
+                <Avatar name={me.username} src={me.avatar} size={80} />
+                <label className="btn btn-primary btn-sm">
+                  Foto wijzigen
+                  <input type="file" accept="image/*" onChange={(e) => void changeAvatar(e.target.files?.[0])} style={{ display: 'none' }} />
+                </label>
+              </div>
+            </div>
+
+            <div className="settings-group">
+              <h3>Privacy & delen</h3>
+              <label className="toggle-label">
+                <input type="checkbox" role="switch" checked={me.shareLocation} onChange={(e) => void setting({ shareLocation: e.target.checked })} />
+                <span className="toggle-track" aria-hidden="true" />
+                <div>
+                  <strong>Locatie delen</strong>
+                  <p className="muted">Vrienden kunnen je locatie zien op de kaart</p>
+                </div>
+              </label>
+              <label className="toggle-label">
+                <input type="checkbox" role="switch" checked={me.showFriendsOnMap} onChange={(e) => void setting({ showFriendsOnMap: e.target.checked })} />
+                <span className="toggle-track" aria-hidden="true" />
+                <div>
+                  <strong>Vrienden op routekaart</strong>
+                  <p className="muted">Toon locaties van vrienden op je routeplan</p>
+                </div>
+              </label>
+            </div>
+
+            {me.shareLocation && (
+              <div className="info-box">
+                Je locatie wordt doorgegeven zolang deze pagina openstaat.
+              </div>
+            )}
+          </section>
+      </div>
+    </div>
   )
 }

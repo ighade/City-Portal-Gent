@@ -230,7 +230,7 @@ export function RouteScreen() {
     setTransitRoute(null)
     setError(null)
     setLezBlocked(false)
-    if (next !== mode) setEzOn(next === 'car' && ezPref)
+    if (next !== mode) setEzOn(next === 'car' && ezPref && !showChargingStations)
   }
 
   const departAt = useMemo(
@@ -394,6 +394,8 @@ export function RouteScreen() {
     setLezBlocked(false)
     setEzOn(true)
     setEzPref(true)
+    // EZ Park en laadpalen sluiten elkaar uit.
+    setShowChargingStations(false)
   }
 
   const toggles = mode !== 'car' ? null : (
@@ -408,7 +410,13 @@ export function RouteScreen() {
         label="Laadpalen (EV)"
         description="Toon laadpunten bij je bestemming"
         value={showChargingStations}
-        onValueChange={setShowChargingStations}
+        onValueChange={(v) => {
+          setShowChargingStations(v)
+          if (v) {
+            setEzPref(false)
+            setEzOn(false)
+          }
+        }}
       />
       <ToggleCard
         label="EZ Park"
@@ -590,35 +598,6 @@ export function RouteScreen() {
                     </Section>
                   )}
 
-                  {/* Route details */}
-                  <Section title="Details" animate={true}>
-                    <DetailItem
-                      label="Start Point"
-                      value={start?.label ?? '—'}
-                      animate={true}
-                    />
-                    <DetailItem
-                      label="Destination"
-                      value={end?.label ?? '—'}
-                      animate={true}
-                    />
-                    <DetailItem
-                      label="Transport Mode"
-                      value={<Badge variant="info">{MODE_LABEL[mode]}</Badge>}
-                      animate={true}
-                    />
-                    <DetailItem
-                      label="Departure Time"
-                      value={transitRoute ? time(new Date(transitRoute.departureAt)) : route ? time(departAt) : '—'}
-                      animate={true}
-                    />
-                    <DetailItem
-                      label="Arrival Time"
-                      value={transitRoute ? time(new Date(transitRoute.arrivalAt)) : arriveAt ? time(arriveAt) : '—'}
-                      animate={true}
-                    />
-                  </Section>
-
                   {/* Fare information */}
                   {transitRoute && transitFareLabel(transitRoute.legs) && (
                     <DetailItem
@@ -666,6 +645,34 @@ export function RouteScreen() {
                       />
                     </Section>
                   )}
+                  {/* Route details: staan altijd onderaan, na tarieven en laadpalen */}
+                  <Section title="Details" animate={true}>
+                    <DetailItem
+                      label="Start Point"
+                      value={start?.label ?? '—'}
+                      animate={true}
+                    />
+                    <DetailItem
+                      label="Destination"
+                      value={end?.label ?? '—'}
+                      animate={true}
+                    />
+                    <DetailItem
+                      label="Transport Mode"
+                      value={<Badge variant="info">{MODE_LABEL[mode]}</Badge>}
+                      animate={true}
+                    />
+                    <DetailItem
+                      label="Departure Time"
+                      value={transitRoute ? time(new Date(transitRoute.departureAt)) : route ? time(departAt) : '—'}
+                      animate={true}
+                    />
+                    <DetailItem
+                      label="Arrival Time"
+                      value={transitRoute ? time(new Date(transitRoute.arrivalAt)) : arriveAt ? time(arriveAt) : '—'}
+                      animate={true}
+                    />
+                  </Section>
                 </>
               )}
             </>
