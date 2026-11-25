@@ -5,7 +5,8 @@ using ParkingGent.Api.Domain;
 namespace ParkingGent.Api.Services;
 
 public sealed record ChatMessageDto(Guid Id, Guid ConversationId, Guid SentByUserId, string SenderUsername, string Content, DateTime SentAtUtc);
-public sealed record ChatConversationDto(Guid Id, string? GroupName, string? GroupImageUrl, Guid? CreatedByUserId, DateTime CreatedAtUtc, List<ChatMessageDto> RecentMessages, List<Guid>? GroupMembers);
+public sealed record DirectChatFriendDto(string Username, string? Avatar);
+public sealed record ChatConversationDto(Guid Id, string? GroupName, string? GroupImageUrl, Guid? CreatedByUserId, DateTime CreatedAtUtc, List<ChatMessageDto> RecentMessages, List<Guid>? GroupMembers, DirectChatFriendDto? DirectChatFriend = null);
 public sealed record CreateGroupRequest(string? GroupName, string? GroupImageUrl, List<Guid>? InitialMemberIds);
 public sealed record SendMessageRequest(string? Content);
 public sealed record AddGroupMemberRequest(string? Username);
@@ -191,10 +192,26 @@ public sealed partial class Chat(AppDbContext db)
             users.TryGetValue(m.SentByUserId, out var u) ? u.Username : "Onbekend",
             m.Content, m.SentAtUtc)).ToList();
 
+        // For direct chats, get the other member's info
+        DirectChatFriendDto? directChatFriend = null;
+        if (conv.GroupName == null && conv.GroupMembers.Count == 2)
+        {
+            var otherMemberId = conv.GroupMembers.FirstOrDefault(m => m.UserId != requester.Id)?.UserId;
+            if (otherMemberId != null)
+            {
+                var otherMember = await db.FriendUsers.FirstOrDefaultAsync(u => u.Id == otherMemberId, ct);
+                if (otherMember != null)
+                {
+                    directChatFriend = new DirectChatFriendDto(otherMember.Username, otherMember.AvatarDataUrl);
+                }
+            }
+        }
+
         return new ChatConversationDto(
             conv.Id, conv.GroupName, conv.GroupImageUrl, conv.CreatedByUserId, conv.CreatedAtUtc,
             messages,
-            conv.GroupMembers.Select(m => m.UserId).ToList());
+            conv.GroupMembers.Select(m => m.UserId).ToList(),
+            directChatFriend);
     }
 
     /// <summary>Haalt alle conversaties op voor een gebruiker.</summary>
@@ -217,6 +234,12 @@ public sealed partial class Chat(AppDbContext db)
             .Where(u => allUserIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, ct);
 
+        // Also get all members from direct chats to show friend info
+        var allMemberIds = convs.Where(c => c.GroupName == null).SelectMany(c => c.GroupMembers.Select(m => m.UserId)).Distinct().ToList();
+        var allMembers = await db.FriendUsers
+            .Where(u => allMemberIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, ct);
+
         return convs.Select(conv =>
         {
             var messages = conv.Messages.OrderBy(m => m.SentAtUtc).Select(m => new ChatMessageDto(
@@ -224,10 +247,22 @@ public sealed partial class Chat(AppDbContext db)
                 users.TryGetValue(m.SentByUserId, out var u) ? u.Username : "Onbekend",
                 m.Content, m.SentAtUtc)).ToList();
 
+            // For direct chats, get the other member's info
+            DirectChatFriendDto? directChatFriend = null;
+            if (conv.GroupName == null && conv.GroupMembers.Count == 2)
+            {
+                var otherMemberId = conv.GroupMembers.FirstOrDefault(m => m.UserId != user.Id)?.UserId;
+                if (otherMemberId != null && allMembers.TryGetValue(otherMemberId.Value, out var friend))
+                {
+                    directChatFriend = new DirectChatFriendDto(friend.Username, friend.AvatarDataUrl);
+                }
+            }
+
             return new ChatConversationDto(
                 conv.Id, conv.GroupName, conv.GroupImageUrl, conv.CreatedByUserId, conv.CreatedAtUtc,
                 messages,
-                conv.GroupMembers.Select(m => m.UserId).ToList());
+                conv.GroupMembers.Select(m => m.UserId).ToList(),
+                directChatFriend);
         }).ToList();
     }
 

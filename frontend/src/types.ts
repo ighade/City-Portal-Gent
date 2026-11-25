@@ -450,6 +450,7 @@ export interface ChatConversation {
   createdAtUtc: string
   recentMessages: ChatMessage[]
   groupMembers?: string[] | null
+  directChatFriend?: { username: string; avatar?: string | null } | null
 }
 
 export interface ChatEventShare {

@@ -154,7 +154,6 @@ export function Chat({ me, onClose }: ChatProps) {
           <h2>Chats</h2>
           <div className="chat-action-buttons">
             <button className="btn-icon" title="Nieuw bericht" onClick={() => setShowDirectForm(!showDirectForm)}>📝</button>
-            <button className="btn-icon" title="Meer opties" onClick={() => {}}>⋮</button>
             <button className="btn-icon" title="Sluiten" onClick={onClose}>✕</button>
           </div>
         </div>
@@ -266,19 +265,43 @@ export function Chat({ me, onClose }: ChatProps) {
                 className={`conversation-item${activeConvId === conv.id ? ' active' : ''}`}
                 onClick={() => setActiveConvId(conv.id)}
               >
-                <div className="conversation-item-header">
-                  <p className="conversation-name">{conv.groupName || 'Direct bericht'}</p>
-                  <span className="conversation-time">
-                    {conv.recentMessages.length > 0
-                      ? new Date(conv.recentMessages[conv.recentMessages.length - 1].sentAtUtc).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })
-                      : ''}
-                  </span>
+                <div className="conversation-item-wrapper">
+                  {/* Avatar section */}
+                  {conv.directChatFriend ? (
+                    <div className="conversation-avatar-section">
+                      {conv.directChatFriend.avatar ? (
+                        <img 
+                          src={conv.directChatFriend.avatar} 
+                          alt={conv.directChatFriend.username}
+                          className="conversation-avatar"
+                        />
+                      ) : (
+                        <div className="conversation-avatar-placeholder">
+                          {conv.directChatFriend.username.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {/* Content section */}
+                  <div className="conversation-item-content">
+                    <div className="conversation-item-header">
+                      <p className="conversation-name">
+                        {conv.groupName || conv.directChatFriend?.username || 'Direct bericht'}
+                      </p>
+                      <span className="conversation-time">
+                        {conv.recentMessages.length > 0
+                          ? new Date(conv.recentMessages[conv.recentMessages.length - 1].sentAtUtc).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })
+                          : ''}
+                      </span>
+                    </div>
+                    <p className="conversation-preview">
+                      {conv.recentMessages.length > 0
+                        ? `${conv.recentMessages[conv.recentMessages.length - 1].senderUsername}: ${conv.recentMessages[conv.recentMessages.length - 1].content}`
+                        : 'Geen berichten'}
+                    </p>
+                  </div>
                 </div>
-                <p className="conversation-preview">
-                  {conv.recentMessages.length > 0
-                    ? `${conv.recentMessages[conv.recentMessages.length - 1].senderUsername}: ${conv.recentMessages[conv.recentMessages.length - 1].content}`
-                    : 'Geen berichten'}
-                </p>
               </button>
             ))
           )}
@@ -308,10 +331,6 @@ export function Chat({ me, onClose }: ChatProps) {
                     👤 Toevoegen
                   </button>
                 )}
-                <div className="chat-action-buttons">
-                  <button className="btn-icon" title="Zoeken">🔍</button>
-                  <button className="btn-icon" title="Meer">⋮</button>
-                </div>
               </div>
             </div>
 
