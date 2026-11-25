@@ -12,6 +12,7 @@ public sealed record CreateGroupRequest(string? GroupName, string? GroupImageUrl
 public sealed record SendMessageRequest(string? Content);
 public sealed record AddGroupMemberRequest(string? Username);
 public sealed record EventShareRequest(string? EventId);
+public sealed record PushTokenRequest(string? Token);
 
 /// <summary>
 /// Eindpunten van de vriendenservice onder <c>/api/friends</c>. Anders dan de rest van de API is
@@ -34,6 +35,15 @@ public static class FriendsApi
             await f.SetLocationAsync(me, body.Lat, body.Lon, ct) ? Results.NoContent() : Results.BadRequest(new { error = "Locatie delen staat uit of de locatie is ongeldig." })));
         g.MapGet("/overview", Authed(async (FriendUser me, Friends f, CancellationToken ct) =>
             Results.Ok(await f.OverviewAsync(me, ct))));
+
+        // Pushtoken van een toestel van de app, voor meldingen bij nieuwe berichten.
+        g.MapPut("/push-token", Authed<PushTokenRequest>(async (me, f, body, ct) =>
+            await f.RegisterPushTokenAsync(me, body.Token, ct) ? Results.NoContent() : Results.BadRequest(new { error = "Ongeldig pushtoken." })));
+        g.MapPost("/push-token/remove", Authed<PushTokenRequest>(async (me, f, body, ct) =>
+        {
+            await f.RemovePushTokenAsync(me, body.Token, ct);
+            return Results.NoContent();
+        }));
 
         // Chat endpoints (must be before /{id:guid} catch-all to avoid routing conflicts)
         g.MapGet("/chats", AuthedChat(async (FriendUser me, Chat c, CancellationToken ct) =>

@@ -22,6 +22,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<FriendLink> FriendLinks => Set<FriendLink>();
     public DbSet<FriendInterest> FriendInterests => Set<FriendInterest>();
     public DbSet<FriendSession> FriendSessions => Set<FriendSession>();
+    public DbSet<PushToken> PushTokens => Set<PushToken>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<CityParkingRate> CityParkingRates => Set<CityParkingRate>();
     public DbSet<ChatConversation> ChatConversations => Set<ChatConversation>();
@@ -185,6 +186,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             e.HasKey(x => x.TokenHash);
             e.Property(x => x.TokenHash).HasMaxLength(64);
+            e.HasIndex(x => x.UserId);
+        });
+
+        b.Entity<PushToken>(e =>
+        {
+            e.HasKey(x => x.Token);
+            e.Property(x => x.Token).HasMaxLength(200);
             e.HasIndex(x => x.UserId);
         });
 

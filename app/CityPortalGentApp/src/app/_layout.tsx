@@ -6,6 +6,7 @@ import { useEffect } from 'react'
 import { AppProvider } from '@/context/AppContext'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { ThemeProvider, useTheme } from '@/context/ThemeContext'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -13,6 +14,7 @@ function RootStack() {
   const { status } = useAuth()
   const { palette: p, theme } = useTheme()
   const known = status !== 'unknown'
+  usePushNotifications(status === 'in')
 
   // De splash blijft staan tot friends.me() antwoordt, zodat er geen aanmeldscherm flitst.
   useEffect(() => {
@@ -43,6 +45,7 @@ function RootStack() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="events/[id]" options={{ title: 'Evenement', headerBackTitle: 'Terug' }} />
             <Stack.Screen name="parking/[slug]" options={{ title: 'Parking', headerBackTitle: 'Terug' }} />
+            <Stack.Screen name="chat/[id]" options={{ title: 'Chat', headerBackTitle: 'Terug' }} />
           </Stack.Protected>
           <Stack.Protected guard={status === 'out'}>
             <Stack.Screen name="login" options={{ headerShown: false }} />

@@ -373,3 +373,23 @@ export interface FriendsOverview {
   incoming: FriendPending[]
   outgoing: FriendPending[]
 }
+
+export interface ChatMessage {
+  id: string
+  conversationId: string
+  sentByUserId: string
+  senderUsername: string
+  content: string
+  sentAtUtc: string
+}
+
+export interface ChatConversation {
+  id: string
+  groupName?: string | null
+  groupImageUrl?: string | null
+  createdByUserId?: string | null
+  createdAtUtc: string
+  recentMessages: ChatMessage[]
+  groupMembers?: string[] | null
+  directChatFriend?: { username: string; avatar?: string | null } | null
+}

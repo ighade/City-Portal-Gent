@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Pressable, View } from 'react-native'
 
 import { errorMessage } from '@/components/AuthForm'
+import { ChatList } from '@/components/ChatList'
 import { FriendsMap } from '@/components/FriendsMap'
 import { Avatar, Banner, Btn, Card, CardTitle, Input, Loading, PageHead, Screen, SwitchRow, Txt } from '@/components/ui'
 import { useAuth } from '@/context/AuthContext'
@@ -116,6 +117,8 @@ export function FriendsScreen() {
 
       {error && <Banner>{error}</Banner>}
       {info && <Banner ok>{info}</Banner>}
+
+      <ChatList friends={friends} />
 
       <Card>
         <CardTitle>Evenementen waar je vrienden naartoe willen</CardTitle>

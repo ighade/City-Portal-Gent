@@ -15,7 +15,7 @@ public sealed record AddGroupMemberRequest(string? Username);
 /// Chat service: direktne berichten tussen vrienden en groepschats.
 /// Groepen kunnen alleen door hun maker worden verwijderd, maar iedereen kan leden toevoegen.
 /// </summary>
-public sealed partial class Chat(AppDbContext db)
+public sealed partial class Chat(AppDbContext db, PushNotifier push)
 {
     /// <summary>Krijgt of maakt een directe chat tussen twee vrienden.</summary>
     public async Task<Guid> GetOrCreateDirectConversationAsync(Guid userId1, Guid userId2, CancellationToken ct)
@@ -165,9 +165,40 @@ public sealed partial class Chat(AppDbContext db)
         });
 
         await db.SaveChangesAsync(ct);
+        await NotifyMembersAsync(sender, conversationId, msg, ct);
         return true;
     }
 
+    /// <summary>Meldt een nieuw bericht aan de andere leden van het gesprek, op elk toestel dat een pushtoken doorgaf.</summary>
+    private async Task NotifyMembersAsync(FriendUser sender, Guid conversationId, string content, CancellationToken ct)
+    {
+        try
+        {
+            var tokens = await db.PushTokens
+                .Where(t => t.UserId != sender.Id
+                    && db.GroupMembers.Any(m => m.ConversationId == conversationId && m.UserId == t.UserId))
+                .Select(t => t.Token)
+                .ToListAsync(ct);
+            if (tokens.Count == 0) return;
+
+            var groupName = await db.ChatConversations
+                .Where(c => c.Id == conversationId)
+                .Select(c => c.GroupName)
+                .FirstOrDefaultAsync(ct);
+            var text = content.Length > 140 ? content[..140] + "…" : content;
+            push.Send(
+                tokens,
+                groupName ?? sender.Username,
+                groupName is null ? text : $"{sender.Username}: {text}",
+                new { conversationId });
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            // Het bericht is al opgeslagen; een mislukte melding mag dat niet ongedaan maken.
+        }
+    }
+
+    /// <summary>Haalt recente berichten op voor een chat (max 50).</summary>
     /// <summary>Haalt recente berichten op voor een chat (max 50).</summary>
     public async Task<ChatConversationDto?> GetConversationAsync(FriendUser requester, Guid conversationId, CancellationToken ct)
     {

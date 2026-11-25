@@ -67,6 +67,12 @@
         }
       ],
       "expo-image",
+      [
+        "expo-notifications",
+        {
+          "color": "#4f46e5"
+        }
+      ],
       "expo-status-bar",
       "expo-web-browser"
     ],

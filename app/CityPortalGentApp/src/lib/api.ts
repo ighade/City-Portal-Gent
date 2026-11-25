@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-import type { EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, TransitRouteRequest, TransitDeparturesResult, TransitRouteResult, TransitStop, Trend } from './types'
+import type { ChatConversation, EzParkRequest, FriendMe, FriendSessionInfo, FriendsOverview, GentEvent, GentEventDetail, EzParkResult, GeoJsonCollection, Meta, Parking, Point, RoutePlanRequest, RoutePlanResult, Stats, TransitRouteRequest, TransitDeparturesResult, TransitRouteResult, TransitStop, Trend } from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {
@@ -230,5 +230,20 @@ export const api = {
     remove: (id: string) => call<void>('DELETE', `/api/friends/${id}`),
     interest: (eventId: string, on: boolean) =>
       call<void>(on ? 'PUT' : 'DELETE', `/api/friends/interests/${encodeURIComponent(eventId)}`),
+    /** Pushtoken van dit toestel, voor meldingen bij nieuwe berichten. */
+    registerPushToken: (token: string) => call<void>('PUT', '/api/friends/push-token', { token }),
+    removePushToken: (token: string) => call<void>('POST', '/api/friends/push-token/remove', { token }),
+    chats: {
+      list: () => call<ChatConversation[]>('GET', '/api/friends/chats'),
+      get: (conversationId: string) => call<ChatConversation>('GET', `/api/friends/chats/${conversationId}`),
+      createDirect: (friendId: string) =>
+        call<{ conversationId: string }>('POST', `/api/friends/chats/direct/${friendId}`),
+      createGroup: (body: { groupName: string; groupImageUrl?: string | null; initialMemberIds?: string[] }) =>
+        call<{ conversationId: string }>('POST', '/api/friends/chats/group', body),
+      sendMessage: (conversationId: string, content: string) =>
+        call<void>('POST', `/api/friends/chats/${conversationId}/messages`, { content }),
+      addMember: (conversationId: string, username: string) =>
+        call<void>('POST', `/api/friends/chats/${conversationId}/members`, { username }),
+    },
   },
 }

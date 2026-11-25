@@ -48,6 +48,15 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Chat notifications
+
+New chat messages arrive as push notifications through the Expo push service
+(`expo-notifications`). This needs a development build (Expo Go on Android does
+not support push), so rebuild the app after pulling this change. On Android,
+add FCM credentials first: follow the
+[push notification setup guide](https://docs.expo.dev/push-notifications/push-notifications-setup/)
+and upload the FCM V1 key with `npx eas-cli@latest credentials`. The backend
+has to be able to reach `exp.host`.
 ## Get a fresh project
 
 When you're ready, run:
