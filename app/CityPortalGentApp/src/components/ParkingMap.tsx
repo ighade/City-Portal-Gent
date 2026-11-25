@@ -346,13 +346,12 @@ export function ParkingMap({
             id="route"
             points={route.points.map((q): [number, number] => lngLatOf(q.lat, q.lon))}
             color={route.mode === 'foot-walking' ? '#2563eb' : route.mode === 'cycling-regular' ? '#16a34a' : '#d94a4a'}
-            width={route.mode === 'foot-walking' ? 4 : 5}
-            dash={route.mode === 'foot-walking' ? [2, 8] : undefined}
+            width={5}
           />
         )}
 
         {route?.walkPoints && route.walkPoints.length > 0 && (
-          <MapLine id="route-walk" points={route.walkPoints.map((q): [number, number] => lngLatOf(q.lat, q.lon))} color="#2563eb" width={4} dash={[2, 8]} />
+          <MapLine id="route-walk" points={route.walkPoints.map((q): [number, number] => lngLatOf(q.lat, q.lon))} color="#2563eb" width={5} />
         )}
 
         {route && dot('route-start', route.start, '#2563eb', 'Start')}
@@ -487,22 +486,26 @@ export function ParkingMap({
               if (leg.coordinates.length < 2) return null
               const coords = leg.coordinates.map(([lat, lon]): [number, number] => [lon!, lat!])
               const transitColor = leg.color ? `#${leg.color}` : leg.mode === 'tram' ? '#d97706' : '#0f766e'
-              const mid = coords[Math.floor(coords.length / 2)]!
               return (
                 <Fragment key={`leg-${i}`}>
                   <MapLine
                     id={`ez-leg-${i}`}
                     points={coords}
                     color={leg.mode === 'drive' ? '#d94a4a' : leg.mode === 'walk' ? '#2563eb' : transitColor}
-                    width={leg.mode === 'drive' ? 5 : leg.mode === 'walk' ? 4 : 6}
-                    dash={leg.mode === 'walk' ? [2, 8] : undefined}
+                    width={leg.mode === 'drive' || leg.mode === 'walk' ? 5 : 6}
                   />
-                  {(leg.mode === 'bus' || leg.mode === 'tram') && leg.line ? (
-                    <PinMarker id={`ez-line-${i}`} lat={mid[1]} lon={mid[0]}>
-                      <LineBadge line={leg.line} color={transitColor} />
-                    </PinMarker>
-                  ) : null}
                 </Fragment>
+              )
+            })}
+            {/* Na alle lijnen getekend, zodat de lijnnummers altijd bovenop liggen. */}
+            {ezpark.legs.map((leg, i) => {
+              if (leg.coordinates.length < 2 || !leg.line || (leg.mode !== 'bus' && leg.mode !== 'tram')) return null
+              const [lat, lon] = leg.coordinates[Math.floor(leg.coordinates.length / 2)]!
+              const transitColor = leg.color ? `#${leg.color}` : leg.mode === 'tram' ? '#d97706' : '#0f766e'
+              return (
+                <PinMarker key={`line-badge-${i}`} id={`ez-line-${i}`} lat={lat!} lon={lon!}>
+                  <LineBadge line={leg.line} color={transitColor} />
+                </PinMarker>
               )
             })}
           </>

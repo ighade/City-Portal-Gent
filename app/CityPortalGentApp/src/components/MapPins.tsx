@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import { ViewAnnotation } from '@maplibre/maplibre-react-native'
@@ -62,6 +63,8 @@ export function BluePin({ size = 30 }: { size?: number }) {
 }
 
 export function RentalBikePin({ provider, selected }: { provider: RentalBikeProvider; selected: boolean }) {
+  // De kaart maakt een momentopname van de view; zonder fade en met een herrender na het laden is die niet meer wit.
+  const [, setLoaded] = useState(false)
   return (
     <View style={{
       width: 36,
@@ -72,7 +75,12 @@ export function RentalBikePin({ provider, selected }: { provider: RentalBikeProv
       borderWidth: selected ? 4 : 3,
       borderColor: selected ? '#facc15' : '#fff',
     }}>
-      <Image source={RENTAL_BIKE_ICONS[provider]} style={{ width: '100%', height: '100%' }} />
+      <Image
+        source={RENTAL_BIKE_ICONS[provider]}
+        fadeDuration={0}
+        onLoad={() => setLoaded(true)}
+        style={{ width: '100%', height: '100%' }}
+      />
     </View>
   )
 }
