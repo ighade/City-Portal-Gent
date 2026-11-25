@@ -114,7 +114,6 @@ function Dashboard({ me, onMe, onLogout }: { me: FriendMe; onMe: (m: FriendMe) =
   const [newFriend, setNewFriend] = useState('')
   const [info, setInfo] = useState<string | null>(null)
   const [, setTick] = useState(0)
-  const [showChats, setShowChats] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -191,7 +190,7 @@ function Dashboard({ me, onMe, onLogout }: { me: FriendMe; onMe: (m: FriendMe) =
           <div className="user-profile">
             <Avatar name={me.username} src={me.avatar} size={40} />
             <span>{me.username}</span>
-            <button className="btn btn-sm btn-ghost" onClick={() => void logout()} title="Afmelden">Logout</button>
+            <button className="btn btn-sm btn-ghost" onClick={() => void logout()} title="Afmelden">Afmelden</button>
           </div>
         </div>
       </header>
@@ -200,22 +199,17 @@ function Dashboard({ me, onMe, onLogout }: { me: FriendMe; onMe: (m: FriendMe) =
       {error && <div className="banner" role="alert">{error}</div>}
       {info && <div className="banner banner-ok" role="status">{info}</div>}
 
-      {/* Chat Section */}
-      {showChats && (
-        <div className="vrienden-chats-section">
-          <button className="btn btn-sm" onClick={() => setShowChats(false)}>Terug</button>
-          <Chat me={me} onClose={() => setShowChats(false)} />
-        </div>
-      )}
+      {/* Chats: altijd open, schermvullend */}
+      <div className="vrienden-chats-section">
+        <Chat me={me} />
+      </div>
 
       {/* Main Content */}
-      {!showChats && (
-        <div className="vrienden-content">
+      <div className="vrienden-content">
           {/* Vrienden Section */}
           <section className="vrienden-main-section">
             <div className="section-header">
               <h2>Vrienden</h2>
-              <button className="btn btn-sm btn-primary" onClick={() => setShowChats(true)}>Chats</button>
             </div>
 
             {/* Map */}
@@ -382,8 +376,7 @@ function Dashboard({ me, onMe, onLogout }: { me: FriendMe; onMe: (m: FriendMe) =
               </div>
             )}
           </section>
-        </div>
-      )}
+      </div>
     </div>
   )
 }

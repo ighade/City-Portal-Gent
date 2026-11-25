@@ -714,15 +714,18 @@ code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; 
 }
 
 .vrienden-chats-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  position: relative;
+  width: 100%;
+  max-width: 1400px;
+  margin: 20px auto 0;
+  padding: 0 20px;
 }
 
-.vrienden-chats-section > .btn {
-  margin: 12px 20px;
-  align-self: flex-start;
+.vrienden-chats-section .chat-container {
+  height: calc(100vh - 200px);
+  min-height: 520px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .vrienden-content {

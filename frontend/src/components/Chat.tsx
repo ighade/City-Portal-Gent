@@ -8,10 +8,9 @@ const message = (err: unknown) => (err instanceof ApiError || err instanceof Err
 
 interface ChatProps {
   me: FriendMe | null
-  onClose: () => void
 }
 
-export function Chat({ me, onClose }: ChatProps) {
+export function Chat({ me }: ChatProps) {
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [activeConvId, setActiveConvId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -153,8 +152,8 @@ export function Chat({ me, onClose }: ChatProps) {
         <div className="chat-header-sidebar">
           <h2>Chats</h2>
           <div className="chat-action-buttons">
-            <button className="btn-icon" title="Nieuw bericht" onClick={() => setShowDirectForm(!showDirectForm)}>📝</button>
-            <button className="btn-icon" title="Sluiten" onClick={onClose}>✕</button>
+            <button className="btn btn-sm" onClick={() => setShowDirectForm(!showDirectForm)}>Nieuw bericht</button>
+            <button className="btn btn-sm btn-primary" onClick={() => setShowGroupForm(!showGroupForm)}>Nieuwe groep</button>
           </div>
         </div>
 
@@ -166,14 +165,6 @@ export function Chat({ me, onClose }: ChatProps) {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-
-        <button 
-          className="btn btn-primary"
-          style={{ margin: '12px', borderRadius: '20px' }}
-          onClick={() => setShowGroupForm(!showGroupForm)}
-        >
-          + Groep
-        </button>
 
         {showGroupForm && (
           <div className="modal-overlay">
@@ -222,7 +213,7 @@ export function Chat({ me, onClose }: ChatProps) {
                 <label>Selecteer een vriend:</label>
                 <div className="friend-select-list">
                   {allFriends.length === 0 ? (
-                    <div style={{ padding: '12px', color: '#999', textAlign: 'center' }}>
+                    <div style={{ padding: '12px', color: 'var(--muted)', textAlign: 'center' }}>
                       Je hebt nog geen vrienden
                     </div>
                   ) : (
@@ -255,7 +246,7 @@ export function Chat({ me, onClose }: ChatProps) {
 
         <div className="conversations-list">
           {filteredConversations.length === 0 ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)' }}>
               {conversations.length === 0 ? 'Geen chats' : 'Geen resultaten'}
             </div>
           ) : (
@@ -328,7 +319,7 @@ export function Chat({ me, onClose }: ChatProps) {
                     onClick={() => setShowAddMembers(!showAddMembers)}
                     style={{ padding: '6px 12px', fontSize: '13px' }}
                   >
-                    👤 Toevoegen
+                    Leden toevoegen
                   </button>
                 )}
               </div>
@@ -350,7 +341,7 @@ export function Chat({ me, onClose }: ChatProps) {
                               type="button"
                               onClick={() => setFriendsToAdd(friendsToAdd.filter(f => f !== friendId))}
                             >
-                              ✕
+                              Verwijder
                             </button>
                           </div>
                         )
@@ -447,7 +438,7 @@ export function Chat({ me, onClose }: ChatProps) {
                 disabled={busy || !messageText.trim()}
                 title="Verzenden"
               >
-                ➤
+                Verstuur
               </button>
             </form>
           </>
