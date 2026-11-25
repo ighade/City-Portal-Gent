@@ -6,7 +6,6 @@ import { FriendsMap } from '../components/FriendsMap'
 import { Chat } from '../components/Chat'
 import { friendStatus, initial, resizeAvatar } from '../friendsUi'
 import type { Friend, FriendMe, FriendsOverview } from '../types'
-import './Vrienden.css'
 
 const whenFmt = new Intl.DateTimeFormat('nl-BE', { timeZone: 'Europe/Brussels', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
