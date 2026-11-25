@@ -1,0 +1,22 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+
+    runs-on: self-hosted
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Validate compose file
+      run: docker compose config --quiet
+    
+    - name: Build the Docker image
+      run: docker compose build . --file Dockerfile --tag my-image-name:$(date +%s)
