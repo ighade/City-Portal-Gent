@@ -13,7 +13,6 @@ import { useAuth } from '@/context/AuthContext'
 import { usePalette } from '@/context/ThemeContext'
 import { api, ApiError } from '@/lib/api'
 import { fmtTimeIso } from '@/lib/format'
-import { setOpenConversation } from '@/lib/notifications'
 import type { ChatConversation, Friend } from '@/lib/types'
 
 const POLL_MS = 4_000
@@ -42,19 +41,17 @@ export function ChatScreen({ id }: { id: string }) {
     }
   }, [id])
 
-  // Verversen en meldingen onderdrukken zolang dit gesprek open en zichtbaar is.
+  // Verversen zolang dit gesprek open en zichtbaar is.
   useFocusEffect(
     useCallback(() => {
-      setOpenConversation(id)
       void load()
       const t = setInterval(() => {
         if (AppState.currentState === 'active') void load()
       }, POLL_MS)
       return () => {
         clearInterval(t)
-        setOpenConversation(null)
       }
-    }, [id, load]),
+    }, [load]),
   )
 
   const count = conv?.recentMessages.length ?? 0

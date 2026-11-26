@@ -51,6 +51,7 @@ public static class Api
         api.MapPost("/route/ezpark", EzPark);
         api.MapGet("/geo/suggest", GeoProxy("Suggestion", 10));
         api.MapGet("/geo/locate", GeoProxy("Location", 5));
+        api.MapGet("/geo/place", PlaceByName).CacheOutput("plaats");
         api.MapPost("/admin/login", AdminLogin);
 
         var admin = api.MapGroup("/admin").AddEndpointFilter(async (ctx, next) =>
@@ -346,6 +347,24 @@ public static class Api
             }
         };
 
+    /// <summary>Plaats op naam, voor evenementen waarvan alleen de naam van de zaal bekend is.</summary>
+    private static async Task<IResult> PlaceByName(IHttpClientFactory factory, string? q, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q.Length > 200)
+            return Results.BadRequest(new { error = "Geef een zoekterm op." });
+        try
+        {
+            using var http = factory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(8);
+            var hit = await PlaceLookup.FindAsync(http, q.Trim(), ct);
+            return hit is null ? Results.NotFound(new { error = "Deze plaats werd niet gevonden." }) : Results.Ok(hit);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            return Results.StatusCode(StatusCodes.Status502BadGateway);
+        }
+    }
+
     private static async Task<IResult> RoutePlan(RoutePlanner planner, StreetParkingZones streetZones, CityRates cityRates, AppDbContext db, RoutePlanRequest request, CancellationToken ct)
     {
         if (request.StartLat is < -90 or > 90 || request.StartLon is < -180 or > 180)
@@ -446,7 +465,8 @@ public static class Api
                 e.IsHappeningNow, e.StartsAtUtc, e.DayTimeLabel, e.Place == null ? null : e.Place.Name,
                 e.Kind, e.SocialSummary, e.InterestedCount, e.GoingCount, e.WentCount, e.TicketPriceLabel))
             .ToListAsync(ct);
-        return Results.Ok(rows);
+        var now = DateTime.UtcNow;
+        return Results.Ok(rows.Select(e => e.Normalize(now)).ToList());
     }
 
     // Lokale kopie van de omslagfoto, geschreven door scripts/import-events.sh. Zonder extensie in de
@@ -491,7 +511,7 @@ public static class Api
             e.Id, e.Url, e.Name, e.CoverImageUrl, e.CoverAccessibilityCaption, e.IsOnline, e.IsPast,
             e.IsHappeningNow, e.StartsAtUtc, e.DayTimeLabel, e.Place?.Name,
             e.Kind, e.SocialSummary, e.InterestedCount, e.GoingCount, e.WentCount, e.TicketPriceLabel);
-        return Results.Ok(new EventDetailDto(dto, e.Description));
+        return Results.Ok(new EventDetailDto(dto.Normalize(DateTime.UtcNow), e.Description));
     }
 
     private static async Task<IResult> TransitRoute(TransitService transit, TransitRouteRequest request, CancellationToken ct)

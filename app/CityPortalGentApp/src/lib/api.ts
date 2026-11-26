@@ -65,6 +65,15 @@ function captureCookie(res: Response) {
 
 const GEO = 'https://geo.api.vlaanderen.be/geolocation/v4'
 
+// De server zet "nu bezig" bij het importeren vast; een evenement dat al langer dan twee dagen
+// begonnen is, is voorbij (er is geen eindtijd bekend).
+const STALE_AFTER_MS = 48 * 3600 * 1000
+
+function withLiveState<T extends { startsAtUtc?: string | null; isPast: boolean; isHappeningNow: boolean }>(e: T): T {
+  if (!e.startsAtUtc || Date.now() - new Date(e.startsAtUtc).getTime() <= STALE_AFTER_MS) return e
+  return { ...e, isPast: true, isHappeningNow: false }
+}
+
 interface Place { lat: number; lon: number; label: string }
 
 const inGent = (label: string) => /\bgent\b/i.test(label)
@@ -99,7 +108,17 @@ async function flemishGeocode(q: string): Promise<Place> {
 
 // Plaatsen zonder adres ("Kuipke", "Bijloke") kent de Vlaamse geolocatie niet; OpenStreetMap wel,
 // beperkt tot de omgeving van Gent.
+// Eerst via onze server: Nominatim weigert de standaard User-Agent van de app, dus rechtstreeks
+// vanaf het toestel lukt het vaak niet.
 async function placeByName(name: string): Promise<Place> {
+  try {
+    const viaServer = await fetch(`${API_URL}/api/geo/place?q=${encodeURIComponent(name)}`)
+    if (viaServer.ok) return await viaServer.json() as Place
+    if (viaServer.status === 404) throw new Error('Deze plaats werd niet gevonden.')
+  } catch (e) {
+    if (e instanceof Error && e.message === 'Deze plaats werd niet gevonden.') throw e
+    // De server is onbereikbaar; probeer rechtstreeks.
+  }
   const res = await fetch(
     `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&bounded=1&viewbox=3.55,51.15,3.9,50.96&q=${encodeURIComponent(name)}`,
     { headers: { Accept: 'application/json' } },
@@ -209,8 +228,8 @@ export const api = {
     departures: (stopId: string) => call<TransitDeparturesResult>('GET', `/api/transit/stops/${encodeURIComponent(stopId)}/departures?count=8`),
     route: (payload: TransitRouteRequest) => call<TransitRouteResult>('POST', '/api/transit/route', payload),
   },
-  events: () => call<GentEvent[]>('GET', '/api/events'),
-  event: (id: string) => call<GentEventDetail>('GET', `/api/events/${encodeURIComponent(id)}`),
+  events: () => call<GentEvent[]>('GET', '/api/events').then((list) => list.map(withLiveState)),
+  event: (id: string) => call<GentEventDetail>('GET', `/api/events/${encodeURIComponent(id)}`).then((d) => ({ ...d, event: withLiveState(d.event) })),
   meta: () => call<Meta>('GET', '/api/meta'),
 
   /** De vriendenservice: alles hier vraagt een aanmelding (cookie), behalve register en login. */
@@ -230,9 +249,6 @@ export const api = {
     remove: (id: string) => call<void>('DELETE', `/api/friends/${id}`),
     interest: (eventId: string, on: boolean) =>
       call<void>(on ? 'PUT' : 'DELETE', `/api/friends/interests/${encodeURIComponent(eventId)}`),
-    /** Pushtoken van dit toestel, voor meldingen bij nieuwe berichten. */
-    registerPushToken: (token: string) => call<void>('PUT', '/api/friends/push-token', { token }),
-    removePushToken: (token: string) => call<void>('POST', '/api/friends/push-token/remove', { token }),
     chats: {
       list: () => call<ChatConversation[]>('GET', '/api/friends/chats'),
       get: (conversationId: string) => call<ChatConversation>('GET', `/api/friends/chats/${conversationId}`),

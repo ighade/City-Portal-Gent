@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ParkingGent.Api.Services;
 
 namespace ParkingGent.Api.Tests;
 
@@ -99,5 +100,31 @@ public class EventsWithoutApiKeyTests(NoSocialKeyFactory factory) : IClassFixtur
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.False((await response.JsonAsync()).TryGetProperty("description", out _));
         Assert.Empty(factory.Social.Requests);
+    }
+}
+
+/// <summary>De vlaggen "voorbij" en "nu bezig" worden bij de import bewaard en moeten met de tijd meeverouderen.</summary>
+public class EventLiveStateTests
+{
+    private static readonly DateTime Now = new(2026, 11, 26, 12, 0, 0, DateTimeKind.Utc);
+
+    private static EventDto Event(DateTime? start, bool past = false, bool live = false) => new(
+        "e", "https://example.test", "Feest", null, null, false, past, live, start, null, "Vooruit", null, null, null, null, null, null);
+
+    [Fact]
+    public void A_happening_now_event_from_days_ago_becomes_past()
+    {
+        var result = Event(Now.AddDays(-6), live: true).Normalize(Now);
+
+        Assert.True(result.IsPast);
+        Assert.False(result.IsHappeningNow);
+    }
+
+    [Fact]
+    public void A_recent_or_future_event_keeps_its_flags()
+    {
+        Assert.True(Event(Now.AddHours(-5), live: true).Normalize(Now).IsHappeningNow);
+        Assert.False(Event(Now.AddDays(2)).Normalize(Now).IsPast);
+        Assert.False(Event(null).Normalize(Now).IsPast);
     }
 }

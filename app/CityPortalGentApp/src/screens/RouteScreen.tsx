@@ -179,7 +179,9 @@ export function RouteScreen() {
     if (!destPlace || !destName) return
     let cancelled = false
     void locatePlace(destPlace).then((at) => {
-      if (at && !cancelled) chooseEnd.current({ lat: at.lat, lon: at.lon, label: destName })
+      if (cancelled) return
+      if (at) chooseEnd.current({ lat: at.lat, lon: at.lon, label: destName })
+      else setError(`De locatie van "${destName}" kon niet worden gevonden.`)
     })
     return () => { cancelled = true }
   }, [destPlace, destName, destN])

@@ -2,7 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react'
 
 import { api, clearSessionCookie, loadSessionCookie, setUnauthorizedHandler } from '@/lib/api'
-import { unregisterForPush } from '@/lib/notifications'
 import type { FriendMe, FriendSessionInfo } from '@/lib/types'
 
 type Status = 'unknown' | 'in' | 'out'
@@ -65,7 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [accept])
 
   const logout = useCallback(async () => {
-    await unregisterForPush()
     await api.friends.logout().catch(() => undefined)
     await clearSessionCookie()
     drop()

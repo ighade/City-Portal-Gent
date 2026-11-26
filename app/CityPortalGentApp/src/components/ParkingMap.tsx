@@ -2,10 +2,12 @@ import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native'
-import { Camera, GeoJSONSource, Layer, Map as MapView } from '@maplibre/maplibre-react-native'
+import { Camera, GeoJSONSource, Layer, Map as MapView, ViewAnnotation } from '@maplibre/maplibre-react-native'
 import type { CameraRef } from '@maplibre/maplibre-react-native'
 
-import { BluePin, ChargingPin, DotLabel, EventPin, LineBadge, ParkingPin, PinMarker, RentalBikePin } from '@/components/MapPins'
+import { BluePin, ChargingPin, DotLabel, EventPin, ParkingPin, PinMarker } from '@/components/MapPins'
+import { LineBadgeLayer, RentalBikeLayer } from '@/components/MapSymbolLayers'
+import type { LineBadgeItem } from '@/components/MapSymbolLayers'
 import { MapLine } from '@/components/MapLine'
 import { FriendMarkers } from '@/components/FriendsMap'
 import { Btn, Txt } from '@/components/ui'
@@ -298,6 +300,15 @@ export function ParkingMap({
   // wat niet openbaar is, zodat de speld waar je wél terechtkunt bovenop ligt.
   const ordered = useMemo(() => [...parkings].sort((a, b) => Number(a.isPublic) - Number(b.isPublic)), [parkings])
 
+  const openBike = openKey?.startsWith('rental-') ? rentalBikes?.find((b) => `rental-${b.id}` === openKey) : undefined
+
+  const lineBadges = (ezpark?.legs ?? []).flatMap((leg, i): LineBadgeItem[] => {
+    if (leg.coordinates.length < 2 || !leg.line || (leg.mode !== 'bus' && leg.mode !== 'tram')) return []
+    const [lat, lon] = leg.coordinates[Math.floor(leg.coordinates.length / 2)]!
+    const color = leg.color ? `#${leg.color}` : leg.mode === 'tram' ? '#d97706' : '#0f766e'
+    return [{ id: `ez-line-${i}`, lat: lat!, lon: lon!, line: leg.line, color }]
+  })
+
   // Valt de bestemming op een parking of evenement, dan is dat icoon al de aanduiding.
   const onOtherIcon = (pt: { lat: number; lon: number }) => {
     const near = (a: { lat: number; lon: number }) => Math.abs(a.lat - pt.lat) < 0.0003 && Math.abs(a.lon - pt.lon) < 0.0004
@@ -398,30 +409,25 @@ export function ParkingMap({
           )
         })}
 
-        {rentalBikes?.map((bike) => {
-          const key = `rental-${bike.provider}-${bike.id}`
-          return (
-            <PinMarker
-              key={key}
-              id={key}
-              lat={bike.lat}
-              lon={bike.lon}
-              open={openKey === key}
-              callout={
-                <View style={[styles.callout, { borderColor: p.border }]}>
-                  <Txt variant="strong" style={{ color: '#111827' }}>{bike.provider} deelfiets</Txt>
-                  <Txt variant="small" style={{ color: '#111827' }}>Selecteer in het routepaneel om te openen.</Txt>
-                </View>
-              }
-              onPress={() => {
-                markerPressAt.current = Date.now()
-                setOpenKey(key)
-                onRentalBikeSelect?.(bike.id)
-              }}>
-              <RentalBikePin provider={bike.provider} selected={selectedRentalBikeId === bike.id} />
-            </PinMarker>
-          )
-        })}
+        {rentalBikes && rentalBikes.length > 0 && (
+          <RentalBikeLayer
+            bikes={rentalBikes}
+            selectedId={selectedRentalBikeId}
+            onPress={(bikeId) => {
+              markerPressAt.current = Date.now()
+              setOpenKey(`rental-${bikeId}`)
+              onRentalBikeSelect?.(bikeId)
+            }}
+          />
+        )}
+        {openBike && (
+          <ViewAnnotation id="rental-callout" lngLat={[openBike.lon, openBike.lat]} anchor="bottom" offset={[0, -24]}>
+            <View style={[styles.callout, { borderColor: p.border }]}>
+              <Txt variant="strong" style={{ color: '#111827' }}>{openBike.provider} deelfiets</Txt>
+              <Txt variant="small" style={{ color: '#111827' }}>Selecteer in het routepaneel om te openen.</Txt>
+            </View>
+          </ViewAnnotation>
+        )}
 
         {ordered.map((pk) => {
           const key = `parking-${pk.slug}`
@@ -498,16 +504,7 @@ export function ParkingMap({
               )
             })}
             {/* Na alle lijnen getekend, zodat de lijnnummers altijd bovenop liggen. */}
-            {ezpark.legs.map((leg, i) => {
-              if (leg.coordinates.length < 2 || !leg.line || (leg.mode !== 'bus' && leg.mode !== 'tram')) return null
-              const [lat, lon] = leg.coordinates[Math.floor(leg.coordinates.length / 2)]!
-              const transitColor = leg.color ? `#${leg.color}` : leg.mode === 'tram' ? '#d97706' : '#0f766e'
-              return (
-                <PinMarker key={`line-badge-${i}`} id={`ez-line-${i}`} lat={lat!} lon={lon!}>
-                  <LineBadge line={leg.line} color={transitColor} />
-                </PinMarker>
-              )
-            })}
+            <LineBadgeLayer badges={lineBadges} dark={p.scheme === 'dark'} />
           </>
         )}
 

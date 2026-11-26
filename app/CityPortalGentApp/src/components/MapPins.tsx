@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import { ViewAnnotation } from '@maplibre/maplibre-react-native'
@@ -7,9 +6,6 @@ import { Icon } from '@/components/Icon'
 import { usePalette } from '@/context/ThemeContext'
 import { levelColor } from '@/components/OccupancyMeter'
 import { agoLabel, initial, isOffline, locationAge } from '@/lib/friendsUi'
-import { textOn } from '@/lib/map'
-import { RENTAL_BIKE_ICONS } from '@/lib/rentalBikes'
-import type { RentalBikeProvider } from '@/lib/rentalBikes'
 import { busyness } from '@/lib/types'
 import type { Friend, Parking } from '@/lib/types'
 export interface PinMarkerProps {
@@ -58,29 +54,6 @@ export function BluePin({ size = 30 }: { size?: number }) {
   return (
     <View style={[styles.round, { width: size, height: size, borderRadius: size / 2, backgroundColor: BLUE, borderColor: '#fff' }]}>
       <Text style={{ color: '#fff', fontWeight: '700', fontSize: size * 0.53 }}>P</Text>
-    </View>
-  )
-}
-
-export function RentalBikePin({ provider, selected }: { provider: RentalBikeProvider; selected: boolean }) {
-  // De kaart maakt een momentopname van de view; zonder fade en met een herrender na het laden is die niet meer wit.
-  const [, setLoaded] = useState(false)
-  return (
-    <View style={{
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      overflow: 'hidden',
-      backgroundColor: '#fff',
-      borderWidth: selected ? 4 : 3,
-      borderColor: selected ? '#facc15' : '#fff',
-    }}>
-      <Image
-        source={RENTAL_BIKE_ICONS[provider]}
-        fadeDuration={0}
-        onLoad={() => setLoaded(true)}
-        style={{ width: '100%', height: '100%' }}
-      />
     </View>
   )
 }
@@ -181,15 +154,6 @@ export function FriendPin({ friend }: { friend: Friend }) {
           <Text style={{ color: '#fff', fontSize: 9 }}>{agoLabel(age)}</Text>
         </View>
       )}
-    </View>
-  )
-}
-
-export function LineBadge({ line, color }: { line: string; color: string }) {
-  const hex = color.replace('#', '')
-  return (
-    <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, backgroundColor: color, borderWidth: 1, borderColor: '#fff' }}>
-      <Text style={{ color: textOn(hex), fontSize: 11, fontWeight: '700' }}>{line}</Text>
     </View>
   )
 }

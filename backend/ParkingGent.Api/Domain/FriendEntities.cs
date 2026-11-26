@@ -38,14 +38,6 @@ public class FriendInterest
     public DateTime CreatedAtUtc { get; set; }
 }
 
-/// <summary>Het pushtoken van een toestel van de app; daarmee sturen we een melding bij een nieuw bericht.</summary>
-public class PushToken
-{
-    public string Token { get; set; } = string.Empty;
-    public Guid UserId { get; set; }
-    public DateTime CreatedAtUtc { get; set; }
-}
-
 /// <summary>Een aanmeldsessie. Alleen de hash van het token staat in de databank.</summary>
 public class FriendSession
 {

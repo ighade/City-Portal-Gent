@@ -154,25 +154,6 @@ public sealed partial class Friends(AppDbContext db, LoginThrottle throttle)
         await db.FriendSessions.Where(s => s.TokenHash == hash).ExecuteDeleteAsync(ct);
     }
 
-    /// <summary>Koppelt een pushtoken aan deze gebruiker; een toestel hoort bij hoogstens één gebruiker.</summary>
-    public async Task<bool> RegisterPushTokenAsync(FriendUser me, string? token, CancellationToken ct)
-    {
-        if (!PushNotifier.IsValidToken(token)) return false;
-        var existing = await db.PushTokens.FirstOrDefaultAsync(t => t.Token == token, ct);
-        if (existing is null)
-            db.PushTokens.Add(new PushToken { Token = token!, UserId = me.Id, CreatedAtUtc = DateTime.UtcNow });
-        else
-            existing.UserId = me.Id;
-        await db.SaveChangesAsync(ct);
-        return true;
-    }
-
-    public async Task RemovePushTokenAsync(FriendUser me, string? token, CancellationToken ct)
-    {
-        if (string.IsNullOrEmpty(token)) return;
-        await db.PushTokens.Where(t => t.Token == token && t.UserId == me.Id).ExecuteDeleteAsync(ct);
-    }
-
     public async Task<string?> UpdateSettingsAsync(
         FriendUser user, bool? shareLocation, bool? showFriendsOnMap, string? avatar, bool avatarProvided, CancellationToken ct)
     {
@@ -294,9 +275,11 @@ public sealed partial class Friends(AppDbContext db, LoginThrottle throttle)
             .Include(e => e.Place)
             .Where(e => eventIds.Contains(e.Id) && !e.IsPast)
             .AsNoTracking().ToListAsync(ct);
-        var liveEventIds = events.Select(e => e.Id).ToHashSet();
 
         var now = DateTime.UtcNow;
+        events = events.Where(e => !EventLiveState.IsStale(e.StartsAtUtc, now)).ToList();
+        var liveEventIds = events.Select(e => e.Id).ToHashSet();
+
         var friends = friendIds.Where(byId.ContainsKey).Select(id =>
         {
             var u = byId[id];
